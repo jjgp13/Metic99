@@ -295,6 +295,13 @@ curve is in `src/config/difficulty.ts` (`difficultyAt(elapsedMs, score)`).
 
 Newest first. Format: `YYYY-MM-DD — decision — rationale`.
 
+- **2026-09-24 — Example monster and ship models for choosing an art direction.**
+  Recipes built for `alien_darter` / `alien_lumberer` / `alien_drifter` and two
+  alternative ships (`ship_dart` sleek, `ship_pod` chunky). They are not in the
+  game yet (pending the owner's pick). Aliens face -Y with a per-model
+  `socket_balls` at +Y. Kit gained `lathe`/`radial`; `contact_sheet.py` makes
+  `art/previews/comparison.png`.
+
 - **2026-09-24 — Number balls are glass spheres with the digit inside; first
   Blender model in game.** Balls moved from voxel chips to a tinted glass sphere
   (custom fresnel shader, unlit) around a camera-facing digit, color = operation.

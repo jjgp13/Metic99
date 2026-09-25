@@ -84,6 +84,9 @@ swatch is fine; renaming one breaks recipes.
   ~40–56 · boss (future) ≤ 120.
 - **Axes (Blender):** forward/nose = **+Y**, top (faces the camera) = **+Z**,
   origin = visual center of the body.
+- **Aliens face -Y** (face/mouth/fangs toward the player, since they descend)
+  and put `socket_balls` above the body at +Y, far enough out that the 9 px
+  balls don't hide the face (darter +28, drifter +26, lumberer +30).
 - **Export:** glTF binary (`.glb`), `export_yup=True`, modifiers applied. The
   runtime loader rotates each model `rotation.x = +π/2` so Blender +Y → screen up
   and Blender +Z → toward the camera. *Verify once with an asymmetric test model.*
@@ -147,6 +150,10 @@ art/
 public/assets/models/<model>.glb   game-ready output (committed)
 ```
 
+To compare models side by side, `python art/blender/contact_sheet.py` (Pillow)
+writes `art/previews/comparison.png`: top + 3/4 views plus a thumb at true game
+scale (from `art/previews/sizes.json`, written by the build).
+
 Build (Blender 5.2, headless, from the repo root). Omit `--only` to build every
 recipe; add `--no-previews` to skip renders. It prints tris/bytes/size per model
 and exits non-zero if a model is over budget:
@@ -170,7 +177,9 @@ Keep samples low (~24) → ~1 s per image.
 | `pair(part_fn, ...)` | Builds a side part and a **separate mirrored copy** (wings, wingtips, engines, eyes). *The first test fused two wingtips into one slab by mirroring them as one hull; this helper prevents that.* |
 | `tube(a, b, r1, r2, swatch, seg=6)` | Engines, flames, spikes, horns |
 | `blob(center, r, swatch, scale)` | Low icospheres: eyes, bulbs, spots, canopies |
-| `creature(nodes, edges, swatch)` | Skin-modifier skeleton (points + radii) → subdivide → decimate. Organic bodies and tentacles from ~10 points |
+| `creature(nodes, edges, swatch)` | Skin-modifier skeleton (points + radii) → subdivide → decimate. Organic bodies and tentacles from ~10 points. `subdivisions=0, decimate=1` gives cheap boxy limbs |
+| `lathe(profile, swatch, segments)` | Spins a `(radius, z)` side profile around Z: saucers, domes, shells, rims, pods |
+| `radial(count, build_one)` | Places parts evenly around Z (tentacles, legs, rim lights, scutes) |
 | `socket(name, loc)` / `anim_part(obj, role)` | Sockets and animated parts (§6) |
 | `join`, `paint`, `export_glb`, `render_previews` | Plumbing |
 
@@ -193,6 +202,11 @@ Rough cost: the kit is a one-time effort; afterwards ~5–10k tokens per model
 including preview reviews.
 
 ## 10. Initial roster (proposal: iterate with gameplay)
+
+Example recipes exist (2026-09-24) for `alien_darter`, `alien_lumberer`,
+`alien_drifter`, and two alternative ship styles `ship_dart` (sleek delta) and
+`ship_pod` (chunky round). They are built but **not wired into the game** until
+an art direction is picked (`art/previews/comparison.png`).
 
 | Model | Gameplay role | Look |
 | --- | --- | --- |

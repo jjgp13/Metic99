@@ -9,6 +9,7 @@ Outputs: public/assets/models/<name>.glb and art/previews/<name>_{top,34}.png.
 """
 import argparse
 import importlib.util
+import json
 import os
 import sys
 
@@ -22,6 +23,7 @@ PREVIEWS_OUT = os.path.join(kit.ROOT, "art", "previews")
 # Triangle budgets by name prefix (docs/ART_SPEC.md §5).
 BUDGETS = {"ship": 600, "alien": 900, "boss": 2500, "prop": 200}
 MAX_BYTES = 60_000
+SIZES_PATH = os.path.join(PREVIEWS_OUT, "sizes.json")  # read by contact_sheet.py
 
 
 def load_recipe(name):
@@ -42,6 +44,7 @@ def main():
     os.makedirs(MODELS_OUT, exist_ok=True)
     os.makedirs(PREVIEWS_OUT, exist_ok=True)
 
+    sizes = json.load(open(SIZES_PATH, encoding="utf-8")) if os.path.exists(SIZES_PATH) else {}
     failed = False
     for name in names:
         kit.begin()
@@ -61,6 +64,9 @@ def main():
 
         if not args.no_previews:
             kit.render_previews(root, os.path.join(PREVIEWS_OUT, name))
+            sizes[name] = round(max(dims.x, dims.y, 1.0), 1)  # preview frame = size × 1.5
+            with open(SIZES_PATH, "w", encoding="utf-8") as f:
+                json.dump(sizes, f, indent=2, sort_keys=True)
 
     sys.exit(1 if failed else 0)
 
