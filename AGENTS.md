@@ -285,6 +285,8 @@ curve is in `src/config/difficulty.ts` (`difficultyAt(elapsedMs, score)`).
 - Keep all tunables in `config/constants.ts`; avoid magic numbers in scenes.
 - Comment only non-obvious intent (per repo style).
 - Verify changes: `npx tsc --noEmit` and `npm run build` must pass.
+- **Git workflow:** feature branches are **local only** (never push them). Merge
+  into `master` locally and push only `master` (pushing it deploys GitHub Pages).
 - Commit trailer: `Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>`.
 
 ---
