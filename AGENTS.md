@@ -68,8 +68,9 @@ src/
                       (charge/spend/drain per spender), SlowTime (drain | stop).
                       Kept pure so a future server sim can share it.
   objects/
-    Alien.ts          Pure alien state (x/y, digits, result) + `behavior`-driven
-                      movement; no rendering. Built from one `AlienConfig`.
+    Alien.ts          Pure alien state (x/y, digits, result, `kind`) + per-kind
+                      movement patterns and readability box; no rendering.
+                      Built from one `AlienConfig`.
     Bullet.ts         Pure bullet state {x, y, active}.
   render3d/
     World3D.ts        Three.js view: camera, lights, starfield, ship/alien/bullet
@@ -171,16 +172,20 @@ Green=multiplication, Yellow=division.
 - **Renderer is a view:** `World3D.render(snapshot)` diffs the snapshot's
   aliens/bullets against its meshes (create/move/remove). Game code never
   imports Three.js, which keeps the path open to a shared sim for multiplayer.
-- **Motion polish:** aliens sway (yaw), the ship banks toward its target,
+- **Motion polish:** aliens sway (yaw) and bank into sideways moves, the ship
+  banks toward its target, the strafer shakes before it dives,
   explosions burst into voxel debris in the alien's colors with a flash from one
   reused point light (adding lights at runtime would trigger shader recompiles).
 - **Models in play:** the player flies the ship picked on the menu
   (`RENDER3D.SHIPS`: FALCON `ship_player`, DART `ship_dart`, POD `ship_pod`; the
-  pick is stored under `STORAGE.SHIP`). Each alien gets a random monster model
-  from `RENDER3D.ALIEN_MODELS` (darter / lumberer / drifter), chosen in
-  `World3D` for now, with its balls at the model's `socket_balls`. Explosion
-  debris uses that model's colors. Per-monster behavior is planned (see
-  Roadmap), and then the monster type moves into the `Alien` state.
+  pick is stored under `STORAGE.SHIP`). Each alien draws the model of its
+  `kind` (`MONSTERS[kind].MODEL`: darter / lumberer / strafer / drifter), with
+  its balls at the model's `socket_balls`. The kind lives in the `Alien` state
+  (game logic picks it); `World3D` only draws it. Explosion debris uses the
+  model's colors (`RENDER3D.ALIEN_MODELS`). The models' `anim_*` parts move
+  with simple sine motion (`RENDER3D.ANIM`): darter tail wags, lumberer legs
+  swing in step with its stomp (body lifts while stepping), drifter skirt spins
+  and pulses, strafer wings flap (faster in windup/dive).
 - One WebGL context for the whole page (singleton), hidden outside GameScene.
 - Dev only: `window.__metic = { game, world }` for console inspection.
 - **Art direction for new 3D models:** see [`docs/ART_SPEC.md`](docs/ART_SPEC.md)
@@ -190,18 +195,43 @@ Green=multiplication, Yellow=division.
 
 - Each alien carries **≥ 2 number balls** (a sum needs two numbers); `result` =
   sum of the balls. `enemiesInField: Map<result, Alien>` keeps results unique so
-  a typed number maps to exactly one target. **Personality:** speed scales
-  inversely with ball count (`ENEMY.SPEED_BY_BALLS`) — 2-number aliens dart in,
-  3+ lumber.
+  a typed number maps to exactly one target.
+- **Monster kinds** (`MONSTERS` in constants, movement in `Alien.advance`).
+  3+ ball sums are always lumberers; 2-ball sums pick darter/strafer by
+  `ENEMY.TWO_BALL_KINDS` weight:
+  - **Darter** (2 balls): fast zig-zag dive (×1.25 speed, ±26 px around its lane).
+  - **Lumberer** (3 balls): slow stop-and-go stomp: moves half of each
+    `STOMP_MS` cycle and stands still for the other half (same ×0.85 average).
+  - **Strafer** (2 balls, Galaga-style): flies into a band at the top, patrols
+    sideways for `DIFFICULTY.STRAFER_PATROL_MS` (5 s → 2.8 s, time to read its
+    sum), hovers and shakes for `WINDUP_MS` (telegraph), then dives fast.
+  - **Drifter** (2 balls, bonus): crosses sideways through a mid band and
+    leaves; **non-lethal**. Solving it gives `ENERGY_BURST` energy (plus normal
+    score). It runs on its own spawn clock (first after 15 s, then every
+    18–28 s, one at a time) and does **not** count toward any spawn cap. Stray
+    bullets fly through it (it must be solved, not hit by accident).
+- **Drifter energy:** a solved drifter charges its `ENERGY_BURST` on top of the
+  normal kill energy (one `addEnergy()` call, capped by the meter) and pops
+  "+N ENERGY" where it died.
 - **Scoring** rewards skill (`SCORE` in constants):
   `BASE × ballCountBonus × speedBonus × difficultyMult × comboMult`, where speed
   bonus decays from solving fast→slow, difficulty = `1 + d`, and the combo
   multiplier grows with an unbroken kill streak (a hit resets it).
 - **Mastery stats** persist in `localStorage` (`STORAGE.*`): high score, best
   combo, total kills, fastest solve; a rank (`RANKS`) is shown on game over.
-- Aliens fall in **fixed vertical lanes** (no horizontal homing) so sprites and
-  numbers never overlap. Spawns reject a lane too close to an existing alien
-  (min gap `ENEMY.MIN_SPAWN_GAP`); if no clear lane, the spawn is skipped.
+- **Readability rule** (docs/MULTIPLAYER_DESIGN.md §3): ball rows must never
+  overlap by accident. Each alien owns a **box** around its ball row and body
+  (`MONSTERS[kind]` `HALF_W` / `BALLS_Y` / `BOTTOM`, widened for 3 balls).
+  Two layers keep boxes apart:
+  1. **Spawner:** a new alien enters just above the top only where its whole
+     horizontal **sweep** (zig-zag width, patrol span) clears the sweep of every
+     alien still above `ENEMY.ENTRY_ZONE_Y`, and its box clears everyone.
+     No room → the spawn retries in `SPAWN_RETRY_MS`.
+  2. **Runtime guard** (`GameScene.advanceReadable`): a move that would bring
+     two boxes within `ENEMY.READ_GAP` is not made. It is retried one axis at a
+     time; the refused axis holds still, and a refused sideways move turns
+     zig-zags/patrols around (the drifter waits). Aliens queue behind each
+     other instead of overlapping.
 - Ship is input-driven only: it lerps horizontally to the targeted alien's x and
   auto-fires when lined up (`PLAYER.SHOOT_RANGE`, `FIRE_COOLDOWN`). The **active
   target STOPS** while locked: once its answer is typed it holds position (it
@@ -290,6 +320,7 @@ alone** so the number of concurrent unsolved sums grows only with points:
 | Max on screen  | 4    | 8    | d (safety net) |
 | Max balls      | 2    | 3    | d |
 | Max digit      | 3    | 9    | d |
+| Strafer patrol | 5000 | 2800 ms | d |
 
 `MIN_BALLS` is fixed at 2. All knobs live in `src/config/constants.ts`; the
 curve is in `src/config/difficulty.ts` (`difficultyAt(elapsedMs, score)`).
@@ -303,11 +334,13 @@ curve is in `src/config/difficulty.ts` (`difficultyAt(elapsedMs, score)`).
 5. [x] Fair targeting: locked target holds still; concurrent-alien cap
 6. [x] Enemy personality by ball count + skill-based scoring + mastery ranks
 6b. [x] Selectable player ship (3 models) + random monster models (darter,
-       lumberer, drifter). **Next:** give each monster its own behavior and
-       character; keep adding ship/monster variations.
-7. [ ] **Drifter bonus enemy** — non-lethal alien that crosses horizontally
-       (`behavior: "wander"`); spot & solve it for bonus points, no life cost.
-       Next up.
+       lumberer, drifter).
+6c. [x] **Monster movement patterns** — kind in the `Alien` state; darter
+       zig-zag, lumberer stomp, new Galaga-style strafer (patrol → dive),
+       readability boxes + sweep-aware spawner, animated `anim_*` parts.
+       **Next:** monster abilities (docs/MULTIPLAYER_DESIGN.md §4).
+7. [x] **Drifter bonus enemy** — non-lethal, crosses sideways; solving it
+       gives an energy burst on top of the normal kill energy.
 8. [ ] **Handwriting input** — draw a digit on a canvas overlay; recognize it as
        the typed number (alongside the keypad).
 9. [ ] Other operations (subtraction/multiplication/division) via color-coded balls
@@ -339,6 +372,15 @@ curve is in `src/config/difficulty.ts` (`difficultyAt(elapsedMs, score)`).
 
 Newest first. Format: `YYYY-MM-DD — decision — rationale`.
 
+- **2026-09-25 — Monsters get their own movement; readability boxes replace
+  fixed lanes.** The kind moved from World3D (random) into `Alien`, so logic
+  and a future shared sim know it. Darter zig-zags, lumberer stomps, the new
+  strafer patrols the top then dives (read time + a telegraphed windup), and
+  the drifter crosses as a non-lethal energy bonus outside the spawn caps.
+  Sideways movement broke the lane guarantee, so each alien owns a box: the
+  spawner reserves sweep columns near the top, and a runtime guard never lets
+  a move enter another box (queue/turn around instead). Soak-tested: 0
+  overlapping frames in ~8.5 min of simulated play.
 - **2026-09-25 — Energy bar + slow time (two playtest modes).** Kills charge a
   0–100 meter (more balls, bigger digits, fast solves, streaks charge more).
   Slow time spends it on the player's own field: `drain` (60% while draining)

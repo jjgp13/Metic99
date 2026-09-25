@@ -15,6 +15,8 @@ export interface DifficultyParams {
   maxHardOnScreen: number;
   /** Max concurrent UNSOLVED aliens (primary spawn gate); score-driven, 1→3. */
   maxUnsolved: number;
+  /** How long a strafer patrols before diving (its read time). */
+  straferPatrolMs: number;
 }
 
 type Range = { easy: number; hard: number };
@@ -52,5 +54,6 @@ export function difficultyAt(elapsedMs: number, score = 0): DifficultyParams {
     maxHardOnScreen: d < DIFFICULTY.SECOND_HARD_AT ? 1 : 2,
     // Score ALONE opens up concurrent unsolved sums (1 → 2 → 3).
     maxUnsolved: Math.round(lerp(DIFFICULTY.MAX_UNSOLVED, dScore)),
+    straferPatrolMs: lerp(DIFFICULTY.STRAFER_PATROL_MS),
   };
 }

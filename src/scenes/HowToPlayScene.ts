@@ -54,12 +54,18 @@ export default class HowToPlayScene extends Phaser.Scene {
           "to slow your field. M switches slow mode.",
       },
       {
+        heading: "MONSTERS",
+        body:
+          "Each kind moves its own way. Solve the\n" +
+          "harmless glowing jellyfish for energy.",
+      },
+      {
         heading: "CONTROLS",
         body: "0-9 type · Bksp · Esc clear · Space slow · P pause",
       },
     ];
 
-    let y = 120;
+    let y = 108;
     for (const s of sections) {
       this.add.text(40, y, s.heading, {
         fontFamily: "monospace",
@@ -73,7 +79,7 @@ export default class HowToPlayScene extends Phaser.Scene {
         color: "#ffffff",
         lineSpacing: 4,
       });
-      y += s.body.split("\n").length * 20 + 16;
+      y += s.body.split("\n").length * 20 + 6;
     }
 
     this.makeBackButton(cx, GAME.HEIGHT - 50);

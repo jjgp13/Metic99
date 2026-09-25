@@ -49,9 +49,17 @@ unfair); deliberate, telegraphed hiding (eyelid balls, balls tucked behind the
 body, orbiting balls) is fair because the player can learn its timing.
 Movement patterns must keep ball rows apart.
 
+**How it's enforced (2026-09-25):** every alien owns a box around its ball row
+and body. The spawner only lets an alien enter where its whole sideways sweep
+clears the aliens near the top, and a runtime guard never lets a move enter
+another alien's box: the mover holds that axis (sideways movers turn around),
+so aliens queue instead of overlapping. Sent aliens in the battle royale must
+go through the same guard. Details: AGENTS.md → Gameplay rules.
+
 ## 4. Monster ideas
 
-Movement (gives the player time to spot and solve a sum):
+Movement (gives the player time to spot and solve a sum). **All four are in
+the single-player game** (2026-09-25):
 - **Darter:** fast zig-zag dive (2 balls).
 - **Lumberer:** slow, stop-and-go stomp (3 balls).
 - **Drifter:** crosses sideways, non-lethal bonus; solving it gives energy.
