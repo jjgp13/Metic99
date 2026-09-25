@@ -33,6 +33,7 @@ export const ENEMY = {
   BALL_SPACING: 20, // px between adjacent number balls (centers)
   BALL_OFFSET_Y: 24, // px the ball row sits above the body
   MIN_SPAWN_GAP: 84, // px min horizontal distance between alien lanes
+  LANE_MARGIN: 40, // px lanes keep from the left/right edges
 
   // Personality: speed scales INVERSELY with how many numbers an alien carries.
   // A 2-number sum is quick to solve, so those aliens dart in faster; 3+ numbers
@@ -50,6 +51,71 @@ export const ENEMY = {
   // While the board is at its threat ceiling, recheck this often (ms) instead of
   // waiting a full spawn interval, so deferred spawns don't pile up and burst.
   SPAWN_RETRY_MS: 350,
+} as const;
+
+/**
+ * Monster abilities (src/objects/abilities.ts). Later these are the aliens
+ * players send each other; in single player they join the run as difficulty
+ * rises. Every hide is telegraphed and follows a fixed rhythm so it can be
+ * learned; accidental overlap is still a bug.
+ */
+export const ABILITY = {
+  // Difficulty d at which each ability starts appearing (earliest first).
+  UNLOCK_AT: { shielded: 0.25, blinker: 0.4, splitter: 0.55 },
+  // Chance that a spawn gets one of the unlocked abilities (lerped on d).
+  CHANCE: { easy: 0.2, hard: 0.4 },
+  // Ability aliens alive at once (the locked target doesn't count). A second one
+  // is allowed only late in a run.
+  SECOND_AT: 0.8,
+  // Ability aliens always carry this many balls: the ability is the challenge.
+  BALLS: 2,
+  // Extra cognitive load an ability alien adds to the threat budget.
+  THREAT: 1,
+  // Kill score multiplier per ability (on top of the normal formula).
+  SCORE_MULT: { shielded: 1.3, blinker: 1.5, splitter: 1.2 },
+  // The model each ability wears, so the ability reads before it triggers.
+  MODEL: { shielded: "alien_shielded", blinker: "alien_blinker", splitter: "alien_splitter" },
+  // Shown once per run, the first time each ability appears.
+  INTRO: {
+    shielded: "SHIELDED · answer twice",
+    blinker: "BLINKER · read it while its eyes are open",
+    splitter: "SPLITTER · pops into two small aliens",
+  },
+  INTRO_Y: 80,
+  INTRO_MS: 2600,
+} as const;
+
+/** Blinker: its balls close like eyelids on a fixed, learnable rhythm. */
+export const BLINKER = {
+  // The first open phase is longer so it can enter the screen and be read.
+  FIRST_OPEN_MS: 3200,
+  OPEN_MS: 2400,
+  // Before closing, the lids flutter half-shut (the telegraph).
+  WARN_MS: 600,
+  WARN_FLUTTERS: 2,
+  WARN_COVER: 0.4, // how far the lids dip while fluttering (1 = shut)
+  LID_MS: 150, // close / open animation
+  CLOSED_MS: 1100,
+} as const;
+
+/** Shielded: the first correct answer breaks the shield and rolls a new sum. */
+export const SHIELD = {
+  KNOCKBACK_PX: 24, // pushed up when the shield breaks...
+  KNOCKBACK_MS: 180,
+  REVEAL_MS: 600, // ...then holds still while the new sum pops in
+} as const;
+
+/** Splitter: destroyed, it pops into two 2-ball splitlings. */
+export const SPLITTER = {
+  CHILD_MODEL: "alien_splitling",
+  SPREAD_PX: 46, // each splitling glides this far left/right (2x >= MIN_SPAWN_GAP)
+  GLIDE_MS: 420,
+  // Splitlings never land closer to the player than this, so a point-blank
+  // kill doesn't drop two fresh sums on top of the ship.
+  MAX_CHILD_Y: 260,
+  // A splitling's landing spot must be this clear of other aliens vertically
+  // (and MIN_SPAWN_GAP horizontally); otherwise that splitling is not spawned.
+  CLEAR_Y: 80,
 } as const;
 
 /**
@@ -223,6 +289,10 @@ export const RENDER3D = {
     "alien_darter",
     "alien_lumberer",
     "alien_drifter",
+    "alien_shielded",
+    "alien_blinker",
+    "alien_splitter",
+    "alien_splitling",
   ],
 
   // Player ships selectable on the menu (model name + label). The first one is
@@ -240,6 +310,26 @@ export const RENDER3D = {
     alien_lumberer: [0x2bb3a3, 0x1b7468, 0xf5f5f0],
     alien_drifter: [0x8e4fd8, 0xf29bc1, 0xff6be6],
   } as Record<string, readonly number[]>,
+
+  // Models worn by ability aliens (never picked at random), with debris colors.
+  ABILITY_MODELS: {
+    alien_shielded: [0x7d8196, 0x5a2d96, 0xff6be6],
+    alien_blinker: [0xd63fa6, 0x5a2d96, 0xf5f5f0],
+    alien_splitter: [0xf29bc1, 0xd63fa6, 0xff6be6],
+    alien_splitling: [0xf29bc1, 0xd63fa6],
+  } as Record<string, readonly number[]>,
+
+  // Blinker ball lids: color, and how far back they rest when open (rad; a
+  // little under π/2 so a thin lid rim shows at rest and marks the ball).
+  BALL_LID_COLOR: 0xd63fa6,
+  BALL_LID_OPEN_ANGLE: 1.2,
+  // Shield bubble (never a ball color): radius clears the ball row above.
+  SHIELD_COLOR: 0xff6be6,
+  SHIELD_RADIUS: 21,
+  SHIELD_SHARDS: 16,
+  // New sum after a shield breaks: the balls pop in from this scale.
+  SUM_POP_SCALE: 1.6,
+  SUM_POP_MS: 260,
 
   // Idle motion: aliens sway (yaw) to show off their depth.
   ALIEN_SWAY: 0.5, // rad

@@ -66,12 +66,17 @@ src/
   objects/
     Alien.ts          Pure alien state (x/y, digits, result) + `behavior`-driven
                       movement; no rendering. Built from one `AlienConfig`.
+                      Optional `model` + `ability`; `glideTo`/`hold` override
+                      the behavior for scripted moves (knockback, splits).
+    abilities.ts      Monster abilities (Blinker, Shielded, Splitter): pure
+                      state with update/onHit/onKilled hooks + `AbilityHost`.
     Bullet.ts         Pure bullet state {x, y, active}.
   render3d/
     World3D.ts        Three.js view: camera, lights, starfield, ship/alien/bullet
                       meshes, voxel-debris explosions, shake. Page-wide singleton.
     voxelize.ts       Extrudes a Phaser sprite frame into a voxel mesh (fallback art).
-    NumberBall.ts     Glass sphere with the digit inside (number balls).
+    NumberBall.ts     Glass sphere with the digit inside (number balls);
+                      optional eyelids (`setBallCover`) for the Blinker.
 art/                  3D art source (docs/ART_SPEC.md)
   palette/palette.json  Shared color swatches for all models
   blender/            metic_kit.py helpers, build.py, recipes/<model>.py
@@ -175,7 +180,11 @@ Green=multiplication, Yellow=division.
   pick is stored under `STORAGE.SHIP`). Each alien gets a random monster model
   from `RENDER3D.ALIEN_MODELS` (darter / lumberer / drifter), chosen in
   `World3D` for now, with its balls at the model's `socket_balls`. Explosion
-  debris uses that model's colors. Per-monster behavior is planned (see
+  debris uses that model's colors. **Ability aliens** set `Alien.model` and
+  wear their ability's model (`ABILITY.MODEL`, debris in
+  `RENDER3D.ABILITY_MODELS`); the renderer mirrors ability state (ball lids,
+  the Blinker's `anim_lid`, the shield bubble + shatter, a pop when the sum
+  changes). Per-monster behavior is planned (see
   Roadmap), and then the monster type moves into the `Alien` state.
 - One WebGL context for the whole page (singleton), hidden outside GameScene.
 - Dev only: `window.__metic = { game, world }` for console inspection.
@@ -228,6 +237,34 @@ Green=multiplication, Yellow=division.
   timer, spawning and firing, and **hides all aliens + their number balls** (and
   the typed display) behind an overlay so the player can't solve sums on a break.
   Tap the overlay or press `P` to resume.
+- **Monster abilities** (`objects/abilities.ts`, tunables `ABILITY`,
+  `BLINKER`, `SHIELD`, `SPLITTER`). An ability is a special rule layered on
+  top of the movement `behavior`, built from three hooks: `update(delta)`
+  (state the renderer reads, e.g. `cover` = how hidden the balls are),
+  `onHit` (return true to absorb the shot) and `onKilled`. Field-wide effects
+  go through `AbilityHost` (GameScene: `rerollSum`, `spawnSplitling`), so new
+  abilities (Hider, Orbiter, Worm) reuse the hooks. Built so far:
+  - **Shielded:** a magenta shield ring around the body. The first correct
+    answer breaks it (scores, extends the streak), rolls a new unique sum, and
+    knocks the alien back and holds it while the new balls pop in. The second
+    answer kills it.
+  - **Blinker:** its balls have eyelids that close on a fixed rhythm (first
+    open 3.2s, then open 2.4s → flutter 0.6s → shut 1.1s). The flutter is the
+    telegraph, and the body's own eye closes in sync. The answer never changes,
+    so it can be typed from memory.
+  - **Splitter:** when killed it pops into two 2-ball splitlings that glide
+    to lanes a full `MIN_SPAWN_GAP` apart (never closer to the player than
+    `SPLITTER.MAX_CHILD_Y`). A splitling whose landing lane isn't clear is
+    not spawned, and they start halfway out so their balls never overlap.
+  - **Solo ramp:** abilities unlock by difficulty (Shielded d≥0.25, Blinker
+    0.4, Splitter 0.55). A spawn gets one with `abilityChance` (20%→40%), with
+    at most 1 ability alien on screen (2 from d≥0.8). Ability aliens always
+    carry 2 balls, add +1 threat, and pay a kill multiplier
+    (`ABILITY.SCORE_MULT`). The first sighting per run shows a one-line intro
+    banner. Ability clocks run on real time, so the post-hit freeze never
+    holds a Blinker shut.
+  - **Play-testing (dev only):** `?ability=blinker,shielded,splitter` makes
+    every allowed spawn one of the listed abilities, ignoring unlocks.
 - **Hit recovery**: on losing a life (but not the last) the whole field **freezes
   for `RECOVERY.FREEZE_MS` (3s)** so the player can read the board, then resumes
   at `RECOVERY.POST_HIT_FACTOR` (80%) speed for the rest of the run. The slowdown
@@ -277,6 +314,10 @@ curve is in `src/config/difficulty.ts` (`difficultyAt(elapsedMs, score)`).
 6b. [x] Selectable player ship (3 models) + random monster models (darter,
        lumberer, drifter). **Next:** give each monster its own behavior and
        character; keep adding ship/monster variations.
+6c. [x] **Monster abilities:** ability system (update/onHit/onKilled hooks) with
+       Shielded, Blinker and Splitter (+ splitling), unlocked by difficulty in
+       solo play. **Next:** Hider, Orbiter and Worm on the same hooks; later these
+       are the aliens players send each other.
 7. [ ] **Drifter bonus enemy** — non-lethal alien that crosses horizontally
        (`behavior: "wander"`); spot & solve it for bonus points, no life cost.
        Next up.
@@ -309,6 +350,15 @@ curve is in `src/config/difficulty.ts` (`difficultyAt(elapsedMs, score)`).
 ## Decision Log
 
 Newest first. Format: `YYYY-MM-DD — decision — rationale`.
+
+- **2026-09-25 — Monster abilities as a hook-based system; Shielded, Blinker
+  and Splitter first.** An ability is a separate field from the movement
+  `behavior`, with `update`/`onHit`/`onKilled` hooks plus an `AbilityHost` for
+  field effects. The first three each prove one hook (hide state, absorb a
+  hit, spawn on death), and Hider/Orbiter/Worm reuse them. Solo play unlocks
+  them by difficulty with a one-time intro banner. Every hide is telegraphed and
+  follows a fixed rhythm (learnable). Four new models: `alien_shielded`,
+  `alien_blinker`, `alien_splitter`, `alien_splitling`.
 
 - **2026-09-25 — Battle-royale direction (docs/MULTIPLAYER_DESIGN.md).** Kills
   charge an energy bar (no automatic attacks), spent on sending aliens or

@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import {
+  ABILITY,
   BULLET,
   DIFFICULTY,
   ENEMY,
@@ -8,11 +9,19 @@ import {
   RANKS,
   RECOVERY,
   SCORE,
+  SPLITTER,
   STORAGE,
 } from "../config/constants";
-import { difficultyAt } from "../config/difficulty";
+import { difficultyAt, type DifficultyParams } from "../config/difficulty";
 import { isLeaderboardEnabled, startMatch } from "../services/leaderboard";
 import Alien from "../objects/Alien";
+import {
+  ABILITY_KINDS,
+  createAbility,
+  unlockedAbilities,
+  type AbilityHost,
+  type AbilityKind,
+} from "../objects/abilities";
 import type { Bullet } from "../objects/Bullet";
 import World3D, { getWorld3D } from "../render3d/World3D";
 import { selectedShip } from "../config/ships";
@@ -26,7 +35,7 @@ import { selectedShip } from "../config/ships";
  * coordinates. Phaser draws only the HUD and keypad; the playfield is drawn in
  * 3D by World3D, which reads a snapshot of this state at the end of each frame.
  */
-export default class GameScene extends Phaser.Scene {
+export default class GameScene extends Phaser.Scene implements AbilityHost {
   private world!: World3D;
   private shipX: number = GAME.WIDTH / 2;
   private bullets: Bullet[] = [];
@@ -76,6 +85,12 @@ export default class GameScene extends Phaser.Scene {
   // player can't keep solving sums during the break.
   private paused = false;
   private pauseOverlay: Phaser.GameObjects.GameObject[] = [];
+
+  /** Abilities already introduced this run (each gets one intro banner). */
+  private seenAbilities = new Set<AbilityKind>();
+  /** Dev only: `?ability=blinker,shielded` makes every allowed spawn one of
+   * these (ignoring unlocks and chance) for play-testing. */
+  private forcedAbilities: AbilityKind[] | null = null;
 
   constructor() {
     super("GameScene");
@@ -130,6 +145,15 @@ export default class GameScene extends Phaser.Scene {
     this.postHitSlow = false;
     this.paused = false;
     this.pauseOverlay = [];
+    this.seenAbilities.clear();
+    this.forcedAbilities = null;
+    if (import.meta.env.DEV) {
+      const forced = new URLSearchParams(window.location.search).get("ability");
+      const kinds = forced
+        ?.split(",")
+        .filter((k): k is AbilityKind => (ABILITY_KINDS as string[]).includes(k));
+      if (kinds?.length) this.forcedAbilities = kinds;
+    }
   }
 
   update(time: number, delta: number): void {
@@ -189,6 +213,10 @@ export default class GameScene extends Phaser.Scene {
       const typedVal = this.typed === "" ? -1 : parseInt(this.typed, 10);
       this.target = this.enemiesInField.get(typedVal) ?? null;
     }
+
+    // Ability clocks run on real time, not field time: a blinker must not stay
+    // shut through the post-hit freeze meant for reading the board.
+    for (const alien of this.aliens) if (alien.active) alien.ability?.update(delta);
 
     // Advance every alien; detect ones that reached the player line. The active
     // target STOPS while it is locked on: once the player has typed its answer it
@@ -260,6 +288,7 @@ export default class GameScene extends Phaser.Scene {
     for (const a of this.aliens) {
       if (!a.active || a === this.lockedTarget) continue;
       threat += ENEMY.THREAT_BY_BALLS[a.ballCount] ?? 1;
+      if (a.ability) threat += ABILITY.THREAT;
     }
     return threat;
   }
@@ -277,6 +306,39 @@ export default class GameScene extends Phaser.Scene {
     ).length;
   }
 
+  /** Count of live ability aliens, excluding the locked target. */
+  private abilityAliensOnScreen(): number {
+    return this.aliens.filter((a) => a.active && a !== this.lockedTarget && a.ability).length;
+  }
+
+  /** Roll whether the next spawn gets an ability (and which), or null. */
+  private pickAbility(diff: DifficultyParams): AbilityKind | null {
+    if (this.abilityAliensOnScreen() >= diff.maxAbilityOnScreen) return null;
+    const pool = this.forcedAbilities ?? unlockedAbilities(diff.d);
+    if (!pool.length) return null;
+    if (!this.forcedAbilities && Math.random() >= diff.abilityChance) return null;
+    return Phaser.Utils.Array.GetRandom(pool);
+  }
+
+  /**
+   * Roll digits (a random count in [minBalls, maxBalls], each 1..maxDigit) whose
+   * sum is not already on the field, so each typed number maps to exactly one
+   * alien. Returns null if the field is too saturated to find one.
+   */
+  private rollSum(
+    minBalls: number,
+    maxBalls: number,
+    maxDigit: number,
+  ): { digits: number[]; result: number } | null {
+    for (let attempt = 0; attempt < 12; attempt++) {
+      const count = Phaser.Math.Between(minBalls, maxBalls);
+      const digits = Array.from({ length: count }, () => Phaser.Math.Between(1, maxDigit));
+      const result = digits.reduce((s, d) => s + d, 0);
+      if (!this.enemiesInField.has(result)) return { digits, result };
+    }
+    return null;
+  }
+
   private spawnAlien(): void {
     if (this.gameOver) return;
 
@@ -286,58 +348,125 @@ export default class GameScene extends Phaser.Scene {
     // unrecoverable.
     if (this.aliens.filter((a) => a.active).length >= diff.maxOnScreen) return;
 
-    // Build a unique result so each typed number maps to exactly one alien.
+    const kind = this.pickAbility(diff);
+
     // Ball count (>= 2, so it is always a real sum) and digit size scale up, but
     // cap concurrent "hard" (multi-number) enemies so the player never has to
-    // juggle two slow multi-number sums at once.
-    const maxBallsAllowed =
-      this.hardAliensOnScreen() >= diff.maxHardOnScreen
+    // juggle two slow multi-number sums at once. Ability aliens carry a fixed,
+    // easy ball count: the ability is the challenge.
+    const maxBallsAllowed = kind
+      ? ABILITY.BALLS
+      : this.hardAliensOnScreen() >= diff.maxHardOnScreen
         ? Math.max(DIFFICULTY.MIN_BALLS, ENEMY.HARD_BALL_THRESHOLD - 1)
         : diff.maxBalls;
-    let digits: number[] = [];
-    let result = -1;
-    for (let attempt = 0; attempt < 12; attempt++) {
-      const count = Phaser.Math.Between(DIFFICULTY.MIN_BALLS, maxBallsAllowed);
-      digits = Array.from({ length: count }, () =>
-        Phaser.Math.Between(1, diff.maxDigit),
-      );
-      result = digits.reduce((s, d) => s + d, 0);
-      if (!this.enemiesInField.has(result)) break;
-      result = -1;
-    }
-    if (result === -1) return; // field saturated, skip this tick
+    const minBalls = kind ? ABILITY.BALLS : DIFFICULTY.MIN_BALLS;
+    const sum = this.rollSum(minBalls, maxBallsAllowed, diff.maxDigit);
+    if (!sum) return; // field saturated, skip this tick
 
     // Pick a lane x that keeps clear of the last spawn AND any alien still near
-    // the top, so aliens (and their numbers) never overlap on screen.
+    // the top, so aliens (and their numbers) never overlap on screen. Gliding
+    // aliens (splitlings) count where they will land.
     const overlaps = (cx: number) =>
-      this.aliens.some((a) => a.active && a.y < 110 && Math.abs(a.x - cx) < ENEMY.MIN_SPAWN_GAP);
-    let x = Phaser.Math.Between(40, GAME.WIDTH - 40);
+      this.aliens.some(
+        (a) => a.active && a.laneY < 110 && Math.abs(a.laneX - cx) < ENEMY.MIN_SPAWN_GAP,
+      );
+    const margin = ENEMY.LANE_MARGIN;
+    let x = Phaser.Math.Between(margin, GAME.WIDTH - margin);
     let guard = 0;
     while (
       (Math.abs(x - this.lastSpawnX) < ENEMY.MIN_SPAWN_GAP || overlaps(x)) &&
       guard++ < 12
     ) {
-      x = Phaser.Math.Between(40, GAME.WIDTH - 40);
+      x = Phaser.Math.Between(margin, GAME.WIDTH - margin);
     }
     if (overlaps(x)) return; // no clear lane right now — skip to avoid overlap
     this.lastSpawnX = x;
 
-    const bodyKey = `alien${Phaser.Math.Between(1, 13)}`;
+    this.addAlien(x, -20, sum, diff, kind ? ABILITY.MODEL[kind] : undefined, kind);
+    if (kind) this.introduceAbility(kind);
+  }
+
+  private addAlien(
+    x: number,
+    y: number,
+    sum: { digits: number[]; result: number },
+    diff: DifficultyParams,
+    model?: string,
+    kind?: AbilityKind | null,
+  ): Alien {
     // Personality: fewer balls (easier sum) => faster; more balls => slower.
-    const speedScale = ENEMY.SPEED_BY_BALLS[digits.length] ?? 1;
+    const speedScale = ENEMY.SPEED_BY_BALLS[sum.digits.length] ?? 1;
     const alien = new Alien({
       x,
-      y: -20,
-      bodyKey,
-      result,
-      digits,
+      y,
+      bodyKey: `alien${Phaser.Math.Between(1, 13)}`,
+      result: sum.result,
+      digits: sum.digits,
       ballTexture: "blueBalls",
       fallSpeed: diff.fallSpeed * speedScale,
       homeSpeed: diff.homeSpeed * speedScale,
       spawnedAt: this.time.now,
+      model,
+      ability: kind ? createAbility(kind) : undefined,
     });
     this.aliens.push(alien);
-    this.enemiesInField.set(result, alien);
+    this.enemiesInField.set(sum.result, alien);
+    return alien;
+  }
+
+  /** First sighting of an ability this run: a short banner names it and its rule. */
+  private introduceAbility(kind: AbilityKind): void {
+    if (this.seenAbilities.has(kind)) return;
+    this.seenAbilities.add(kind);
+    const banner = this.add
+      .text(GAME.WIDTH / 2, ABILITY.INTRO_Y, ABILITY.INTRO[kind], {
+        fontFamily: "monospace",
+        fontSize: "15px",
+        color: "#ffd166",
+        stroke: "#05060f",
+        strokeThickness: 4,
+      })
+      .setOrigin(0.5)
+      .setDepth(5);
+    this.tweens.add({
+      targets: banner,
+      alpha: 0,
+      delay: ABILITY.INTRO_MS,
+      duration: 400,
+      onComplete: () => banner.destroy(),
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // AbilityHost: what abilities may ask of the field (see objects/abilities.ts)
+  // ---------------------------------------------------------------------------
+  public rerollSum(alien: Alien): boolean {
+    const diff = difficultyAt(this.elapsedMs, this.score);
+    const sum = this.rollSum(alien.ballCount, alien.ballCount, diff.maxDigit);
+    if (!sum) return false;
+    this.enemiesInField.delete(alien.result);
+    alien.setSum(sum.digits, sum.result, this.time.now);
+    this.enemiesInField.set(sum.result, alien);
+    return true;
+  }
+
+  public spawnSplitling(parent: Alien, x: number, y: number): boolean {
+    const blocked = this.aliens.some(
+      (a) =>
+        a.active &&
+        a !== parent &&
+        Math.abs(a.laneX - x) < ENEMY.MIN_SPAWN_GAP &&
+        Math.abs(a.laneY - y) < SPLITTER.CLEAR_Y,
+    );
+    if (blocked) return false;
+    const diff = difficultyAt(this.elapsedMs, this.score);
+    const sum = this.rollSum(DIFFICULTY.MIN_BALLS, DIFFICULTY.MIN_BALLS, diff.maxDigit);
+    if (!sum) return false;
+    // Start halfway out, not at the parent's center: the two splitlings then
+    // begin a full ball-row apart, so their numbers never overlap mid-glide.
+    const child = this.addAlien((parent.x + x) / 2, parent.y, sum, diff, SPLITTER.CHILD_MODEL);
+    child.glideTo(x, y, SPLITTER.GLIDE_MS);
+    return true;
   }
 
   // ---------------------------------------------------------------------------
@@ -366,7 +495,26 @@ export default class GameScene extends Phaser.Scene {
   private onBulletHit(bullet: Bullet, alien: Alien): void {
     if (!alien.active) return;
     bullet.active = false;
-    this.killAlien(alien);
+    const solveMs = this.time.now - alien.spawnedAt; // before an ability rerolls the sum
+    if (alien.ability?.onHit(alien, this)) this.onHitAbsorbed(alien, solveMs);
+    else this.killAlien(alien);
+  }
+
+  /**
+   * An ability took the hit (e.g. a shield broke and rolled a new sum). The
+   * answer was still correct, so it scores and extends the streak, but the
+   * alien lives on: release the lock so the player can target its new sum.
+   */
+  private onHitAbsorbed(alien: Alien, solveMs: number): void {
+    this.combo += 1;
+    this.bestComboThisRun = Math.max(this.bestComboThisRun, this.combo);
+    this.updateComboText();
+    this.sound.play("explode", { volume: 0.3, rate: 1.6 });
+    this.addScore(this.computeScore(alien.ballCount, solveMs), alien.x, alien.y);
+    if (this.lockedTarget === alien) {
+      this.lockedTarget = null;
+      this.lockedBullet = null;
+    }
   }
 
   /** Award and clean up a destroyed alien. */
@@ -382,7 +530,8 @@ export default class GameScene extends Phaser.Scene {
     this.fastestSolveMs = Math.min(this.fastestSolveMs, solveMs);
     this.updateComboText();
 
-    const points = this.computeScore(alien.ballCount, solveMs);
+    const abilityMult = alien.ability ? ABILITY.SCORE_MULT[alien.ability.kind] : 1;
+    const points = Math.round(this.computeScore(alien.ballCount, solveMs) * abilityMult);
 
     this.explode(alien);
     this.addScore(points, alien.x, alien.y);
@@ -393,6 +542,8 @@ export default class GameScene extends Phaser.Scene {
       this.lockedBullet = null;
     }
     alien.kill();
+    // After kill() so the dead alien doesn't block its own splitlings' lanes.
+    alien.ability?.onKilled(alien, this);
   }
 
   /** points = BASE * ballCountBonus * speedBonus * difficultyMult * comboMult. */

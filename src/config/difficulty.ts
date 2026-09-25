@@ -1,4 +1,4 @@
-import { DIFFICULTY } from "./constants";
+import { ABILITY, DIFFICULTY } from "./constants";
 
 export interface DifficultyParams {
   /** Normalized difficulty in [0,1). 0 = easiest, approaches 1 with score/time. */
@@ -15,6 +15,10 @@ export interface DifficultyParams {
   maxHardOnScreen: number;
   /** Max concurrent UNSOLVED aliens (primary spawn gate); score-driven, 1→3. */
   maxUnsolved: number;
+  /** Chance a spawn gets one of the unlocked monster abilities. */
+  abilityChance: number;
+  /** Max concurrent ability aliens (1, then 2 late in a run). */
+  maxAbilityOnScreen: number;
 }
 
 type Range = { easy: number; hard: number };
@@ -52,5 +56,7 @@ export function difficultyAt(elapsedMs: number, score = 0): DifficultyParams {
     maxHardOnScreen: d < DIFFICULTY.SECOND_HARD_AT ? 1 : 2,
     // Score ALONE opens up concurrent unsolved sums (1 → 2 → 3).
     maxUnsolved: Math.round(lerp(DIFFICULTY.MAX_UNSOLVED, dScore)),
+    abilityChance: lerp(ABILITY.CHANCE),
+    maxAbilityOnScreen: d < ABILITY.SECOND_AT ? 1 : 2,
   };
 }

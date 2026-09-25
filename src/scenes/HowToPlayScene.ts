@@ -44,9 +44,15 @@ export default class HowToPlayScene extends Phaser.Scene {
         heading: "SCORE BIG",
         body:
           "Solve fast and keep a kill streak for combo\n" +
-          "bonuses. Harder sums and later waves pay\n" +
-          "more. The board fills with tougher aliens as\n" +
-          "your score climbs.",
+          "bonuses. Harder sums and later waves pay more.",
+      },
+      {
+        heading: "SPECIAL ALIENS",
+        body:
+          "As your score climbs, some aliens gain powers:\n" +
+          "SHIELDED  answer twice; a new sum appears\n" +
+          "BLINKER   read it while its eyes are open\n" +
+          "SPLITTER  pops into two small aliens",
       },
       {
         heading: "CONTROLS",
@@ -54,7 +60,7 @@ export default class HowToPlayScene extends Phaser.Scene {
       },
     ];
 
-    let y = 120;
+    let y = 105;
     for (const s of sections) {
       this.add.text(40, y, s.heading, {
         fontFamily: "monospace",
@@ -68,7 +74,7 @@ export default class HowToPlayScene extends Phaser.Scene {
         color: "#ffffff",
         lineSpacing: 4,
       });
-      y += s.body.split("\n").length * 20 + 16;
+      y += s.body.split("\n").length * 20 + 10;
     }
 
     this.makeBackButton(cx, GAME.HEIGHT - 50);

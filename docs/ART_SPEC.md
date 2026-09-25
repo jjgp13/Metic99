@@ -123,12 +123,16 @@ Balls are **glass spheres with the number floating inside**
 - Balls do not rotate. Radius `RENDER3D.BALL_RADIUS` (9 px), row spacing
   `ENEMY.BALL_SPACING` (20 px). Color = operation (`RENDER3D.BALL_TINT`, §4).
 
+**Eyelid balls (built, the Blinker's ability):** `createNumberBall(n, tint,
+lidColor)` adds two opaque hemispherical lids hinged on the ball's horizontal
+axis; `setBallCover(ball, 0..1)` swings them shut. Open, they rest tilted back
+(`RENDER3D.BALL_LID_OPEN_ANGLE`) so a thin magenta rim marks the ball even
+before it blinks.
+
 ### Ideas to iterate on (not decided)
 
 The balls are also a design space for monsters. Candidates to prototype:
 
-- **Eyelid balls:** a sphere opens and closes like an eye; the number is only
-  readable while it's open (timing pressure, a "blinking" monster).
 - **Monsters made of balls:** the body itself is a cluster of number spheres
   (caterpillar, molecule, grape bunch) instead of balls floating above a body.
 - Whatever we try, the number must stay the most readable element on screen.
@@ -181,6 +185,7 @@ Keep samples low (~24) → ~1 s per image.
 | `lathe(profile, swatch, segments)` | Spins a `(radius, z)` side profile around Z: saucers, domes, shells, rims, pods |
 | `radial(count, build_one)` | Places parts evenly around Z (tentacles, legs, rim lights, scutes) |
 | `socket(name, loc)` / `anim_part(obj, role)` | Sockets and animated parts (§6) |
+| `pivot(obj, point)` | Moves an `anim_*` part's origin (e.g. an eyelid hinged at its top edge) |
 | `join`, `paint`, `export_glb`, `render_previews` | Plumbing |
 
 ### Variants
@@ -209,12 +214,21 @@ Example recipes exist (2026-09-24) for `alien_darter`, `alien_lumberer`,
 ship on the menu, and each alien spawns as a random monster (behavior per
 monster comes later). More variations of both will follow in this style.
 
+Ability monsters (2026-09-25) wear a model that shows their ability before it
+triggers: `alien_shielded` (grey armored beetle with a glowing shield emitter),
+`alien_blinker` (magenta head that is one big eye, with an `anim_lid`),
+`alien_splitter` (two pink cell lobes on a glowing seam) and `alien_splitling`
+(one lobe, spawned in pairs by the splitter).
+
 | Model | Gameplay role | Look |
 | --- | --- | --- |
 | `ship_player` | The player | Fat lavender hull, cyan canopy, twin glowing engines |
 | `alien_darter` | 2-number alien, fast | Small, sleek, pointed; tail/fins trailing |
 | `alien_lumberer` | 3-number alien, slow | Big round body, heavy limbs, plated back |
 | `alien_drifter` | Bonus, non-lethal (roadmap) | Jellyfish/UFO, glowing rim, crosses sideways |
+| `alien_shielded` | Ability: needs two answers | Grey armored beetle, magenta emitter; shield bubble drawn in code |
+| `alien_blinker` | Ability: balls blink shut | Magenta one-eyed head with lashes; `anim_lid` closes with the balls |
+| `alien_splitter` / `alien_splitling` | Ability: pops into two 2-ball aliens | Two pink lobes on a glowing seam / one lobe |
 | `alien_attack` | Sent by an opponent (battle royale) | Any alien + attacker's color glow ring |
 | `ball_chip` | Number ball | Coin + digit texture (§7) |
 
@@ -228,8 +242,11 @@ monster comes later). More variations of both will follow in this style.
   so art lands one model at a time. Adding a model = recipe + build + add its
   name to `RENDER3D.MODELS` + use it in `World3D`.
 - Done: the three ships (their `anim_flame*` parts flicker) and the three
-  monsters (balls sit at `socket_balls`). To do: animate the monsters'
-  `anim_*` parts, read `socket_muzzle` for bullets.
+  monsters (balls sit at `socket_balls`). Ability monsters animate their parts:
+  `anim_lid` (scaled along Blender Y = the glTF node's Z by the blink),
+  `anim_emitter` (pulses while the shield is up) and `anim_nucleus*` (pulse).
+  To do: animate the base monsters' `anim_*` parts, read `socket_muzzle` for
+  bullets.
 - The build also renders `public/assets/icons/<model>.png` (128 px, transparent,
   top-down) for 2D menus such as the ship picker.
 
