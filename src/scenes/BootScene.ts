@@ -70,6 +70,10 @@ export default class BootScene extends Phaser.Scene {
     for (const name of RENDER3D.MODELS) {
       this.load.binary(`model:${name}`, `${base}/models/${name}.glb`);
     }
+    // Top-down ship renders for the menu's ship picker (built with the models).
+    for (const ship of RENDER3D.SHIPS) {
+      this.load.image(`icon:${ship.model}`, `${base}/icons/${ship.model}.png`);
+    }
 
     // --- Audio --------------------------------------------------------------
     this.load.audio("shoot", `${base}/sounds/Laser_Shoot3.wav`);

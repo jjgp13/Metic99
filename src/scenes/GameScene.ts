@@ -15,6 +15,7 @@ import { isLeaderboardEnabled, startMatch } from "../services/leaderboard";
 import Alien from "../objects/Alien";
 import type { Bullet } from "../objects/Bullet";
 import World3D, { getWorld3D } from "../render3d/World3D";
+import { selectedShip } from "../config/ships";
 
 /**
  * GameScene owns the actual gameplay. A Phaser Scene has a lifecycle:
@@ -86,7 +87,7 @@ export default class GameScene extends Phaser.Scene {
     // The 3D playfield (starfield, ship, aliens, bullets, explosions) renders on
     // its own canvas under Phaser's; stop drawing it when we leave this scene.
     this.world = getWorld3D();
-    this.world.begin(this.textures, this.game.canvas);
+    this.world.begin(this.textures, this.game.canvas, selectedShip().model);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.world.end());
 
     this.buildHud();

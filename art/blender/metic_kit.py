@@ -146,6 +146,46 @@ def blob(name, center, radius, swatch, scale=(1, 1, 1), subdivisions=1):
     return _finish(name, bm, swatch, location=center)
 
 
+def lathe(name, profile, swatch, center=(0, 0, 0), segments=8, scale=(1, 1, 1)):
+    """Spin a side profile [(radius, z), ...] (listed top to bottom) around Z.
+
+    Round parts in one line: saucers, domes, rims, pods, jellyfish bells. A radius
+    of 0 closes the shape at that end; open ends are capped.
+    """
+    bm = bmesh.new()
+    rings = []
+    for r, z in profile:
+        if r < 1e-6:
+            rings.append([bm.verts.new((0, 0, z))])
+        else:
+            rings.append([bm.verts.new((r * math.cos(a), r * math.sin(a), z))
+                          for a in (2 * math.pi * i / segments for i in range(segments))])
+    for up, lo in zip(rings, rings[1:]):
+        for i in range(segments):
+            j = (i + 1) % segments
+            quad = [up[i % len(up)], lo[i % len(lo)], lo[j % len(lo)], up[j % len(up)]]
+            face = list(dict.fromkeys(quad))  # a pole collapses the quad to a triangle
+            if len(face) >= 3:
+                bm.faces.new(face)
+    for ring in (rings[0], rings[-1]):
+        if len(ring) > 1:
+            bm.faces.new(ring)
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    bmesh.ops.transform(bm, matrix=Matrix.Diagonal((*scale, 1)), verts=bm.verts)
+    return _finish(name, bm, swatch, location=center)
+
+
+def radial(count, build_one, start=0.0, spread=2 * math.pi):
+    """Call build_one(i, angle, (cos, sin)) for parts spaced around Z.
+
+    Tentacles, legs, spikes, lights on a rim. `spread` < 2π fans them over an arc
+    starting at `start` (radians, 0 = +X, π/2 = +Y) instead of a full circle.
+    """
+    step = spread / count if spread >= 2 * math.pi - 1e-6 else spread / max(count - 1, 1)
+    return [build_one(i, start + i * step, (math.cos(start + i * step), math.sin(start + i * step)))
+            for i in range(count)]
+
+
 def creature(name, nodes, edges, swatch, subdivisions=1, decimate=0.45):
     """Organic body from a stick skeleton: nodes = [((x, y, z), radius), ...].
 
@@ -161,8 +201,10 @@ def creature(name, nodes, edges, swatch, subdivisions=1, decimate=0.45):
         sv = me.skin_vertices[0].data[i]
         sv.radius = (r, r)
         sv.use_root = i == 0
-    obj.modifiers.new("sub", "SUBSURF").levels = subdivisions
-    obj.modifiers.new("dec", "DECIMATE").ratio = decimate
+    if subdivisions:
+        obj.modifiers.new("sub", "SUBSURF").levels = subdivisions
+    if decimate < 1:
+        obj.modifiers.new("dec", "DECIMATE").ratio = decimate
     _apply_modifiers(obj)
     return paint(obj, swatch)
 
@@ -241,8 +283,11 @@ def export_glb(root, path):
                               export_apply=True, export_yup=True)
 
 
-def render_previews(root, out_prefix):
+def render_previews(root, out_prefix, icon_path=None):
     """Top-down (the game's view) + 3/4 renders for review.
+
+    With icon_path, also renders a small transparent top-down icon the game's 2D
+    menus can show (e.g. the ship picker).
 
     Uses Cycles on the CPU: the GPU renderers (Workbench/EEVEE) crash in
     background mode with the dev machine's AMD driver.
@@ -276,7 +321,7 @@ def render_previews(root, out_prefix):
 
     size = max(max(root.dimensions.x, root.dimensions.y), 1.0)
 
-    def shot(suffix, loc, ortho):
+    def shot(path, loc, ortho):
         cam.location = loc
         # Straight down with +Y (the nose) at the top of the frame, like the game.
         cam.rotation_euler = (0, 0, 0) if ortho else (-Vector(loc)).to_track_quat("-Z", "Y").to_euler()
@@ -286,8 +331,13 @@ def render_previews(root, out_prefix):
         else:
             cam_data.type = "PERSP"
             cam_data.lens = 50
-        scene.render.filepath = f"{out_prefix}_{suffix}.png"
+        scene.render.filepath = path
         bpy.ops.render.render(write_still=True)
 
-    shot("top", (0, 0, size * 4), ortho=True)
-    shot("34", (0, -size * 2.2, size * 1.9), ortho=False)
+    shot(f"{out_prefix}_top.png", (0, 0, size * 4), ortho=True)
+    shot(f"{out_prefix}_34.png", (0, -size * 2.2, size * 1.9), ortho=False)
+    if icon_path:
+        scene.render.film_transparent = True
+        scene.render.resolution_x = scene.render.resolution_y = 128
+        shot(icon_path, (0, 0, size * 4), ortho=True)
+        scene.render.film_transparent = False

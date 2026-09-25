@@ -50,9 +50,10 @@ src/
   config/
     constants.ts      All tunable gameplay/layout values
     difficulty.ts     Logistic difficulty curve
+    ships.ts          Player's ship choice (menu picker, saved in localStorage)
   scenes/
     BootScene.ts      Preloads assets; defers animations (static frames for now)
-    MenuScene.ts      Title screen: PLAY / HOW TO PLAY / SCORES buttons
+    MenuScene.ts      Title screen: ship picker + PLAY / HOW TO PLAY / SCORES
     HowToPlayScene.ts Static rules screen reached from the menu
     GameScene.ts      The core loop: spawn, input, targeting, combat, HUD.
                       Owns plain game state (shipX, aliens[], bullets[]) and
@@ -76,6 +77,7 @@ art/                  3D art source (docs/ART_SPEC.md)
   blender/            metic_kit.py helpers, build.py, recipes/<model>.py
   previews/           Rendered top-down + 3/4 previews per model
 public/assets/models/ Built .glb models loaded by World3D
+public/assets/icons/  Transparent top-down model renders for 2D menus (build output)
 docs/ART_SPEC.md      3D art style, budgets, axes, pipeline
   env.d.ts            Types for Vite `import.meta.env` (Supabase env vars)
 ```
@@ -109,7 +111,8 @@ docs/ART_SPEC.md      3D art style, budgets, axes, pipeline
   (baked in at build, public by design). `isLeaderboardEnabled()` is true only
   when both are present, so the game **builds and runs locally without them** —
   game over just returns to the menu instead of routing to name entry.
-- **Navigation:** `BootScene` → `MenuScene` (PLAY / HOW TO PLAY / SCORES). PLAY →
+- **Navigation:** `BootScene` → `MenuScene` (ship picker ◀ ▶ / ←→, then PLAY /
+  HOW TO PLAY / SCORES). PLAY →
   `GameScene`; HOW TO PLAY → `HowToPlayScene`; SCORES → `LeaderboardScene` in
   **browse** mode (fetches `getTop()` itself, BACK → menu).
 - Game-over flow (when enabled): GAME OVER overlay → `NameEntryScene` (3–6 char
@@ -166,6 +169,13 @@ Green=multiplication, Yellow=division.
 - **Motion polish:** aliens sway (yaw), the ship banks toward its target,
   explosions burst into voxel debris in the alien's colors with a flash from one
   reused point light (adding lights at runtime would trigger shader recompiles).
+- **Models in play:** the player flies the ship picked on the menu
+  (`RENDER3D.SHIPS`: FALCON `ship_player`, DART `ship_dart`, POD `ship_pod`; the
+  pick is stored under `STORAGE.SHIP`). Each alien gets a random monster model
+  from `RENDER3D.ALIEN_MODELS` (darter / lumberer / drifter), chosen in
+  `World3D` for now, with its balls at the model's `socket_balls`. Explosion
+  debris uses that model's colors. Per-monster behavior is planned (see
+  Roadmap), and then the monster type moves into the `Alien` state.
 - One WebGL context for the whole page (singleton), hidden outside GameScene.
 - Dev only: `window.__metic = { game, world }` for console inspection.
 - **Art direction for new 3D models:** see [`docs/ART_SPEC.md`](docs/ART_SPEC.md)
@@ -263,6 +273,9 @@ curve is in `src/config/difficulty.ts` (`difficultyAt(elapsedMs, score)`).
 4. [x] Pause (hides field) + freeze-then-slow hit recovery
 5. [x] Fair targeting: locked target holds still; concurrent-alien cap
 6. [x] Enemy personality by ball count + skill-based scoring + mastery ranks
+6b. [x] Selectable player ship (3 models) + random monster models (darter,
+       lumberer, drifter). **Next:** give each monster its own behavior and
+       character; keep adding ship/monster variations.
 7. [ ] **Drifter bonus enemy** — non-lethal alien that crosses horizontally
        (`behavior: "wander"`); spot & solve it for bonus points, no life cost.
        Next up.
@@ -294,6 +307,19 @@ curve is in `src/config/difficulty.ts` (`difficultyAt(elapsedMs, score)`).
 ## Decision Log
 
 Newest first. Format: `YYYY-MM-DD — decision — rationale`.
+
+- **2026-09-24 — Player picks a ship; monsters spawn with random models.** All
+  three ship styles are kept and chosen on the menu (saved in localStorage) so
+  players can express a preference. The three monsters are cosmetic and random
+  for now; per-monster behavior/character comes next, then more variations. The
+  build now renders transparent icons (`public/assets/icons/`) for 2D menus.
+
+- **2026-09-24 — Example monster and ship models for choosing an art direction.**
+  Recipes built for `alien_darter` / `alien_lumberer` / `alien_drifter` and two
+  alternative ships (`ship_dart` sleek, `ship_pod` chunky). They are not in the
+  game yet (pending the owner's pick). Aliens face -Y with a per-model
+  `socket_balls` at +Y. Kit gained `lathe`/`radial`; `contact_sheet.py` makes
+  `art/previews/comparison.png`.
 
 - **2026-09-24 — Number balls are glass spheres with the digit inside; first
   Blender model in game.** Balls moved from voxel chips to a tinted glass sphere
