@@ -63,6 +63,10 @@ src/
   services/
     leaderboard.ts    Supabase global high scores: startMatch + match-gated
                       submitScore, plus getTop/getRank reads
+  sim/
+    energy.ts         Phaser-free energy rules: energyForKill, EnergyMeter
+                      (charge/spend/drain per spender), SlowTime (drain | stop).
+                      Kept pure so a future server sim can share it.
   objects/
     Alien.ts          Pure alien state (x/y, digits, result, `kind`) + per-kind
                       movement patterns and readability box; no rendering.
@@ -206,9 +210,9 @@ Green=multiplication, Yellow=division.
     score). It runs on its own spawn clock (first after 15 s, then every
     18–28 s, one at a time) and does **not** count toward any spawn cap. Stray
     bullets fly through it (it must be solved, not hit by accident).
-- **Energy** (placeholder): `GameScene.grantEnergy()` accumulates the drifter's
-  burst and pops "+N ENERGY". When feature/energy-bar lands it becomes a call
-  to that branch's `addEnergy()` / `EnergyMeter.charge()`.
+- **Drifter energy:** a solved drifter charges its `ENERGY_BURST` on top of the
+  normal kill energy (one `addEnergy()` call, capped by the meter) and pops
+  "+N ENERGY" where it died.
 - **Scoring** rewards skill (`SCORE` in constants):
   `BASE × ballCountBonus × speedBonus × difficultyMult × comboMult`, where speed
   bonus decays from solving fast→slow, difficulty = `1 + d`, and the combo
@@ -249,8 +253,28 @@ Green=multiplication, Yellow=division.
   may be on screen until late game (`DIFFICULTY.SECOND_HARD_AT` = d≥0.85, then
   two), so the player never juggles two multi-number sums at once. When the cap
   is hit the spawn is forced to an easy 2-ball enemy.
-- Input: on-screen keypad **and** physical keyboard (0–9, Backspace, Esc).
-  Max 2 typed digits.
+- Input: on-screen keypad **and** physical keyboard (0–9, Backspace, Esc,
+  Space = SLOW, M = slow mode, P = pause). Max 2 typed digits.
+- **Energy** (`ENERGY`, `src/sim/energy.ts`): each kill charges a 0–100 meter by
+  `BASE × ballBonus × digitBonus × speedBonus × comboBonus` (more balls, bigger
+  average digit, faster solve, longer streak = more; ~8 for an easy early kill,
+  30+ for a fast 3-ball streak kill). Overflow is lost. The meter only charges
+  and spends; each use is a separate spender (`"slow"` now, `"send"` reserved
+  for the battle royale). Per-run earned/spent totals show on game over.
+- **Slow time** (`SLOW_TIME`): the player spends energy to slow their OWN field
+  (alien movement + spawn clock); the ship, bullets and difficulty clock keep
+  full speed. Two playtest modes, switched in game with `M` or by tapping the
+  mode bar under the keypad (remembered in `STORAGE.SLOW_MODE`):
+  - `drain` (default): toggle; field at 60% while energy drains 16/s; needs 10
+    to switch on; turns off when tapped again or when empty.
+  - `stop`: one-shot; pays 50 for a 1.5 s full stop.
+  Both buy roughly the same field-time per energy, so the playtest compares
+  feel, not strength. Slow time **holds** (no drain, stop timer paused) while
+  the hit-recovery freeze already stops the field. The field is tinted while
+  slow time runs.
+- **Energy HUD** sits in the gutters beside the keypad (meter on the left with
+  a mark at the current mode's activation cost, tall SLOW button on the right)
+  plus a mode bar below it, so it never covers the field or keys in portrait.
 - HUD (score, lives, difficulty bar, typed display) draws above gameplay
   (`depth 5`) so entering aliens never obscure it.
 - High score persisted in `localStorage` (`metic-highscore`).
@@ -258,12 +282,16 @@ Green=multiplication, Yellow=division.
   timer, spawning and firing, and **hides all aliens + their number balls** (and
   the typed display) behind an overlay so the player can't solve sums on a break.
   Tap the overlay or press `P` to resume.
+- **Lives** are a playtest constant, `PLAYER.LIVES` (3 by default; 1 = the
+  battle-royale knockout rule). With 1 life the hit recovery below never runs:
+  the only hit ends the game, so slow time is the sole safety tool.
 - **Hit recovery**: on losing a life (but not the last) the whole field **freezes
   for `RECOVERY.FREEZE_MS` (3s)** so the player can read the board, then resumes
   at `RECOVERY.POST_HIT_FACTOR` (80%) speed for the rest of the run. The slowdown
   is flat (non-stacking) and the difficulty curve keeps ramping underneath, so
   absolute speed still climbs over time. The ship can still fire during the
-  freeze (so a frozen board can be cleared).
+  freeze (so a frozen board can be cleared). The freeze is a countdown that
+  only runs while unpaused, so pausing doesn't eat it.
 
 ## Difficulty design
 
@@ -312,7 +340,7 @@ curve is in `src/config/difficulty.ts` (`difficultyAt(elapsedMs, score)`).
        readability boxes + sweep-aware spawner, animated `anim_*` parts.
        **Next:** monster abilities (docs/MULTIPLAYER_DESIGN.md §4).
 7. [x] **Drifter bonus enemy** — non-lethal, crosses sideways; solving it
-       gives an energy burst (wire to the energy meter when it lands).
+       gives an energy burst on top of the normal kill energy.
 8. [ ] **Handwriting input** — draw a digit on a canvas overlay; recognize it as
        the typed number (alongside the keypad).
 9. [ ] Other operations (subtraction/multiplication/division) via color-coded balls
@@ -324,9 +352,10 @@ curve is in `src/config/difficulty.ts` (`difficultyAt(elapsedMs, score)`).
 12. [ ] Publish on GitHub Pages (workflow added; enable Pages = "GitHub Actions"
        and add repo secrets `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY`).
 13. [ ] **Battle-royale multiplayer (Tetris 99-style)** — see
-       `docs/MULTIPLAYER_DESIGN.md`. Single player first: energy bar + slow
-       time, alien movement patterns, monster abilities; then offline bots, then
-       the WebSocket match server (8–16 players to start).
+       `docs/MULTIPLAYER_DESIGN.md`. Single player first: [x] energy bar + slow
+       time (two modes under playtest; lives constant for 1 vs 3), [ ] alien
+       movement patterns, [ ] monster abilities; then offline bots (and energy
+       "send"), then the WebSocket match server (8–16 players to start).
 
 ## Conventions
 
@@ -352,6 +381,15 @@ Newest first. Format: `YYYY-MM-DD — decision — rationale`.
   spawner reserves sweep columns near the top, and a runtime guard never lets
   a move enter another box (queue/turn around instead). Soak-tested: 0
   overlapping frames in ~8.5 min of simulated play.
+- **2026-09-25 — Energy bar + slow time (two playtest modes).** Kills charge a
+  0–100 meter (more balls, bigger digits, fast solves, streaks charge more).
+  Slow time spends it on the player's own field: `drain` (60% while draining)
+  vs `stop` (1.5 s full stop for 50), switchable in game with `M` so the owner
+  can compare by playing; tuned to buy similar field-time per energy. Energy
+  rules live in Phaser-free `src/sim/energy.ts` with a per-spender meter, so
+  "send" plugs in later and a server sim can share it. Lives stay a constant
+  (`PLAYER.LIVES`) for 1-vs-3 tests; with 1 life the hit freeze is
+  unreachable. The hit freeze became a pause-safe countdown.
 
 - **2026-09-25 — Battle-royale direction (docs/MULTIPLAYER_DESIGN.md).** Kills
   charge an energy bar (no automatic attacks), spent on sending aliens or
