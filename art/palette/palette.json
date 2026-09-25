@@ -1,0 +1,31 @@
+{
+  "_comment": "Metic 3D palette (docs/ART_SPEC.md §4). Swatch name -> sRGB hex. Adding swatches is fine; renaming breaks recipes. Blue/red/green/yellow are reserved for number balls, so monsters avoid them as body colors.",
+  "swatches": {
+    "hull": "#8A7FD6",
+    "hull_dark": "#4B3F9E",
+    "hull_light": "#B9B2EE",
+    "trim": "#E8E6F5",
+    "canopy": "#27CBE6",
+    "engine": "#2A2A3A",
+    "metal": "#9AA0B5",
+    "flame": "#FF9A1F",
+    "flame_core": "#FFE24A",
+
+    "purple": "#8E4FD8",
+    "purple_dark": "#5A2D96",
+    "magenta": "#D63FA6",
+    "teal": "#2BB3A3",
+    "teal_dark": "#1B7468",
+    "orange": "#F2913D",
+    "pink": "#F29BC1",
+    "grey": "#7D8196",
+
+    "eye": "#F5F5F0",
+    "pupil": "#141414",
+    "mouth": "#3A0F2A",
+    "glow": "#FFE24A",
+    "glow_cyan": "#7FF6FF",
+    "glow_magenta": "#FF6BE6"
+  },
+  "glow": ["flame", "flame_core", "glow", "glow_cyan", "glow_magenta"]
+}

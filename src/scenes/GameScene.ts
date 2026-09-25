@@ -13,17 +13,23 @@ import {
 import { difficultyAt } from "../config/difficulty";
 import { isLeaderboardEnabled, startMatch } from "../services/leaderboard";
 import Alien from "../objects/Alien";
+import type { Bullet } from "../objects/Bullet";
+import World3D, { getWorld3D } from "../render3d/World3D";
 
 /**
  * GameScene owns the actual gameplay. A Phaser Scene has a lifecycle:
  *   create()  -> build the world once
  *   update(t, dt) -> called every frame (dt = ms since last frame)
- * Arcade Physics "Groups" batch many sprites and give us cheap overlap checks.
+ *
+ * Game objects (ship x, aliens, bullets) are plain state in 2D logical
+ * coordinates. Phaser draws only the HUD and keypad; the playfield is drawn in
+ * 3D by World3D, which reads a snapshot of this state at the end of each frame.
  */
 export default class GameScene extends Phaser.Scene {
-  private ship!: Phaser.Physics.Arcade.Sprite;
-  private bullets!: Phaser.Physics.Arcade.Group;
-  private aliens!: Phaser.Physics.Arcade.Group;
+  private world!: World3D;
+  private shipX: number = GAME.WIDTH / 2;
+  private bullets: Bullet[] = [];
+  private aliens: Alien[] = [];
 
   /** result -> alien, so a typed number maps directly to its target. */
   private enemiesInField = new Map<number, Alien>();
@@ -33,7 +39,7 @@ export default class GameScene extends Phaser.Scene {
   private lockedTarget: Alien | null = null;
   /** The in-flight bullet aimed at lockedTarget; prevents firing a second
    * bullet while one is already on its way (re-fires only if it misses). */
-  private lockedBullet: Phaser.Physics.Arcade.Sprite | null = null;
+  private lockedBullet: Bullet | null = null;
 
   private typed = "";
   private typedText!: Phaser.GameObjects.Text;
@@ -56,7 +62,6 @@ export default class GameScene extends Phaser.Scene {
   /** Whether this run beat the stored personal best (drives name-entry copy). */
   private newHighScore = false;
 
-  private starSprites: Phaser.GameObjects.Image[] = [];
   private elapsedMs = 0;
   private spawnCountdown = 0;
   private diffBar!: Phaser.GameObjects.Rectangle;
@@ -78,39 +83,11 @@ export default class GameScene extends Phaser.Scene {
   create(): void {
     this.resetState();
 
-    // --- Sparse parallax starfield -----------------------------------------
-    // Individual faint stars at random depths read far better than tiling the
-    // star texture. Bigger stars drift faster, creating a parallax effect.
-    this.starSprites = [];
-    for (let i = 0; i < 70; i++) {
-      const s = this.add
-        .image(
-          Phaser.Math.Between(0, GAME.WIDTH),
-          Phaser.Math.Between(0, GAME.HEIGHT),
-          "star",
-        )
-        .setScale(Phaser.Math.FloatBetween(0.25, 0.85))
-        .setAlpha(Phaser.Math.FloatBetween(0.25, 0.8))
-        .setDepth(-1);
-      this.starSprites.push(s);
-    }
-
-    // --- Groups -------------------------------------------------------------
-    this.bullets = this.physics.add.group();
-    this.aliens = this.physics.add.group();
-
-    // --- Player ship --------------------------------------------------------
-    this.ship = this.physics.add.sprite(GAME.WIDTH / 2, PLAYER.Y, "ship", 0);
-    this.ship.setScale(2);
-
-    // Bullet hits alien -> explode + score.
-    this.physics.add.overlap(
-      this.bullets,
-      this.aliens,
-      (b, a) => this.onBulletHit(b as Phaser.Physics.Arcade.Sprite, a as Alien),
-      undefined,
-      this,
-    );
+    // The 3D playfield (starfield, ship, aliens, bullets, explosions) renders on
+    // its own canvas under Phaser's; stop drawing it when we leave this scene.
+    this.world = getWorld3D();
+    this.world.begin(this.textures, this.game.canvas);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.world.end());
 
     this.buildHud();
     this.buildKeypad();
@@ -126,6 +103,9 @@ export default class GameScene extends Phaser.Scene {
   }
 
   private resetState(): void {
+    this.shipX = GAME.WIDTH / 2;
+    this.bullets = [];
+    this.aliens = [];
     this.enemiesInField.clear();
     this.target = null;
     this.lockedTarget = null;
@@ -152,8 +132,24 @@ export default class GameScene extends Phaser.Scene {
   }
 
   update(time: number, delta: number): void {
-    if (this.gameOver || this.paused) return;
+    // Game over / pause freeze the simulation, but the 3D view keeps rendering
+    // (stars drift, the final explosion finishes, pause hides the aliens).
+    if (!this.gameOver && !this.paused) this.tick(time, delta);
 
+    this.world.render(
+      {
+        shipX: this.shipX,
+        shipTargetX: this.target?.active ? this.target.x : null,
+        aliens: this.aliens,
+        bullets: this.bullets,
+        aliensHidden: this.paused,
+      },
+      time,
+      delta,
+    );
+  }
+
+  private tick(time: number, delta: number): void {
     this.elapsedMs += delta;
     const diff = difficultyAt(this.elapsedMs, this.score);
 
@@ -163,14 +159,6 @@ export default class GameScene extends Phaser.Scene {
     const slow = time < this.freezeUntil ? 0 : this.postHitSlow ? RECOVERY.POST_HIT_FACTOR : 1;
     const fieldDelta = delta * slow;
 
-    // Drift stars downward with parallax; wrap back to the top.
-    for (const s of this.starSprites) {
-      s.y += (0.15 + s.scaleX * 0.9) * (delta / 16.67);
-      if (s.y > GAME.HEIGHT) {
-        s.y = 0;
-        s.x = Phaser.Math.Between(0, GAME.WIDTH);
-      }
-    }
     this.diffBar.setSize(diff.d * (GAME.WIDTH - 24), 4); // show ramp progress
 
     // Spawn pacing's PRIMARY gate is the number of UNSOLVED aliens (ones the
@@ -205,36 +193,57 @@ export default class GameScene extends Phaser.Scene {
     // target STOPS while it is locked on: once the player has typed its answer it
     // holds position while the ship lines up the shot, so a correct answer is
     // never punished by the ship's travel time (and it can't cost a life).
-    this.aliens.getChildren().forEach((obj) => {
-      const alien = obj as Alien;
-      if (alien === this.target) return; // hold still while targeted
+    for (const alien of this.aliens) {
+      if (alien === this.target || !alien.active) continue; // hold still while targeted
       alien.advance(fieldDelta);
       if (alien.y >= PLAYER.Y - 6) this.onAlienReachedPlayer(alien);
-    });
+    }
 
     // Slide the ship toward the target and fire when lined up. Don't fire again
     // while a bullet is already in flight toward this locked target — only
     // re-fire if that shot missed (its bullet was recycled off-screen).
     if (this.target && this.target.active) {
-      this.ship.x = Phaser.Math.Linear(this.ship.x, this.target.x, PLAYER.MOVE_LERP);
+      this.shipX = Phaser.Math.Linear(this.shipX, this.target.x, PLAYER.MOVE_LERP);
       const shotInFlight =
         this.lockedTarget === this.target &&
         this.lockedBullet !== null &&
         this.lockedBullet.active;
       if (
         !shotInFlight &&
-        Math.abs(this.ship.x - this.target.x) < PLAYER.SHOOT_RANGE &&
+        Math.abs(this.shipX - this.target.x) < PLAYER.SHOOT_RANGE &&
         time - this.lastFire > PLAYER.FIRE_COOLDOWN
       ) {
         this.fire(time, this.target);
       }
     }
 
-    // Recycle bullets that fly off the top.
-    this.bullets.getChildren().forEach((obj) => {
-      const b = obj as Phaser.Physics.Arcade.Sprite;
-      if (b.y < -20) b.destroy();
-    });
+    this.moveBullets(delta);
+
+    // Drop killed aliens and spent bullets; the 3D view removes their meshes.
+    this.aliens = this.aliens.filter((a) => a.active);
+    this.bullets = this.bullets.filter((b) => b.active);
+  }
+
+  /**
+   * Fly bullets upward and resolve hits. The hit test is swept over the distance
+   * travelled this frame, so a fast bullet can't tunnel through an alien on a
+   * slow frame. Any alien in the path is hit, not just the locked target.
+   */
+  private moveBullets(delta: number): void {
+    for (const b of this.bullets) {
+      if (!b.active) continue;
+      const prevY = b.y;
+      b.y -= BULLET.SPEED * (delta / 1000);
+      const hit = this.aliens.find(
+        (a) =>
+          a.active &&
+          Math.abs(b.x - a.x) < BULLET.HIT_HALF_W &&
+          a.y >= b.y - BULLET.HIT_HALF_H &&
+          a.y <= prevY + BULLET.HIT_HALF_H,
+      );
+      if (hit) this.onBulletHit(b, hit);
+      else if (b.y < -20) b.active = false; // flew off the top
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -247,33 +256,24 @@ export default class GameScene extends Phaser.Scene {
    */
   private currentThreat(): number {
     let threat = 0;
-    this.aliens.getChildren().forEach((o) => {
-      const a = o as Alien;
-      if (a === this.lockedTarget) return;
+    for (const a of this.aliens) {
+      if (!a.active || a === this.lockedTarget) continue;
       threat += ENEMY.THREAT_BY_BALLS[a.ballCount] ?? 1;
-    });
+    }
     return threat;
   }
 
   /** Count of UNSOLVED aliens — every live alien except the already-answered
    * (locked, fleeing) target. Drives the primary spawn gate. */
   private unsolvedOnScreen(): number {
-    let n = 0;
-    this.aliens.getChildren().forEach((o) => {
-      if ((o as Alien) !== this.lockedTarget) n++;
-    });
-    return n;
+    return this.aliens.filter((a) => a.active && a !== this.lockedTarget).length;
   }
 
   /** Count of live "hard" (multi-number) aliens, excluding the locked target. */
   private hardAliensOnScreen(): number {
-    let n = 0;
-    this.aliens.getChildren().forEach((o) => {
-      const a = o as Alien;
-      if (a === this.lockedTarget) return;
-      if (a.ballCount >= ENEMY.HARD_BALL_THRESHOLD) n++;
-    });
-    return n;
+    return this.aliens.filter(
+      (a) => a.active && a !== this.lockedTarget && a.ballCount >= ENEMY.HARD_BALL_THRESHOLD,
+    ).length;
   }
 
   private spawnAlien(): void {
@@ -283,7 +283,7 @@ export default class GameScene extends Phaser.Scene {
 
     // Don't let the field over-populate — a crowded screen makes a single hit
     // unrecoverable.
-    if (this.aliens.getLength() >= diff.maxOnScreen) return;
+    if (this.aliens.filter((a) => a.active).length >= diff.maxOnScreen) return;
 
     // Build a unique result so each typed number maps to exactly one alien.
     // Ball count (>= 2, so it is always a real sum) and digit size scale up, but
@@ -309,10 +309,7 @@ export default class GameScene extends Phaser.Scene {
     // Pick a lane x that keeps clear of the last spawn AND any alien still near
     // the top, so aliens (and their numbers) never overlap on screen.
     const overlaps = (cx: number) =>
-      this.aliens.getChildren().some((o) => {
-        const a = o as Alien;
-        return a.y < 110 && Math.abs(a.x - cx) < ENEMY.MIN_SPAWN_GAP;
-      });
+      this.aliens.some((a) => a.active && a.y < 110 && Math.abs(a.x - cx) < ENEMY.MIN_SPAWN_GAP);
     let x = Phaser.Math.Between(40, GAME.WIDTH - 40);
     let guard = 0;
     while (
@@ -327,7 +324,7 @@ export default class GameScene extends Phaser.Scene {
     const bodyKey = `alien${Phaser.Math.Between(1, 13)}`;
     // Personality: fewer balls (easier sum) => faster; more balls => slower.
     const speedScale = ENEMY.SPEED_BY_BALLS[digits.length] ?? 1;
-    const alien = new Alien(this, {
+    const alien = new Alien({
       x,
       y: -20,
       bodyKey,
@@ -336,9 +333,9 @@ export default class GameScene extends Phaser.Scene {
       ballTexture: "blueBalls",
       fallSpeed: diff.fallSpeed * speedScale,
       homeSpeed: diff.homeSpeed * speedScale,
+      spawnedAt: this.time.now,
     });
-    alien.setScale(1.5);
-    this.aliens.add(alien);
+    this.aliens.push(alien);
     this.enemiesInField.set(result, alien);
   }
 
@@ -347,13 +344,8 @@ export default class GameScene extends Phaser.Scene {
   // ---------------------------------------------------------------------------
   private fire(time: number, target: Alien | null): void {
     this.lastFire = time;
-    const bullet = this.bullets.create(
-      this.ship.x,
-      this.ship.y - 24,
-      "bullet",
-    ) as Phaser.Physics.Arcade.Sprite;
-    bullet.setFrame(0); // static frame for now
-    bullet.setVelocityY(-BULLET.SPEED);
+    const bullet: Bullet = { x: this.shipX, y: PLAYER.Y - BULLET.MUZZLE_OFFSET, active: true };
+    this.bullets.push(bullet);
     this.sound.play("shoot", { volume: 0.4 });
     // Clear the typed answer once we have committed to a shot, but keep the
     // target LOCKED so it keeps fleeing until a bullet actually destroys it.
@@ -365,14 +357,14 @@ export default class GameScene extends Phaser.Scene {
 
     // If the locked target sits at/below the muzzle, an upward bullet can't
     // reach it, so resolve the hit point-blank to guarantee the kill.
-    if (target && target.active && target.y >= this.ship.y - 24) {
+    if (target && target.active && target.y >= PLAYER.Y - BULLET.MUZZLE_OFFSET) {
       this.onBulletHit(bullet, target);
     }
   }
 
-  private onBulletHit(bullet: Phaser.Physics.Arcade.Sprite, alien: Alien): void {
+  private onBulletHit(bullet: Bullet, alien: Alien): void {
     if (!alien.active) return;
-    bullet.destroy();
+    bullet.active = false;
     this.killAlien(alien);
   }
 
@@ -391,7 +383,7 @@ export default class GameScene extends Phaser.Scene {
 
     const points = this.computeScore(alien.ballCount, solveMs);
 
-    this.explode(alien.x, alien.y);
+    this.explode(alien);
     this.addScore(points, alien.x, alien.y);
 
     this.enemiesInField.delete(alien.result);
@@ -427,23 +419,14 @@ export default class GameScene extends Phaser.Scene {
 
   private onAlienReachedPlayer(alien: Alien): void {
     this.enemiesInField.delete(alien.result);
-    this.explode(alien.x, alien.y);
+    this.explode(alien);
     alien.kill();
     this.loseLife();
   }
 
-  private explode(x: number, y: number): void {
+  private explode(alien: Alien): void {
     this.sound.play("explode", { volume: 0.5 });
-    const emitter = this.add.particles(x, y, "star", {
-      speed: { min: 60, max: 180 },
-      angle: { min: 0, max: 360 },
-      scale: { start: 2, end: 0 },
-      lifespan: 500,
-      quantity: 16,
-      tint: [0xffd166, 0xef476f, 0x4ea1ff],
-    });
-    emitter.explode(16);
-    this.time.delayedCall(550, () => emitter.destroy());
+    this.world.explode(alien.x, alien.y, alien);
   }
 
   // ---------------------------------------------------------------------------
@@ -473,6 +456,7 @@ export default class GameScene extends Phaser.Scene {
     const icon = this.lifeIcons[this.lives];
     if (icon) icon.setAlpha(0.15);
     this.cameras.main.shake(150, 0.01);
+    this.world.shake(150, 0.01);
     if (this.lives <= 0) {
       this.endGame();
       return;
@@ -488,8 +472,8 @@ export default class GameScene extends Phaser.Scene {
     if (this.gameOver) return;
     this.paused = !this.paused;
 
+    // The 3D view hides the aliens while paused (see update()).
     if (this.paused) {
-      this.aliens.getChildren().forEach((o) => (o as Alien).setVisibleAll(false));
       this.typedText.setVisible(false);
 
       const dim = this.add
@@ -510,7 +494,6 @@ export default class GameScene extends Phaser.Scene {
     } else {
       this.pauseOverlay.forEach((o) => o.destroy());
       this.pauseOverlay = [];
-      this.aliens.getChildren().forEach((o) => (o as Alien).setVisibleAll(true));
       this.typedText.setVisible(true);
     }
   }

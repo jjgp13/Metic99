@@ -29,9 +29,13 @@ loop. See the Decision Log.
 
 ## Tech stack
 
-- **Phaser 3** — full 2D engine (WebGL/Canvas renderer + arcade physics + input
-  + audio + asset loader + scenes). Chosen over raw PixiJS, which is *only* a
-  renderer.
+- **Phaser 3** — scenes, menus, HUD, keypad, input, audio and the asset loader.
+  Its canvas is **transparent** and stacked above the 3D canvas. Arcade physics
+  is no longer used (hits are a swept test in `GameScene.moveBullets`).
+- **Three.js** — renders the gameplay playfield in 3D (`src/render3d/`). Chosen
+  over Babylon.js / Unity WebGL for desktop + phone browsers: small bundle
+  (~150 kB gz), fast mobile load, and plain TS that a future Node game server can
+  share with the client.
 - **Vite** — dev server (HMR) + production bundler.
 - **TypeScript** — strict mode.
 - Node.js LTS required. `npm install` → `npm run dev` (port 5173) → `npm run build`.
@@ -50,16 +54,29 @@ src/
     BootScene.ts      Preloads assets; defers animations (static frames for now)
     MenuScene.ts      Title screen: PLAY / HOW TO PLAY / SCORES buttons
     HowToPlayScene.ts Static rules screen reached from the menu
-    GameScene.ts      The core loop: spawn, input, targeting, combat, HUD
+    GameScene.ts      The core loop: spawn, input, targeting, combat, HUD.
+                      Owns plain game state (shipX, aliens[], bullets[]) and
+                      hands World3D a snapshot every frame.
     NameEntryScene.ts Arcade 5-char initials entry shown at game over
     LeaderboardScene.ts Global top-N board; dual-mode (post-run / menu browse)
   services/
     leaderboard.ts    Supabase global high scores: startMatch + match-gated
                       submitScore, plus getTop/getRank reads
   objects/
-    Alien.ts          Alien body + number balls; movement driven by `behavior`.
-                      Constructed from a single `AlienConfig` object so new
-                      per-personality fields (speed, behavior, color) slot in.
+    Alien.ts          Pure alien state (x/y, digits, result) + `behavior`-driven
+                      movement; no rendering. Built from one `AlienConfig`.
+    Bullet.ts         Pure bullet state {x, y, active}.
+  render3d/
+    World3D.ts        Three.js view: camera, lights, starfield, ship/alien/bullet
+                      meshes, voxel-debris explosions, shake. Page-wide singleton.
+    voxelize.ts       Extrudes a Phaser sprite frame into a voxel mesh (fallback art).
+    NumberBall.ts     Glass sphere with the digit inside (number balls).
+art/                  3D art source (docs/ART_SPEC.md)
+  palette/palette.json  Shared color swatches for all models
+  blender/            metic_kit.py helpers, build.py, recipes/<model>.py
+  previews/           Rendered top-down + 3/4 previews per model
+public/assets/models/ Built .glb models loaded by World3D
+docs/ART_SPEC.md      3D art style, budgets, axes, pipeline
   env.d.ts            Types for Vite `import.meta.env` (Supabase env vars)
 ```
 
@@ -127,6 +144,32 @@ no JS `import`. Spritesheets are sliced by frame size. **Verified layouts**
 
 Ball **color encodes the math operation** (future): Blue=sum, Red=subtraction,
 Green=multiplication, Yellow=division.
+
+### 3D rendering (Three.js)
+
+- **Two stacked canvases:** Three.js draws the playfield on a `position: fixed`
+  canvas that `World3D` keeps exactly under Phaser's (it copies Phaser's
+  bounding rect each frame, so `Scale.FIT` letterboxing still works). Phaser's
+  canvas is transparent (`transparent: true`) and on top (`#game > canvas`
+  z-index 1), so HUD, keypad and input are unchanged.
+- **Same 2D coordinates:** game logic stays in the 480×720 logical space. A
+  perspective camera (`RENDER3D.FOV` 30°) sits at the distance where the z = 0
+  plane maps 1:1 onto the Phaser canvas, so HUD elements anchored to world
+  positions (score pops) still line up.
+- **Voxel models from the existing sprites:** `voxelizeFrame` reads a frame's
+  pixels from Phaser's texture manager and extrudes every opaque pixel into a
+  lit box (only exposed faces). Geometries are cached per (key, frame, depth)
+  and shared. Number balls never rotate, so digits stay readable.
+- **Renderer is a view:** `World3D.render(snapshot)` diffs the snapshot's
+  aliens/bullets against its meshes (create/move/remove). Game code never
+  imports Three.js, which keeps the path open to a shared sim for multiplayer.
+- **Motion polish:** aliens sway (yaw), the ship banks toward its target,
+  explosions burst into voxel debris in the alien's colors with a flash from one
+  reused point light (adding lights at runtime would trigger shader recompiles).
+- One WebGL context for the whole page (singleton), hidden outside GameScene.
+- Dev only: `window.__metic = { game, world }` for console inspection.
+- **Art direction for new 3D models:** see [`docs/ART_SPEC.md`](docs/ART_SPEC.md)
+  (script-built low-poly models from Blender, palette colors, reserved ball colors).
 
 ## Gameplay rules (current)
 
@@ -227,11 +270,15 @@ curve is in `src/config/difficulty.ts` (`difficultyAt(elapsedMs, score)`).
        the typed number (alongside the keypad).
 9. [ ] Other operations (subtraction/multiplication/division) via color-coded balls
 10. [ ] Sprite animations + richer explosion/background VFX
+10b. [x] **3D playfield (Three.js)** — same top-down view, voxel models built
+       from the sprites, 3D starfield parallax, voxel-debris explosions.
 11. [x] Leaderboard backend (Supabase) + world leaderboard — 5-char initials at
        game over, world rank, top-N board. **Needs Supabase creds + Pages setup.**
 12. [ ] Publish on GitHub Pages (workflow added; enable Pages = "GitHub Actions"
        and add repo secrets `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY`).
-13. [ ] PvP multiplayer (Colyseus / WebSockets)
+13. [ ] **Battle-royale multiplayer (Tetris 99-style)** — many players each on
+       their own field, clearing aliens sends attacks to opponents; a learning
+       project for multiplayer backend infrastructure. Design TBD (iterate).
 
 ## Conventions
 
@@ -245,6 +292,28 @@ curve is in `src/config/difficulty.ts` (`difficultyAt(elapsedMs, score)`).
 ## Decision Log
 
 Newest first. Format: `YYYY-MM-DD — decision — rationale`.
+
+- **2026-09-24 — Number balls are glass spheres with the digit inside; first
+  Blender model in game.** Balls moved from voxel chips to a tinted glass sphere
+  (custom fresnel shader, unlit) around a camera-facing digit, color = operation.
+  Future ideas to prototype: eyelid balls that hide the number, monsters built
+  from balls. Blender pipeline (`art/blender`) builds `ship_player.glb`, loaded
+  by BootScene/World3D with voxel fallback for missing models.
+- **2026-09-24 — Art style adopted: script-built low-poly (docs/ART_SPEC.md).**
+  Chunky, flat-shaded, palette-textured models generated by Python recipes run
+  headless in Blender 5.2 → `.glb`, with previews rendered on the CPU (Cycles).
+  Chosen because an agent can author a model in ~40–80 lines (a test ship took
+  166 tris, a monster 648) with no texture painting. Ball colors are reserved
+  for math operations, so monsters avoid them.
+
+- **2026-09-24 — 3D playfield with Three.js; same top-down view.** Gameplay is
+  drawn by Three.js under a transparent Phaser canvas (Phaser keeps menus, HUD,
+  keypad, input, audio). Three.js chosen over Babylon.js/Unity WebGL for desktop
+  + phone browsers (small bundle, fast mobile load, TS shareable with a future
+  Node game server). Sprites are voxelized into 3D models so the art style is
+  kept with no new assets. Alien/Bullet became plain state objects and arcade
+  physics was dropped for a swept bullet hit test; the renderer only reads a
+  per-frame snapshot. Long-term goal set: Tetris 99-style battle royale.
 
 - **2026-06-02 — Locked target holds still; freeze-then-slow hit recovery.**
   Replaced the "flees upward" (`RETREAT_SPEED`) behavior — an answered target now

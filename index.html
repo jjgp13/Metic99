@@ -37,6 +37,11 @@
           env(safe-area-inset-bottom) env(safe-area-inset-left);
         box-sizing: border-box;
       }
+      /* Phaser's transparent HUD canvas stacks above the Three.js playfield. */
+      #game > canvas {
+        position: relative;
+        z-index: 1;
+      }
     </style>
   </head>
   <body>

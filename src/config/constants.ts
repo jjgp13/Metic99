@@ -14,14 +14,24 @@ export const PLAYER = {
   SHOOT_RANGE: 6, // px tolerance to consider "lined up" and fire
   LIVES: 3,
   FIRE_COOLDOWN: 250, // ms between shots
+  SCALE: 2, // ship model scale (16px source art)
 } as const;
 
 export const BULLET = {
   SPEED: 700, // px/sec upward
+  MUZZLE_OFFSET: 24, // px above the ship where bullets spawn
+  // Hit box: a bullet hits an alien whose center is within HALF_W horizontally
+  // and whose y the bullet swept past (±HALF_H) this frame. Matches the old
+  // arcade overlap of a 16×32 bullet vs a 24×24 alien body.
+  HIT_HALF_W: 20,
+  HIT_HALF_H: 28,
 } as const;
 
 export const ENEMY = {
   HOME_TRIGGER_Y: 220, // y after which an alien speeds up toward the player
+  SCALE: 1.5, // alien body model scale
+  BALL_SPACING: 20, // px between adjacent number balls (centers)
+  BALL_OFFSET_Y: 24, // px the ball row sits above the body
   MIN_SPAWN_GAP: 84, // px min horizontal distance between alien lanes
 
   // Personality: speed scales INVERSELY with how many numbers an alien carries.
@@ -176,4 +186,54 @@ export const BALL_COLOR = {
   SUB: "redBalls",
   MUL: "greenBalls",
   DIV: "yellowBalls",
+} as const;
+
+/**
+ * 3D presentation (Three.js). The playfield keeps its 2D logical coordinates
+ * (GAME.WIDTH × GAME.HEIGHT px); a perspective camera is placed so the z = 0
+ * plane maps 1:1 onto the Phaser canvas, keeping the 2D HUD aligned with the
+ * 3D world. Sprites are extruded into voxel models (1 voxel = 1 source pixel).
+ */
+export const RENDER3D = {
+  FOV: 30, // vertical field of view (deg); narrow = subtle perspective
+  MAX_PIXEL_RATIO: 2, // cap for high-DPI phones (fill-rate)
+
+  // Model thickness in voxels.
+  ALIEN_DEPTH: 6,
+  SHIP_DEPTH: 6,
+  BULLET_DEPTH: 2,
+
+  // Number balls: glass spheres with the digit inside (render3d/NumberBall.ts).
+  BALL_RADIUS: 9,
+  // Glass tint per ball texture key = math operation (see BALL_COLOR).
+  BALL_TINT: {
+    blueBalls: 0x3d8bff, // sum
+    redBalls: 0xff4d5e, // subtraction
+    greenBalls: 0x3ddc84, // multiplication
+    yellowBalls: 0xffd23f, // division
+  } as Record<string, number>,
+
+  // Blender-built .glb models (public/assets/models/<name>.glb, see
+  // docs/ART_SPEC.md). Any that fail to load fall back to sprite voxels.
+  MODELS: ["ship_player"],
+
+  // Idle motion: aliens sway (yaw) to show off their depth.
+  ALIEN_SWAY: 0.5, // rad
+  ALIEN_SWAY_SPEED: 0.0025, // rad per ms
+  // Ship banks toward where it is sliding.
+  SHIP_BANK_PER_PX: 0.012,
+  SHIP_BANK_MAX: 0.7, // rad
+  SHIP_BANK_RESPONSE: 10, // 1/s, how fast bank follows its target
+
+  STAR_COUNT: 260,
+  STAR_NEAR_Z: -80,
+  STAR_FAR_Z: -2600,
+  STAR_DRIFT: 45, // world px/s; farther stars *look* slower (true parallax)
+
+  DEBRIS_COUNT: 22,
+  DEBRIS_SIZE: 3,
+  DEBRIS_SPEED: { min: 90, max: 320 }, // px/s
+  DEBRIS_LIFE_MS: 650,
+  FLASH_MS: 220,
+  FLASH_INTENSITY: 6,
 } as const;

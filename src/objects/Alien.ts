@@ -1,4 +1,3 @@
-import Phaser from "phaser";
 import { ENEMY } from "../config/constants";
 
 /** How an alien moves through the field. New personalities slot in here. */
@@ -20,61 +19,49 @@ export interface AlienConfig {
   ballTexture: string;
   fallSpeed: number;
   homeSpeed: number;
+  /** Scene time (ms) when spawned, used for the score's speed bonus. */
+  spawnedAt: number;
   behavior?: AlienBehavior;
 }
 
-const BALL_SPACING = 16; // px between adjacent number balls
-const BALL_OFFSET_Y = 22; // px the ball row sits above the body
-
 /**
- * An Alien is a sprite (the body) plus a row of "number ball" sprites whose
- * values sum to `result`. The balls are kept glued above the body every frame.
- * Movement is driven by `behavior` so different enemy personalities can be added
- * without touching the scene.
+ * An Alien is pure game state: a position in the 2D logical playfield, the
+ * numbers it carries and how it moves. It knows nothing about rendering — the
+ * 3D view (World3D) reads these fields every frame and draws the body and its
+ * number balls. Movement is driven by `behavior` so different enemy
+ * personalities can be added without touching the scene.
  */
-export default class Alien extends Phaser.Physics.Arcade.Sprite {
+export default class Alien {
+  public x: number;
+  public y: number;
+  /** False once killed; the renderer drops its view and the scene prunes it. */
+  public active = true;
+
   /** The number the player must type to target this alien. */
   public readonly result: number;
+  public readonly digits: readonly number[];
   /** How many numbers this alien carries (2 = easy sum, 3 = harder, …). */
   public readonly ballCount: number;
+  public readonly bodyKey: string;
+  public readonly ballTexture: string;
   public readonly behavior: AlienBehavior;
-  /** Scene time (ms) when spawned, used for the score's speed bonus. */
   public readonly spawnedAt: number;
 
-  private balls: Phaser.GameObjects.Sprite[] = [];
   private fallSpeed: number;
   private homeSpeed: number;
 
-  constructor(scene: Phaser.Scene, config: AlienConfig) {
-    super(scene, config.x, config.y, config.bodyKey);
+  constructor(config: AlienConfig) {
+    this.x = config.x;
+    this.y = config.y;
     this.result = config.result;
+    this.digits = config.digits;
     this.ballCount = config.digits.length;
+    this.bodyKey = config.bodyKey;
+    this.ballTexture = config.ballTexture;
     this.behavior = config.behavior ?? "descend";
-    this.spawnedAt = scene.time.now;
+    this.spawnedAt = config.spawnedAt;
     this.fallSpeed = config.fallSpeed;
     this.homeSpeed = config.homeSpeed;
-
-    scene.add.existing(this);
-    scene.physics.add.existing(this);
-
-    this.setData("type", "alien");
-    this.setFrame(0); // static frame for now; animations come later
-
-    // Lay the number balls out in a row centered above the alien body.
-    config.digits.forEach((d) => {
-      const ball = scene.add.sprite(config.x, config.y, config.ballTexture, d - 1); // frame N-1 shows number N
-      this.balls.push(ball);
-    });
-    this.syncBalls();
-  }
-
-  /** Keep the number balls centered above the body. */
-  private syncBalls(): void {
-    const totalW = (this.balls.length - 1) * BALL_SPACING;
-    this.balls.forEach((ball, i) => {
-      ball.x = this.x - totalW / 2 + i * BALL_SPACING;
-      ball.y = this.y - BALL_OFFSET_Y;
-    });
   }
 
   /**
@@ -92,19 +79,9 @@ export default class Alien extends Phaser.Physics.Arcade.Sprite {
         break;
       }
     }
-    this.syncBalls();
   }
 
-  /** Show/hide the body and its number balls together (used while paused). */
-  public setVisibleAll(visible: boolean): void {
-    this.setVisible(visible);
-    this.balls.forEach((b) => b.setVisible(visible));
-  }
-
-  /** Clean up the alien and its balls together. */
   public kill(): void {
-    this.balls.forEach((b) => b.destroy());
-    this.balls = [];
-    this.destroy();
+    this.active = false;
   }
 }

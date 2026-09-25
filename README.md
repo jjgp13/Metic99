@@ -1,6 +1,7 @@
 # MeticWeb
 
-Web rewrite of **Metic**, a 2D math-shooter, using **Phaser 3 + TypeScript + Vite**.
+Web rewrite of **Metic**, a math-shooter, using **Phaser 3 + Three.js + TypeScript + Vite**.
+The playfield renders in 3D (voxel models built from the original pixel art).
 Ported from the original Unity project.
 
 ## Gameplay
@@ -12,9 +13,10 @@ lose a life — lose all three and it's game over.
 
 ## Tech
 
-- **[Phaser 3](https://phaser.io/)** — full 2D game engine: WebGL/Canvas renderer,
-  arcade physics, input, audio and an asset loader. (Pixi.js, by contrast, is *only*
-  a renderer, so Phaser saves us wiring those systems ourselves.)
+- **[Phaser 3](https://phaser.io/)** — scenes, input, audio, asset loader, and the
+  2D menus/HUD/keypad (drawn on a transparent canvas).
+- **[Three.js](https://threejs.org/)** — draws the gameplay field in 3D on a
+  canvas under Phaser's transparent one; Phaser keeps menus, HUD and keypad.
 - **[Vite](https://vitejs.dev/)** — dev server with hot-reload + production bundler.
 - **TypeScript** — typed game logic.
 
@@ -32,7 +34,11 @@ src/
     BootScene.ts      Preloads assets, builds animations
     GameScene.ts      The core loop (spawn, input, targeting, combat, HUD)
   objects/
-    Alien.ts          Alien body + its numbered balls + movement
+    Alien.ts          Alien state (numbers, position) + movement; no rendering
+    Bullet.ts         Bullet state
+  render3d/
+    World3D.ts        Three.js playfield: camera, lights, meshes, explosions
+    voxelize.ts       Turns a sprite frame into a 3D voxel mesh
 ```
 
 ### How assets are imported

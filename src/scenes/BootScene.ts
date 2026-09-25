@@ -1,5 +1,6 @@
 import Phaser from "phaser";
-import { GAME } from "../config/constants";
+import { GAME, RENDER3D } from "../config/constants";
+import { getWorld3D } from "../render3d/World3D";
 
 /**
  * BootScene preloads every asset, builds the shared animations, then hands off
@@ -65,6 +66,11 @@ export default class BootScene extends Phaser.Scene {
     this.load.image("life", `${base}/sprites/SpaceShipLifeIcon.png`);
     this.load.image("star", `${base}/sprites/star.png`);
 
+    // --- 3D models (Blender .glb, parsed into Three.js in create()) ---------
+    for (const name of RENDER3D.MODELS) {
+      this.load.binary(`model:${name}`, `${base}/models/${name}.glb`);
+    }
+
     // --- Audio --------------------------------------------------------------
     this.load.audio("shoot", `${base}/sounds/Laser_Shoot3.wav`);
     this.load.audio("explode", `${base}/sounds/Explosion.wav`);
@@ -77,6 +83,13 @@ export default class BootScene extends Phaser.Scene {
     // are still sliced correctly so animations can be re-enabled later:
     //   alien1-9: 16x16 (2 frames), alien10-13: 32x20 (2 frames),
     //   ship: 16x16 (2x2 grid), bullet: 16x32 (2 frames).
-    this.scene.start("MenuScene");
+    // Parse the 3D models before the menu so a run never starts half-loaded.
+    // Missing models just fall back to sprite voxels (see World3D.loadModels).
+    const files = RENDER3D.MODELS.map(
+      (name) => [name, this.cache.binary.get(`model:${name}`) as ArrayBuffer | undefined] as const,
+    );
+    void getWorld3D()
+      .loadModels(files)
+      .finally(() => this.scene.start("MenuScene"));
   }
 }
