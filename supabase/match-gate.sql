@@ -1,5 +1,5 @@
 -- =============================================================================
--- MeticWeb leaderboard: server-gated score submission ("Level 2" security)
+-- Metic99 leaderboard: server-gated score submission ("Level 2" security)
 -- =============================================================================
 -- Run this in the Supabase SQL editor (Project -> SQL Editor -> New query).
 --

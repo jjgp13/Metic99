@@ -1,7 +1,7 @@
-# AGENTS.md — MeticWeb
+# AGENTS.md — Metic99
 
 Project context and working agreement for any AI agent (or human) picking up
-**MeticWeb**. Read this first; it is the source of truth for architecture and
+**Metic99**. Read this first; it is the source of truth for architecture and
 design decisions.
 
 > **Self-updating rule (IMPORTANT):** Whenever a **game design or architectural
@@ -15,7 +15,7 @@ design decisions.
 
 ---
 
-## What MeticWeb is
+## What Metic99 is
 
 A web rewrite of **Metic**, a 2D math-shooter originally built in Unity
 (`https://github.com/jjgp13/Metic`). Aliens descend carrying numbered balls; the
@@ -307,6 +307,10 @@ curve is in `src/config/difficulty.ts` (`difficultyAt(elapsedMs, score)`).
 ## Decision Log
 
 Newest first. Format: `YYYY-MM-DD — decision — rationale`.
+
+- **2026-09-25 — Project renamed MeticWeb → Metic99.** Repo, package and folder
+  renamed to reflect the Tetris 99-style battle-royale goal. The GitHub repo is
+  now `jjgp13/Metic99`, so the Pages URL moved to `jjgp13.github.io/Metic99`.
 
 - **2026-09-24 — Player picks a ship; monsters spawn with random models.** All
   three ship styles are kept and chosen on the menu (saved in localStorage) so

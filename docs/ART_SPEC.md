@@ -163,7 +163,7 @@ and exits non-zero if a model is over budget:
 ```
 
 Blender cannot open scripts from very long paths (Windows MAX_PATH); keep the
-repo at a short path such as `C:/Users/<you>/source/repos/MeticWeb`.
+repo at a short path such as `C:/Users/<you>/source/repos/Metic99`.
 
 **Previews render with Cycles on the CPU.** Workbench/EEVEE crash in background
 mode with the AMD driver on the dev machine (`atio6axx.dll` access violation).

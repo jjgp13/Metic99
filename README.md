@@ -1,4 +1,4 @@
-# MeticWeb
+# Metic99
 
 Web rewrite of **Metic**, a math-shooter, using **Phaser 3 + Three.js + TypeScript + Vite**.
 The playfield renders in 3D (voxel models built from the original pixel art).
