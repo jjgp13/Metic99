@@ -43,10 +43,16 @@ export default class HowToPlayScene extends Phaser.Scene {
       {
         heading: "SCORE BIG",
         body:
-          "Solve fast and keep a kill streak for combo\n" +
+          "Solve fast and keep a streak for combo\n" +
           "bonuses. Harder sums and later waves pay\n" +
-          "more. The board fills with tougher aliens as\n" +
-          "your score climbs.",
+          "more; the board fills up as you score.",
+      },
+      {
+        heading: "MONSTERS",
+        body:
+          "Each kind moves its own way. The glowing\n" +
+          "jellyfish is a harmless bonus: solve it\n" +
+          "before it drifts away for extra energy.",
       },
       {
         heading: "CONTROLS",
@@ -54,7 +60,7 @@ export default class HowToPlayScene extends Phaser.Scene {
       },
     ];
 
-    let y = 120;
+    let y = 108;
     for (const s of sections) {
       this.add.text(40, y, s.heading, {
         fontFamily: "monospace",
@@ -68,7 +74,7 @@ export default class HowToPlayScene extends Phaser.Scene {
         color: "#ffffff",
         lineSpacing: 4,
       });
-      y += s.body.split("\n").length * 20 + 16;
+      y += s.body.split("\n").length * 20 + 10;
     }
 
     this.makeBackButton(cx, GAME.HEIGHT - 50);

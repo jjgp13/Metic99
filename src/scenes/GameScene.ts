@@ -4,13 +4,15 @@ import {
   DIFFICULTY,
   ENEMY,
   GAME,
+  MONSTERS,
   PLAYER,
   RANKS,
   RECOVERY,
   SCORE,
   STORAGE,
+  type AlienKind,
 } from "../config/constants";
-import { difficultyAt } from "../config/difficulty";
+import { difficultyAt, type DifficultyParams } from "../config/difficulty";
 import { isLeaderboardEnabled, startMatch } from "../services/leaderboard";
 import Alien from "../objects/Alien";
 import type { Bullet } from "../objects/Bullet";
@@ -55,7 +57,6 @@ export default class GameScene extends Phaser.Scene {
   private killsThisRun = 0;
   private bestComboThisRun = 0;
   private fastestSolveMs = Infinity;
-  private lastSpawnX = -999;
   private lastFire = 0;
   private gameOver = false;
   /** Guards the single transition out of the game-over screen. */
@@ -65,6 +66,10 @@ export default class GameScene extends Phaser.Scene {
 
   private elapsedMs = 0;
   private spawnCountdown = 0;
+  private drifterCountdown: number = MONSTERS.drifter.FIRST_MS;
+  /** Energy from bonus kills. Placeholder until the energy meter lands
+   * (feature/energy-bar): then grantEnergy() charges that meter instead. */
+  private energy = 0;
   private diffBar!: Phaser.GameObjects.Rectangle;
 
   // Hit-recovery: the field freezes until `freezeUntil`, then (once the player
@@ -96,7 +101,7 @@ export default class GameScene extends Phaser.Scene {
 
     // --- Enemy spawner: interval & speeds scale with difficulty (see update).
     this.spawnCountdown = 0; // spawn immediately on the first frame
-    this.spawnAlien();
+    this.spawnAlien(difficultyAt(0, 0));
 
     // Open a server-gated match so this run's score can be submitted later.
     // Fire-and-forget: if it fails the player just gets an unsaved score.
@@ -119,10 +124,11 @@ export default class GameScene extends Phaser.Scene {
     this.killsThisRun = 0;
     this.bestComboThisRun = 0;
     this.fastestSolveMs = Infinity;
-    this.lastSpawnX = -999;
     this.lastFire = 0;
     this.elapsedMs = 0;
     this.spawnCountdown = 0;
+    this.drifterCountdown = MONSTERS.drifter.FIRST_MS;
+    this.energy = 0;
     this.gameOver = false;
     this.proceeding = false;
     this.newHighScore = false;
@@ -169,15 +175,21 @@ export default class GameScene extends Phaser.Scene {
     // of waiting a full interval so deferred spawns don't pile up and burst.
     this.spawnCountdown -= fieldDelta;
     if (this.spawnCountdown <= 0) {
-      if (
+      const spawned =
         this.unsolvedOnScreen() < diff.maxUnsolved &&
-        this.currentThreat() < diff.threatBudget
-      ) {
-        this.spawnAlien();
-        this.spawnCountdown = diff.spawnInterval;
-      } else {
-        this.spawnCountdown = ENEMY.SPAWN_RETRY_MS;
-      }
+        this.currentThreat() < diff.threatBudget &&
+        this.spawnAlien(diff);
+      this.spawnCountdown = spawned ? diff.spawnInterval : ENEMY.SPAWN_RETRY_MS;
+    }
+
+    // The bonus drifter runs on its own clock and ignores the caps above: it is
+    // optional, so it never takes a slot from the sums the player must solve.
+    this.drifterCountdown -= fieldDelta;
+    if (this.drifterCountdown <= 0) {
+      const { min, max } = MONSTERS.drifter.INTERVAL_MS;
+      this.drifterCountdown = this.spawnDrifter(diff)
+        ? Phaser.Math.Between(min, max)
+        : ENEMY.SPAWN_RETRY_MS;
     }
 
     // Resolve the current target. A locked target (already fired upon) stays
@@ -196,8 +208,9 @@ export default class GameScene extends Phaser.Scene {
     // never punished by the ship's travel time (and it can't cost a life).
     for (const alien of this.aliens) {
       if (alien === this.target || !alien.active) continue; // hold still while targeted
-      alien.advance(fieldDelta);
-      if (alien.y >= PLAYER.Y - 6) this.onAlienReachedPlayer(alien);
+      this.advanceReadable(alien, fieldDelta);
+      if (alien.lethal && alien.y >= PLAYER.Y - 6) this.onAlienReachedPlayer(alien);
+      else if (alien.escaped) this.onAlienEscaped(alien);
     }
 
     // Slide the ship toward the target and fire when lined up. Don't fire again
@@ -226,6 +239,36 @@ export default class GameScene extends Phaser.Scene {
   }
 
   /**
+   * Readability rule (docs/MULTIPLAYER_DESIGN.md §3): an alien never moves INTO
+   * another alien's box (ball row + body). A blocked move is retried one axis
+   * at a time; the refused axis holds still, and a refused sideways move turns
+   * zig-zags and patrols around. Aliens already too close (shouldn't happen)
+   * are ignored so they can move apart.
+   */
+  private advanceReadable(alien: Alien, delta: number): void {
+    const px = alien.x;
+    const py = alien.y;
+    alien.advance(delta);
+    const others = this.aliens.filter(
+      (o) => o !== alien && o.active && !alien.overlapsAt(px, py, o),
+    );
+    const blocked = () => others.some((o) => alien.overlaps(o));
+    if (!blocked()) return;
+
+    const nx = alien.x;
+    alien.x = px; // keep only the vertical move
+    if (!blocked()) {
+      if (nx !== px) alien.blockedX();
+      return;
+    }
+    alien.x = nx; // keep only the sideways move
+    alien.y = py;
+    if (!blocked()) return;
+    alien.x = px;
+    if (nx !== px) alien.blockedX();
+  }
+
+  /**
    * Fly bullets upward and resolve hits. The hit test is swept over the distance
    * travelled this frame, so a fast bullet can't tunnel through an alien on a
    * slow frame. Any alien in the path is hit, not just the locked target.
@@ -235,9 +278,11 @@ export default class GameScene extends Phaser.Scene {
       if (!b.active) continue;
       const prevY = b.y;
       b.y -= BULLET.SPEED * (delta / 1000);
+      // Stray bullets fly through the bonus drifter: it has to be solved.
       const hit = this.aliens.find(
         (a) =>
           a.active &&
+          (a.lethal || a === this.lockedTarget) &&
           Math.abs(b.x - a.x) < BULLET.HIT_HALF_W &&
           a.y >= b.y - BULLET.HIT_HALF_H &&
           a.y <= prevY + BULLET.HIT_HALF_H,
@@ -251,42 +296,75 @@ export default class GameScene extends Phaser.Scene {
   // Spawning
   // ---------------------------------------------------------------------------
   /**
-   * Weighted cognitive load currently on screen. Already-answered (locked,
-   * fleeing) aliens are excluded: they are committed kills, no longer a mental
-   * burden, so they shouldn't suppress new spawns.
+   * Aliens the player still has to solve: live, lethal (the bonus drifter is
+   * optional) and not the already-answered locked target — a committed kill is
+   * no longer a mental burden, so it shouldn't suppress new spawns.
    */
+  private unsolved(): Alien[] {
+    return this.aliens.filter((a) => a.active && a.lethal && a !== this.lockedTarget);
+  }
+
+  /** Weighted cognitive load of the unsolved aliens (secondary spawn gate). */
   private currentThreat(): number {
-    let threat = 0;
-    for (const a of this.aliens) {
-      if (!a.active || a === this.lockedTarget) continue;
-      threat += ENEMY.THREAT_BY_BALLS[a.ballCount] ?? 1;
-    }
-    return threat;
+    return this.unsolved().reduce((t, a) => t + (ENEMY.THREAT_BY_BALLS[a.ballCount] ?? 1), 0);
   }
 
-  /** Count of UNSOLVED aliens — every live alien except the already-answered
-   * (locked, fleeing) target. Drives the primary spawn gate. */
+  /** Count of unsolved aliens. Drives the primary spawn gate. */
   private unsolvedOnScreen(): number {
-    return this.aliens.filter((a) => a.active && a !== this.lockedTarget).length;
+    return this.unsolved().length;
   }
 
-  /** Count of live "hard" (multi-number) aliens, excluding the locked target. */
+  /** Count of unsolved "hard" (multi-number) aliens. */
   private hardAliensOnScreen(): number {
-    return this.aliens.filter(
-      (a) => a.active && a !== this.lockedTarget && a.ballCount >= ENEMY.HARD_BALL_THRESHOLD,
-    ).length;
+    return this.unsolved().filter((a) => a.ballCount >= ENEMY.HARD_BALL_THRESHOLD).length;
   }
 
-  private spawnAlien(): void {
-    if (this.gameOver) return;
+  /**
+   * Digits for a new sum whose result isn't already on the field, so each typed
+   * number maps to exactly one alien. Null when the field is saturated.
+   */
+  private rollSum(maxBalls: number, maxDigit: number): { digits: number[]; result: number } | null {
+    for (let attempt = 0; attempt < 12; attempt++) {
+      const count = Phaser.Math.Between(DIFFICULTY.MIN_BALLS, maxBalls);
+      const digits = Array.from({ length: count }, () => Phaser.Math.Between(1, maxDigit));
+      const result = digits.reduce((s, d) => s + d, 0);
+      if (!this.enemiesInField.has(result)) return { digits, result };
+    }
+    return null;
+  }
 
-    const diff = difficultyAt(this.elapsedMs, this.score);
+  private makeAlien(
+    kind: AlienKind,
+    sum: { digits: number[]; result: number },
+    x: number,
+    y: number,
+    diff: DifficultyParams,
+    bandY?: number,
+  ): Alien {
+    return new Alien({
+      kind,
+      x,
+      y,
+      bodyKey: `alien${Phaser.Math.Between(1, 13)}`,
+      result: sum.result,
+      digits: sum.digits,
+      ballTexture: "blueBalls",
+      fallSpeed: diff.fallSpeed,
+      homeSpeed: diff.homeSpeed,
+      spawnedAt: this.time.now,
+      patrolMs: diff.straferPatrolMs,
+      bandY,
+    });
+  }
+
+  /** Spawn one lethal alien from the top. Returns false if there was no room. */
+  private spawnAlien(diff: DifficultyParams): boolean {
+    if (this.gameOver) return false;
 
     // Don't let the field over-populate — a crowded screen makes a single hit
     // unrecoverable.
-    if (this.aliens.filter((a) => a.active).length >= diff.maxOnScreen) return;
+    if (this.aliens.filter((a) => a.active && a.lethal).length >= diff.maxOnScreen) return false;
 
-    // Build a unique result so each typed number maps to exactly one alien.
     // Ball count (>= 2, so it is always a real sum) and digit size scale up, but
     // cap concurrent "hard" (multi-number) enemies so the player never has to
     // juggle two slow multi-number sums at once.
@@ -294,50 +372,75 @@ export default class GameScene extends Phaser.Scene {
       this.hardAliensOnScreen() >= diff.maxHardOnScreen
         ? Math.max(DIFFICULTY.MIN_BALLS, ENEMY.HARD_BALL_THRESHOLD - 1)
         : diff.maxBalls;
-    let digits: number[] = [];
-    let result = -1;
+    const sum = this.rollSum(maxBallsAllowed, diff.maxDigit);
+    if (!sum) return false;
+
+    const kind: AlienKind =
+      sum.digits.length >= ENEMY.HARD_BALL_THRESHOLD ? "lumberer" : this.pickTwoBallKind();
+    const bandY =
+      kind === "strafer"
+        ? Phaser.Math.Between(MONSTERS.strafer.BAND_Y.min, MONSTERS.strafer.BAND_Y.max)
+        : undefined;
+
+    // Enter just above the top edge, in a column whose whole sweep (zig-zag or
+    // patrol span) clears every alien still near the top and whose box clears
+    // everyone, so ball rows start apart; advanceReadable keeps them apart.
+    const probe = this.makeAlien(kind, sum, 0, 0, diff, bandY);
+    const y = -probe.bottom - 2;
+    const lo = probe.sweepHalf + ENEMY.SPAWN_EDGE;
+    const hi = GAME.WIDTH - lo;
     for (let attempt = 0; attempt < 12; attempt++) {
-      const count = Phaser.Math.Between(DIFFICULTY.MIN_BALLS, maxBallsAllowed);
-      digits = Array.from({ length: count }, () =>
-        Phaser.Math.Between(1, diff.maxDigit),
-      );
-      result = digits.reduce((s, d) => s + d, 0);
-      if (!this.enemiesInField.has(result)) break;
-      result = -1;
+      const alien = this.makeAlien(kind, sum, Phaser.Math.Between(lo, hi), y, diff, bandY);
+      if (this.hasRoomFor(alien)) {
+        this.addAlien(alien);
+        return true;
+      }
     }
-    if (result === -1) return; // field saturated, skip this tick
+    return false; // no clear column right now; the spawner retries soon
+  }
 
-    // Pick a lane x that keeps clear of the last spawn AND any alien still near
-    // the top, so aliens (and their numbers) never overlap on screen.
-    const overlaps = (cx: number) =>
-      this.aliens.some((a) => a.active && a.y < 110 && Math.abs(a.x - cx) < ENEMY.MIN_SPAWN_GAP);
-    let x = Phaser.Math.Between(40, GAME.WIDTH - 40);
-    let guard = 0;
-    while (
-      (Math.abs(x - this.lastSpawnX) < ENEMY.MIN_SPAWN_GAP || overlaps(x)) &&
-      guard++ < 12
-    ) {
-      x = Phaser.Math.Between(40, GAME.WIDTH - 40);
-    }
-    if (overlaps(x)) return; // no clear lane right now — skip to avoid overlap
-    this.lastSpawnX = x;
+  private pickTwoBallKind(): AlienKind {
+    const weights = ENEMY.TWO_BALL_KINDS;
+    let r = Math.random() * (weights.darter + weights.strafer);
+    r -= weights.darter;
+    return r < 0 ? "darter" : "strafer";
+  }
 
-    const bodyKey = `alien${Phaser.Math.Between(1, 13)}`;
-    // Personality: fewer balls (easier sum) => faster; more balls => slower.
-    const speedScale = ENEMY.SPEED_BY_BALLS[digits.length] ?? 1;
-    const alien = new Alien({
-      x,
-      y: -20,
-      bodyKey,
-      result,
-      digits,
-      ballTexture: "blueBalls",
-      fallSpeed: diff.fallSpeed * speedScale,
-      homeSpeed: diff.homeSpeed * speedScale,
-      spawnedAt: this.time.now,
+  private hasRoomFor(alien: Alien): boolean {
+    const [lo, hi] = alien.sweep;
+    return this.aliens.every((o) => {
+      if (!o.active) return true;
+      if (alien.overlaps(o)) return false;
+      if (o.y >= ENEMY.ENTRY_ZONE_Y) return true;
+      const [olo, ohi] = o.sweep;
+      return hi + ENEMY.READ_GAP <= olo || ohi + ENEMY.READ_GAP <= lo;
     });
+  }
+
+  private addAlien(alien: Alien): void {
     this.aliens.push(alien);
-    this.enemiesInField.set(result, alien);
+    this.enemiesInField.set(alien.result, alien);
+  }
+
+  /** Send a bonus drifter across from a random side. False if not possible now. */
+  private spawnDrifter(diff: DifficultyParams): boolean {
+    if (this.gameOver || this.aliens.some((a) => a.active && a.kind === "drifter")) return false;
+    // Always a quick 2-number sum: it is a bonus, not a test.
+    const sum = this.rollSum(DIFFICULTY.MIN_BALLS, diff.maxDigit);
+    if (!sum) return false;
+    const m = MONSTERS.drifter;
+    for (let attempt = 0; attempt < 6; attempt++) {
+      const fromLeft = Math.random() < 0.5;
+      const probe = this.makeAlien("drifter", sum, 0, 0, diff);
+      const x = fromLeft ? -probe.halfW : GAME.WIDTH + probe.halfW - 1;
+      const bandY = Phaser.Math.Between(m.BAND_Y.min, m.BAND_Y.max);
+      const alien = this.makeAlien("drifter", sum, x, bandY, diff, bandY);
+      if (this.aliens.every((o) => !o.active || !alien.overlaps(o))) {
+        this.addAlien(alien);
+        return true;
+      }
+    }
+    return false;
   }
 
   // ---------------------------------------------------------------------------
@@ -386,6 +489,7 @@ export default class GameScene extends Phaser.Scene {
 
     this.explode(alien);
     this.addScore(points, alien.x, alien.y);
+    if (!alien.lethal) this.grantEnergy(MONSTERS.drifter.ENERGY_BURST, alien.x, alien.y);
 
     this.enemiesInField.delete(alien.result);
     if (this.lockedTarget === alien) {
@@ -423,6 +527,35 @@ export default class GameScene extends Phaser.Scene {
     this.explode(alien);
     alien.kill();
     this.loseLife();
+  }
+
+  /** A bonus alien crossed the field unsolved: it just leaves, no penalty. */
+  private onAlienEscaped(alien: Alien): void {
+    this.enemiesInField.delete(alien.result);
+    alien.kill();
+  }
+
+  /**
+   * Bonus energy (the solved drifter's burst). Until the energy meter lands
+   * this only accumulates and pops a label so the reward can be play-tested.
+   */
+  private grantEnergy(amount: number, x: number, y: number): void {
+    this.energy += amount;
+    const pop = this.add
+      .text(x, y + 22, `+${amount} ENERGY`, {
+        fontFamily: "monospace",
+        fontSize: "15px",
+        color: "#ff6be6",
+      })
+      .setOrigin(0.5)
+      .setDepth(5);
+    this.tweens.add({
+      targets: pop,
+      y: y - 30,
+      alpha: 0,
+      duration: 1100,
+      onComplete: () => pop.destroy(),
+    });
   }
 
   private explode(alien: Alien): void {

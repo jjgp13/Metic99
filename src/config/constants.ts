@@ -28,16 +28,24 @@ export const BULLET = {
 } as const;
 
 export const ENEMY = {
-  HOME_TRIGGER_Y: 220, // y after which an alien speeds up toward the player
-  SCALE: 1.5, // alien body model scale
+  HOME_TRIGGER_Y: 220, // y after which a descending alien speeds up toward the player
+  SCALE: 1.5, // voxel-fallback alien body scale
   BALL_SPACING: 20, // px between adjacent number balls (centers)
-  BALL_OFFSET_Y: 24, // px the ball row sits above the body
-  MIN_SPAWN_GAP: 84, // px min horizontal distance between alien lanes
+  BALL_RADIUS: 9, // px; number ball size (drawn by render3d/NumberBall.ts)
+  BALL_OFFSET_Y: 24, // px the ball row sits above a voxel-fallback body
 
-  // Personality: speed scales INVERSELY with how many numbers an alien carries.
-  // A 2-number sum is quick to solve, so those aliens dart in faster; 3+ numbers
-  // are harder, so they lumber. Keyed by ball count (falls back to 1).
-  SPEED_BY_BALLS: { 2: 1.25, 3: 0.85, 4: 0.6 } as Record<number, number>,
+  // Readability rule (docs/MULTIPLAYER_DESIGN.md §3): each alien owns a box
+  // around its ball row and body (see MONSTERS). A move that would bring two
+  // boxes closer than READ_GAP is not made: the alien holds that axis, and
+  // sideways movers turn around, so ball rows never overlap by accident.
+  READ_GAP: 8,
+  // New aliens enter only where their horizontal sweep (zig-zag width, patrol
+  // span) clears the sweep of every alien still above this y.
+  ENTRY_ZONE_Y: 180,
+  SPAWN_EDGE: 6, // px kept between a sweep and the field edge
+
+  // 3+ ball sums are always lumberers; 2-ball sums pick a kind by weight.
+  TWO_BALL_KINDS: { darter: 0.6, strafer: 0.4 } as Record<"darter" | "strafer", number>,
 
   // Spawn pacing is gated by the board's CURRENT cognitive load, not a blind
   // clock. Each alien contributes its THREAT_BY_BALLS weight; new spawns are
@@ -51,6 +59,67 @@ export const ENEMY = {
   // waiting a full spawn interval, so deferred spawns don't pile up and burst.
   SPAWN_RETRY_MS: 350,
 } as const;
+
+/**
+ * Monster kinds: each has its own model, movement pattern and readability box.
+ * Box = HALF_W (widest body half-width; the ball row widens it for 3 balls),
+ * BALLS_Y (ball-row center above the body; must match the model's
+ * socket_balls) and BOTTOM (lowest body point below center), all in px.
+ * SPEED multiplies the difficulty's fall/home speed.
+ */
+export const MONSTERS = {
+  // 2 balls: fast zig-zag dive around its entry lane.
+  darter: {
+    MODEL: "alien_darter",
+    HALF_W: 15,
+    BALLS_Y: 28,
+    BOTTOM: 19,
+    SPEED: 1.25,
+    ZIG_AMPLITUDE: 26, // px either side of its lane
+    ZIG_SPEED: 70, // px/s sideways
+  },
+  // 3 balls: slow stop-and-go stomp (moves half of each cycle, same average).
+  lumberer: {
+    MODEL: "alien_lumberer",
+    HALF_W: 27,
+    BALLS_Y: 30,
+    BOTTOM: 28,
+    SPEED: 0.85,
+    STOMP_MS: 1400, // one step + one pause
+  },
+  // 2 balls, Galaga-style: flies into a band at the top, patrols sideways for
+  // DIFFICULTY.STRAFER_PATROL_MS (time to read its sum), shakes, then dives.
+  strafer: {
+    MODEL: "alien_strafer",
+    HALF_W: 24,
+    BALLS_Y: 30,
+    BOTTOM: 20,
+    ENTER_SPEED: 90, // px/s down into the band
+    BAND_Y: { min: 110, max: 140 }, // body y of the patrol band
+    PATROL_HALF: 60, // px either side of its entry x
+    PATROL_SPEED: 60, // px/s
+    WINDUP_MS: 600, // telegraph: hovers and shakes before the dive
+    DIVE_SPEED: 1.6, // × home speed
+  },
+  // Bonus: crosses sideways, never reaches the player (non-lethal). Solving it
+  // gives an ENERGY_BURST; left alone it just leaves. Doesn't count toward the
+  // spawn caps, and stray bullets fly through it (it must be solved).
+  drifter: {
+    MODEL: "alien_drifter",
+    HALF_W: 25,
+    BALLS_Y: 26,
+    BOTTOM: 25,
+    BAND_Y: { min: 190, max: 260 },
+    CROSS_SPEED: 45, // px/s (~11 s to cross)
+    BOB_PX: 6,
+    BOB_MS: 1800,
+    FIRST_MS: 15000, // field time before the first one
+    INTERVAL_MS: { min: 18000, max: 28000 }, // between drifters
+    ENERGY_BURST: 40,
+  },
+} as const;
+
+export type AlienKind = keyof typeof MONSTERS;
 
 /**
  * Skill-based scoring. Points reward harder sums, faster solving, later game and
@@ -167,6 +236,9 @@ export const DIFFICULTY = {
   MIN_BALLS: 2,
   MAX_BALLS: { easy: 2, hard: 3 },
   MAX_DIGIT: { easy: 3, hard: 9 },
+
+  // How long a strafer patrols the top band before diving (read time).
+  STRAFER_PATROL_MS: { easy: 5000, hard: 2800 },
 } as const;
 
 /**
@@ -205,7 +277,7 @@ export const RENDER3D = {
   BULLET_DEPTH: 2,
 
   // Number balls: glass spheres with the digit inside (render3d/NumberBall.ts).
-  BALL_RADIUS: 9,
+  BALL_RADIUS: ENEMY.BALL_RADIUS,
   // Glass tint per ball texture key = math operation (see BALL_COLOR).
   BALL_TINT: {
     blueBalls: 0x3d8bff, // sum
@@ -223,6 +295,7 @@ export const RENDER3D = {
     "alien_darter",
     "alien_lumberer",
     "alien_drifter",
+    "alien_strafer",
   ],
 
   // Player ships selectable on the menu (model name + label). The first one is
@@ -233,17 +306,34 @@ export const RENDER3D = {
     { model: "ship_pod", name: "POD" },
   ],
 
-  // Monster models, picked at random per spawn for now (per-model behavior is
-  // planned). Values are the debris colors their explosion bursts into.
+  // Debris colors each monster model bursts into (model per kind: MONSTERS).
   ALIEN_MODELS: {
     alien_darter: [0xf2913d, 0x5a2d96, 0x7ff6ff],
     alien_lumberer: [0x2bb3a3, 0x1b7468, 0xf5f5f0],
     alien_drifter: [0x8e4fd8, 0xf29bc1, 0xff6be6],
+    alien_strafer: [0xd63fa6, 0x5a2d96, 0x9aa0b5],
   } as Record<string, readonly number[]>,
 
-  // Idle motion: aliens sway (yaw) to show off their depth.
+  // Idle motion: aliens sway (yaw) to show off their depth, and bank into
+  // sideways moves like the ship.
   ALIEN_SWAY: 0.5, // rad
   ALIEN_SWAY_SPEED: 0.0025, // rad per ms
+  ALIEN_BANK_PER_PXS: 0.006, // rad per px/s of sideways speed
+  ALIEN_BANK_MAX: 0.5, // rad
+
+  // Sine motion of the models' anim_* parts (docs/ART_SPEC.md §6).
+  ANIM: {
+    TAIL_WAG: 0.45, // darter tail, rad
+    TAIL_SPEED: 0.012, // rad per ms
+    LEG_SWING: 0.35, // lumberer legs, rad (synced to its stomp)
+    STOMP_LIFT: 3, // px the lumberer's body rises while stepping
+    SKIRT_SPIN: 0.0006, // drifter skirt, rad per ms
+    SKIRT_PULSE: 0.1, // drifter skirt scale ±
+    SKIRT_PULSE_SPEED: 0.004, // rad per ms
+    WING_FLAP: 0.45, // strafer wings, rad
+    WING_SPEED: 0.018, // rad per ms (doubles in windup/dive)
+    WINDUP_SHAKE: 2.5, // px the strafer jitters before diving
+  },
   // Ship banks toward where it is sliding.
   SHIP_BANK_PER_PX: 0.012,
   SHIP_BANK_MAX: 0.7, // rad
