@@ -79,6 +79,7 @@ art/                  3D art source (docs/ART_SPEC.md)
 public/assets/models/ Built .glb models loaded by World3D
 public/assets/icons/  Transparent top-down model renders for 2D menus (build output)
 docs/ART_SPEC.md      3D art style, budgets, axes, pipeline
+docs/MULTIPLAYER_DESIGN.md  Battle-royale design: energy, attacks, backend plan
   env.d.ts            Types for Vite `import.meta.env` (Supabase env vars)
 ```
 
@@ -289,9 +290,10 @@ curve is in `src/config/difficulty.ts` (`difficultyAt(elapsedMs, score)`).
        game over, world rank, top-N board. **Needs Supabase creds + Pages setup.**
 12. [ ] Publish on GitHub Pages (workflow added; enable Pages = "GitHub Actions"
        and add repo secrets `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY`).
-13. [ ] **Battle-royale multiplayer (Tetris 99-style)** — many players each on
-       their own field, clearing aliens sends attacks to opponents; a learning
-       project for multiplayer backend infrastructure. Design TBD (iterate).
+13. [ ] **Battle-royale multiplayer (Tetris 99-style)** — see
+       `docs/MULTIPLAYER_DESIGN.md`. Single player first: energy bar + slow
+       time, alien movement patterns, monster abilities; then offline bots, then
+       the WebSocket match server (8–16 players to start).
 
 ## Conventions
 
@@ -307,6 +309,13 @@ curve is in `src/config/difficulty.ts` (`difficultyAt(elapsedMs, score)`).
 ## Decision Log
 
 Newest first. Format: `YYYY-MM-DD — decision — rationale`.
+
+- **2026-09-25 — Battle-royale direction (docs/MULTIPLAYER_DESIGN.md).** Kills
+  charge an energy bar (no automatic attacks), spent on sending aliens or
+  slowing your own field; kills cancel incoming aliens first. First matches
+  8–16 players with bots; leaning to one life. Single-player fun comes first.
+  Accidental ball overlap is a bug; hiding numbers is only allowed as a monster
+  ability.
 
 - **2026-09-25 — Project renamed MeticWeb → Metic99.** Repo, package and folder
   renamed to reflect the Tetris 99-style battle-royale goal. The GitHub repo is
