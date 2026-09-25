@@ -12,6 +12,7 @@ export default class HowToPlayScene extends Phaser.Scene {
 
   create(): void {
     const cx = GAME.WIDTH / 2;
+    const lives: number = PLAYER.LIVES;
 
     this.add
       .text(cx, 60, "HOW TO PLAY", {
@@ -36,21 +37,25 @@ export default class HowToPlayScene extends Phaser.Scene {
       {
         heading: "STAY ALIVE",
         body:
-          `You have ${PLAYER.LIVES} lives. An alien that reaches your\n` +
-          "line costs one. Lose all of them and it's\n" +
-          "game over.",
+          `You have ${lives} ${lives === 1 ? "life" : "lives"}. An alien reaching your line\n` +
+          "costs one. Lose them all: game over.",
       },
       {
         heading: "SCORE BIG",
         body:
-          "Solve fast and keep a kill streak for combo\n" +
-          "bonuses. Harder sums and later waves pay\n" +
-          "more. The board fills with tougher aliens as\n" +
-          "your score climbs.",
+          "Fast solves, streaks and harder sums pay\n" +
+          "more. The board toughens as you score.",
+      },
+      {
+        heading: "ENERGY",
+        body:
+          "Kills charge the EN meter (harder, faster\n" +
+          "and streak kills charge more). Press SLOW\n" +
+          "to slow your field. M switches slow mode.",
       },
       {
         heading: "CONTROLS",
-        body: "0-9 type · Backspace delete · Esc clear · P pause",
+        body: "0-9 type · Bksp · Esc clear · Space slow · P pause",
       },
     ];
 

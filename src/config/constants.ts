@@ -12,6 +12,9 @@ export const PLAYER = {
   Y: 430, // fixed vertical line the ship rides on (keypad sits below it)
   MOVE_LERP: 0.22, // how snappily the ship slides toward a target (0..1)
   SHOOT_RANGE: 6, // px tolerance to consider "lined up" and fire
+  // Playtest switch: 3 lives (classic) vs 1 (knockout, as leaned to for the
+  // battle royale). With 1 life the RECOVERY freeze never runs: the only hit
+  // ends the game, so slow time is the player's sole safety tool.
   LIVES: 3,
   FIRE_COOLDOWN: 250, // ms between shots
   SCALE: 2, // ship model scale (16px source art)
@@ -95,6 +98,7 @@ export const STORAGE = {
   LAST_NAME: "metic-last-name", // remembers the player's last arcade initials
   LAST_LEN: "metic-last-len", // remembers the chosen initials length
   SHIP: "metic-ship", // player ship model picked on the menu
+  SLOW_MODE: "metic-slow-mode", // playtest: last slow-time mode picked in game
 } as const;
 
 /** Arcade global leaderboard (Supabase-backed). */
@@ -179,6 +183,56 @@ export const DIFFICULTY = {
 export const RECOVERY = {
   FREEZE_MS: 3000, // field is completely frozen for this long after a hit
   POST_HIT_FACTOR: 0.8, // field speed multiplier once movement resumes
+} as const;
+
+/**
+ * Energy: kills charge a meter the player chooses when to spend (slow time now;
+ * sending aliens to opponents in the battle royale, see
+ * docs/MULTIPLAYER_DESIGN.md). Harder, faster and streakier kills charge more:
+ *
+ *   gain = BASE * ballBonus * digitBonus * speedBonus * comboBonus
+ *
+ * - ballBonus: more numbers in the sum pay more.
+ * - digitBonus: 1 for an average digit of 1, rising to DIGIT_MAX_MULT at 9.
+ * - speedBonus: FAST_MULT when solved within SCORE.FAST_MS, decaying to
+ *   SLOW_MULT by SCORE.SLOW_MS (same window as the score's speed bonus).
+ * - comboBonus: +COMBO_STEP per consecutive kill, capped at COMBO_MAX.
+ *
+ * An easy early kill gives ~8, so a full stop (SLOW_TIME.STOP.COST) takes about
+ * five kills; a fast 3-ball kill on a streak gives 30+.
+ */
+export const ENERGY = {
+  MAX: 100,
+  BASE: 6,
+  BALL_BONUS: { 2: 1.0, 3: 1.6, 4: 2.2 } as Record<number, number>,
+  DIGIT_MAX_MULT: 1.5,
+  FAST_MULT: 1.5,
+  SLOW_MULT: 1.0,
+  COMBO_STEP: 0.1,
+  COMBO_MAX: 2.0,
+} as const;
+
+/** How slow time works. Two modes, switchable in game (M key / mode label). */
+export type SlowMode = "drain" | "stop";
+
+/**
+ * Slow time: spend energy to slow the player's own field (aliens + spawn clock).
+ * The ship and bullets keep full speed, and the difficulty clock keeps running.
+ * The two modes are tuned to buy roughly the same field-time per energy
+ * (a full bar ≈ 2.5 s of "saved" alien movement in drain, ≈ 3 s in stop), so a
+ * playtest compares how they FEEL, not which one is stronger.
+ */
+export const SLOW_TIME = {
+  DEFAULT_MODE: "drain" as SlowMode,
+  DRAIN: {
+    FACTOR: 0.6, // field speed while active
+    PER_SEC: 16, // energy drained per second (a full bar lasts ~6 s)
+    MIN_START: 10, // energy needed to switch it on (stops tap-flicker at empty)
+  },
+  STOP: {
+    DURATION_MS: 1500, // the field is fully stopped for this long
+    COST: 50, // energy paid up front
+  },
 } as const;
 
 /** Number ball colors map to future math operations (sum/sub/mul/div). */

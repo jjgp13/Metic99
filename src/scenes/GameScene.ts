@@ -8,7 +8,9 @@ import {
   RANKS,
   RECOVERY,
   SCORE,
+  SLOW_TIME,
   STORAGE,
+  type SlowMode,
 } from "../config/constants";
 import { difficultyAt } from "../config/difficulty";
 import { isLeaderboardEnabled, startMatch } from "../services/leaderboard";
@@ -16,6 +18,14 @@ import Alien from "../objects/Alien";
 import type { Bullet } from "../objects/Bullet";
 import World3D, { getWorld3D } from "../render3d/World3D";
 import { selectedShip } from "../config/ships";
+import { EnergyMeter, SlowTime, energyForKill } from "../sim/energy";
+
+// Energy HUD sits in the gutters beside the keypad so it never covers the field
+// or the keys: the meter on the left, the SLOW button on the right.
+const KEYPAD_TOP = PLAYER.Y + 52;
+const KEYPAD_BOTTOM = PLAYER.Y + 214;
+const GUTTER_H = KEYPAD_BOTTOM - KEYPAD_TOP;
+const ENERGY_COLOR = 0x5ef0ff;
 
 /**
  * GameScene owns the actual gameplay. A Phaser Scene has a lifecycle:
@@ -67,10 +77,22 @@ export default class GameScene extends Phaser.Scene {
   private spawnCountdown = 0;
   private diffBar!: Phaser.GameObjects.Rectangle;
 
-  // Hit-recovery: the field freezes until `freezeUntil`, then (once the player
-  // has been hit at least once) runs at POST_HIT_FACTOR for the rest of the run.
-  private freezeUntil = 0;
+  // Hit-recovery: the field freezes while `freezeLeftMs` > 0, then (once the
+  // player has been hit at least once) runs at POST_HIT_FACTOR for the rest of
+  // the run. A countdown (not a timestamp) so pausing doesn't eat the freeze.
+  private freezeLeftMs = 0;
   private postHitSlow = false;
+
+  // Energy: kills charge it, SLOW spends it (sending comes with multiplayer).
+  private energy = new EnergyMeter();
+  private slowTime = new SlowTime(SLOW_TIME.DEFAULT_MODE);
+  private energyFill!: Phaser.GameObjects.Rectangle;
+  private energyTick!: Phaser.GameObjects.Rectangle;
+  private energyText!: Phaser.GameObjects.Text;
+  private slowBtn!: Phaser.GameObjects.Rectangle;
+  private slowLabel!: Phaser.GameObjects.Text;
+  private modeText!: Phaser.GameObjects.Text;
+  private slowTint!: Phaser.GameObjects.Rectangle;
 
   // Pause: while paused the field is frozen and aliens are hidden so the
   // player can't keep solving sums during the break.
@@ -92,6 +114,7 @@ export default class GameScene extends Phaser.Scene {
 
     this.buildHud();
     this.buildKeypad();
+    this.buildEnergyHud();
     this.bindKeyboard();
 
     // --- Enemy spawner: interval & speeds scale with difficulty (see update).
@@ -126,8 +149,10 @@ export default class GameScene extends Phaser.Scene {
     this.gameOver = false;
     this.proceeding = false;
     this.newHighScore = false;
-    this.freezeUntil = 0;
+    this.freezeLeftMs = 0;
     this.postHitSlow = false;
+    this.energy = new EnergyMeter();
+    this.slowTime = new SlowTime(loadSlowMode());
     this.paused = false;
     this.pauseOverlay = [];
   }
@@ -156,8 +181,14 @@ export default class GameScene extends Phaser.Scene {
 
     // After a hit the field FREEZES for a few seconds (factor 0), then resumes at
     // POST_HIT_FACTOR for the rest of the run. The difficulty timer keeps running
-    // underneath, so absolute speed still climbs over time.
-    const slow = time < this.freezeUntil ? 0 : this.postHitSlow ? RECOVERY.POST_HIT_FACTOR : 1;
+    // underneath, so absolute speed still climbs over time. Slow time multiplies
+    // on top; it holds (no drain) while the hit freeze already stops the field.
+    const hitFrozen = this.freezeLeftMs > 0;
+    if (hitFrozen) this.freezeLeftMs -= delta;
+    const slowFactor = this.slowTime.update(delta, this.energy, hitFrozen);
+    const slow = hitFrozen
+      ? 0
+      : slowFactor * (this.postHitSlow ? RECOVERY.POST_HIT_FACTOR : 1);
     const fieldDelta = delta * slow;
 
     this.diffBar.setSize(diff.d * (GAME.WIDTH - 24), 4); // show ramp progress
@@ -223,6 +254,8 @@ export default class GameScene extends Phaser.Scene {
     // Drop killed aliens and spent bullets; the 3D view removes their meshes.
     this.aliens = this.aliens.filter((a) => a.active);
     this.bullets = this.bullets.filter((b) => b.active);
+
+    this.updateEnergyHud();
   }
 
   /**
@@ -386,6 +419,7 @@ export default class GameScene extends Phaser.Scene {
 
     this.explode(alien);
     this.addScore(points, alien.x, alien.y);
+    this.addEnergy(energyForKill({ digits: alien.digits, solveMs, combo: this.combo }));
 
     this.enemiesInField.delete(alien.result);
     if (this.lockedTarget === alien) {
@@ -464,7 +498,7 @@ export default class GameScene extends Phaser.Scene {
     }
     // Freeze the whole field for a few seconds so the player can recover, then
     // run at a reduced speed for the rest of the run (difficulty keeps ramping).
-    this.freezeUntil = this.time.now + RECOVERY.FREEZE_MS;
+    this.freezeLeftMs = RECOVERY.FREEZE_MS;
     this.postHitSlow = true;
   }
 
@@ -560,6 +594,137 @@ export default class GameScene extends Phaser.Scene {
   }
 
   // ---------------------------------------------------------------------------
+  // Energy & slow time
+  // ---------------------------------------------------------------------------
+  private addEnergy(gain: number): void {
+    const stored = this.energy.charge(gain);
+    if (stored < 0.5) return;
+    const pop = this.add
+      .text(30, KEYPAD_TOP - 18, `+${Math.round(stored)}`, {
+        fontFamily: "monospace",
+        fontSize: "14px",
+        color: "#5ef0ff",
+      })
+      .setOrigin(0.5, 1)
+      .setDepth(6);
+    this.tweens.add({
+      targets: pop,
+      y: pop.y - 30,
+      alpha: 0,
+      duration: 700,
+      onComplete: () => pop.destroy(),
+    });
+  }
+
+  private triggerSlow(): void {
+    if (this.gameOver || this.paused) return;
+    if (this.slowTime.trigger(this.energy)) this.sound.play("blip", { volume: 0.5, rate: 0.6 });
+    this.updateEnergyHud();
+  }
+
+  /** Playtest switch between the two slow-time modes; remembered across runs. */
+  private toggleSlowMode(): void {
+    if (this.gameOver || this.paused) return;
+    const next: SlowMode = this.slowTime.currentMode === "drain" ? "stop" : "drain";
+    this.slowTime.setMode(next);
+    saveSlowMode(next);
+    this.modeText.setText(slowModeLabel(next));
+    this.updateEnergyHud();
+  }
+
+  private buildEnergyHud(): void {
+    const HUD_DEPTH = 5;
+    const midY = KEYPAD_TOP + GUTTER_H / 2;
+
+    // Field tint while slow time runs. It is drawn on the transparent Phaser
+    // canvas, so it tints the 3D playfield underneath (and sits below the HUD).
+    this.slowTint = this.add
+      .rectangle(GAME.WIDTH / 2, 0, GAME.WIDTH, PLAYER.Y + 20, ENERGY_COLOR, 1)
+      .setOrigin(0.5, 0)
+      .setDepth(4)
+      .setVisible(false);
+
+    // Left gutter: vertical energy meter.
+    this.add
+      .text(30, KEYPAD_TOP - 4, "EN", { fontFamily: "monospace", fontSize: "12px", color: "#5ef0ff" })
+      .setOrigin(0.5, 1)
+      .setDepth(HUD_DEPTH);
+    this.add
+      .rectangle(30, midY, 18, GUTTER_H, 0x1b2340)
+      .setStrokeStyle(1, 0x33406e)
+      .setDepth(HUD_DEPTH);
+    this.energyFill = this.add
+      .rectangle(30, KEYPAD_BOTTOM, 14, 0, ENERGY_COLOR)
+      .setOrigin(0.5, 1)
+      .setDepth(HUD_DEPTH);
+    // Marks how much energy the current slow mode needs before it can be used.
+    this.energyTick = this.add.rectangle(30, KEYPAD_BOTTOM, 26, 2, 0xffd166).setDepth(HUD_DEPTH);
+    this.energyText = this.add
+      .text(30, KEYPAD_BOTTOM + 6, "0", { fontFamily: "monospace", fontSize: "12px", color: "#ffffff" })
+      .setOrigin(0.5, 0)
+      .setDepth(HUD_DEPTH);
+
+    // Right gutter: a tall SLOW button (also Space), easy to hit with a thumb.
+    this.slowBtn = this.add
+      .rectangle(GAME.WIDTH - 30, midY, 48, GUTTER_H, 0x1b2340)
+      .setStrokeStyle(2, ENERGY_COLOR)
+      .setDepth(HUD_DEPTH)
+      .setInteractive({ useHandCursor: true });
+    this.slowLabel = this.add
+      .text(GAME.WIDTH - 30, midY, "S\nL\nO\nW", {
+        fontFamily: "monospace",
+        fontSize: "20px",
+        color: "#ffffff",
+        align: "center",
+        lineSpacing: 6,
+      })
+      .setOrigin(0.5)
+      .setDepth(HUD_DEPTH);
+    this.add
+      .text(GAME.WIDTH - 30, KEYPAD_BOTTOM + 6, "SPACE", {
+        fontFamily: "monospace",
+        fontSize: "10px",
+        color: "#8892b0",
+      })
+      .setOrigin(0.5, 0)
+      .setDepth(HUD_DEPTH);
+    this.slowBtn.on("pointerdown", () => this.triggerSlow());
+
+    // Below the keypad: which slow mode is active; tap it (or M) to switch.
+    const modeBg = this.add
+      .rectangle(GAME.WIDTH / 2, KEYPAD_BOTTOM + 34, 340, 30, 0x0b1020)
+      .setStrokeStyle(1, 0x33406e)
+      .setDepth(HUD_DEPTH)
+      .setInteractive({ useHandCursor: true });
+    this.modeText = this.add
+      .text(GAME.WIDTH / 2, KEYPAD_BOTTOM + 34, slowModeLabel(this.slowTime.currentMode), {
+        fontFamily: "monospace",
+        fontSize: "13px",
+        color: "#ffd166",
+      })
+      .setOrigin(0.5)
+      .setDepth(HUD_DEPTH);
+    modeBg.on("pointerdown", () => this.toggleSlowMode());
+
+    this.updateEnergyHud();
+  }
+
+  private updateEnergyHud(): void {
+    const e = this.energy;
+    this.energyFill.setSize(14, GUTTER_H * e.fraction);
+    this.energyTick.setY(KEYPAD_BOTTOM - GUTTER_H * (this.slowTime.threshold / e.max));
+    this.energyText.setText(String(Math.floor(e.value)));
+
+    const active = this.slowTime.active;
+    const usable = active || this.slowTime.canTrigger(e);
+    this.slowBtn.setFillStyle(active ? 0x1f6f7a : 0x1b2340).setAlpha(usable ? 1 : 0.35);
+    this.slowLabel.setAlpha(usable ? 1 : 0.35);
+    this.slowTint
+      .setVisible(active)
+      .setAlpha(this.slowTime.currentMode === "stop" ? 0.2 : 0.1);
+  }
+
+  // ---------------------------------------------------------------------------
   // Input: on-screen keypad + physical keyboard
   // ---------------------------------------------------------------------------
   private buildKeypad(): void {
@@ -595,6 +760,15 @@ export default class GameScene extends Phaser.Scene {
     this.input.keyboard?.on("keydown", (e: KeyboardEvent) => {
       if (e.key === "p" || e.key === "P") {
         this.togglePause();
+        return;
+      }
+      if (e.key === " ") {
+        e.preventDefault();
+        this.triggerSlow();
+        return;
+      }
+      if (e.key === "m" || e.key === "M") {
+        this.toggleSlowMode();
         return;
       }
       if (e.key >= "0" && e.key <= "9") this.handleInput(e.key);
@@ -672,10 +846,12 @@ export default class GameScene extends Phaser.Scene {
     this.add
       .text(
         GAME.WIDTH / 2,
-        GAME.HEIGHT / 2 + 10,
+        GAME.HEIGHT / 2 + 20,
         `Score: ${this.score}    Best: ${best}\n` +
           `Best combo: ${bestCombo}    Kills: ${totalKills}\n` +
-          `Fastest solve: ${fastestStr}`,
+          `Fastest solve: ${fastestStr}\n` +
+          `Energy ${Math.round(this.energy.earned)} earned, ` +
+          `${Math.round(this.energy.spent.slow)} on slow (${this.slowTime.currentMode})`,
         { fontFamily: "monospace", fontSize: "16px", color: "#ffffff", align: "center", lineSpacing: 8 },
       )
       .setOrigin(0.5)
@@ -684,7 +860,7 @@ export default class GameScene extends Phaser.Scene {
       ? "tap / Enter to enter initials"
       : "tap / Enter to play again";
     this.add
-      .text(GAME.WIDTH / 2, GAME.HEIGHT / 2 + 80, continueText, {
+      .text(GAME.WIDTH / 2, GAME.HEIGHT / 2 + 96, continueText, {
         fontFamily: "monospace",
         fontSize: "16px",
         color: "#4ea1ff",
@@ -707,5 +883,31 @@ export default class GameScene extends Phaser.Scene {
     } else {
       this.scene.start("MenuScene");
     }
+  }
+}
+
+function slowModeLabel(mode: SlowMode): string {
+  const text =
+    mode === "drain"
+      ? `SLOW: ${Math.round(SLOW_TIME.DRAIN.FACTOR * 100)}% SPEED, DRAINS`
+      : `SLOW: FULL STOP ${SLOW_TIME.STOP.DURATION_MS / 1000}s, COSTS ${SLOW_TIME.STOP.COST}`;
+  return `${text}  [M]`;
+}
+
+function loadSlowMode(): SlowMode {
+  try {
+    const stored = localStorage.getItem(STORAGE.SLOW_MODE);
+    if (stored === "drain" || stored === "stop") return stored;
+  } catch {
+    // Storage blocked: use the default mode.
+  }
+  return SLOW_TIME.DEFAULT_MODE;
+}
+
+function saveSlowMode(mode: SlowMode): void {
+  try {
+    localStorage.setItem(STORAGE.SLOW_MODE, mode);
+  } catch {
+    // Not persisted; the switch still applies for this session.
   }
 }
