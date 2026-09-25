@@ -20,7 +20,9 @@ export interface WorldSnapshot {
 
 interface AlienView {
   root: THREE.Group;
-  body: THREE.Mesh;
+  body: THREE.Object3D;
+  /** Blender model name, or null when drawn with the sprite-voxel fallback. */
+  model: string | null;
   phase: number;
 }
 
@@ -57,6 +59,7 @@ export default class World3D {
   private readonly models = new Map<string, VoxelModel>();
   /** Parsed Blender models by name (docs/ART_SPEC.md); cloned per instance. */
   private readonly gltfModels = new Map<string, THREE.Object3D>();
+  private readonly ballSockets = new Map<string, THREE.Vector3 | null>();
   private readonly litMaterial = new THREE.MeshStandardMaterial({
     vertexColors: true,
     roughness: 0.6,
@@ -155,13 +158,20 @@ export default class World3D {
     );
   }
 
-  /** Start drawing a run. Needs Phaser's textures (to voxelize) and canvas (to align). */
-  public begin(textures: Phaser.Textures.TextureManager, phaserCanvas: HTMLCanvasElement): void {
+  /**
+   * Start drawing a run. Needs Phaser's textures (to voxelize), its canvas (to
+   * align) and the player's ship model (picked on the menu).
+   */
+  public begin(
+    textures: Phaser.Textures.TextureManager,
+    phaserCanvas: HTMLCanvasElement,
+    shipModel: string,
+  ): void {
     this.textures = textures;
     this.phaserCanvas = phaserCanvas;
     this.clearViews();
 
-    this.shipBody = this.instantiate("ship_player") ?? this.voxelShip();
+    this.shipBody = this.instantiate(shipModel) ?? this.voxelShip();
     this.shipFlames = [];
     this.shipBody.traverse((o) => {
       if (o.name.startsWith("anim_flame")) this.shipFlames.push(o);
@@ -194,9 +204,12 @@ export default class World3D {
 
   /** Burst an alien into voxel debris at logical (x, y). */
   public explode(x: number, y: number, alien?: Alien): void {
-    const palette = alien
-      ? this.model(alien.bodyKey, 0, RENDER3D.ALIEN_DEPTH).palette
-      : [0xffd166, 0xef476f, 0x4ea1ff];
+    const view = alien && this.alienViews.get(alien);
+    const palette = view?.model
+      ? RENDER3D.ALIEN_MODELS[view.model]
+      : alien
+        ? this.model(alien.bodyKey, 0, RENDER3D.ALIEN_DEPTH).palette
+        : [0xffd166, 0xef476f, 0x4ea1ff];
     const wx = toWorldX(x);
     const wy = toWorldY(y);
     const { min, max } = RENDER3D.DEBRIS_SPEED;
@@ -340,11 +353,18 @@ export default class World3D {
 
   private createAlienView(a: Alien): AlienView {
     const root = new THREE.Group();
-    const body = new THREE.Mesh(
-      this.model(a.bodyKey, 0, RENDER3D.ALIEN_DEPTH).geometry,
-      this.litMaterial,
-    );
-    body.scale.setScalar(ENEMY.SCALE);
+    // For now any monster model can carry any sum; per-model behavior comes later.
+    const loaded = Object.keys(RENDER3D.ALIEN_MODELS).filter((m) => this.gltfModels.has(m));
+    const model = loaded.length ? loaded[Math.floor(Math.random() * loaded.length)] : null;
+    let body: THREE.Object3D;
+    let ballsAt = new THREE.Vector3(0, ENEMY.BALL_OFFSET_Y, 0);
+    if (model) {
+      body = this.instantiate(model)!;
+      ballsAt = this.ballSocket(model) ?? ballsAt;
+    } else {
+      body = new THREE.Mesh(this.model(a.bodyKey, 0, RENDER3D.ALIEN_DEPTH).geometry, this.litMaterial);
+      body.scale.setScalar(ENEMY.SCALE);
+    }
     root.add(body);
 
     // Number balls sit in a row above the body and never rotate, so the digits
@@ -353,12 +373,23 @@ export default class World3D {
     const tint = RENDER3D.BALL_TINT[a.ballTexture] ?? RENDER3D.BALL_TINT.blueBalls;
     a.digits.forEach((d, i) => {
       const ball = createNumberBall(d, tint);
-      ball.position.set(-totalW / 2 + i * ENEMY.BALL_SPACING, ENEMY.BALL_OFFSET_Y, 0);
+      ball.position.set(ballsAt.x - totalW / 2 + i * ENEMY.BALL_SPACING, ballsAt.y, 0);
       root.add(ball);
     });
 
     this.scene.add(root);
-    return { root, body, phase: Math.random() * Math.PI * 2 };
+    return { root, body, model, phase: Math.random() * Math.PI * 2 };
+  }
+
+  /** Where a model's `socket_balls` empty sits, in view space (cached per model). */
+  private ballSocket(model: string): THREE.Vector3 | null {
+    if (!this.ballSockets.has(model)) {
+      const probe = this.instantiate(model);
+      const socket = probe?.getObjectByName("socket_balls");
+      probe?.updateMatrixWorld(true);
+      this.ballSockets.set(model, socket ? socket.getWorldPosition(new THREE.Vector3()) : null);
+    }
+    return this.ballSockets.get(model) ?? null;
   }
 
   private syncBullets(s: WorldSnapshot): void {

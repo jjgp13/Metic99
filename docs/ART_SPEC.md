@@ -205,8 +205,9 @@ including preview reviews.
 
 Example recipes exist (2026-09-24) for `alien_darter`, `alien_lumberer`,
 `alien_drifter`, and two alternative ship styles `ship_dart` (sleek delta) and
-`ship_pod` (chunky round). They are built but **not wired into the game** until
-an art direction is picked (`art/previews/comparison.png`).
+`ship_pod` (chunky round). **All five are in the game:** the player picks a
+ship on the menu, and each alien spawns as a random monster (behavior per
+monster comes later). More variations of both will follow in this style.
 
 | Model | Gameplay role | Look |
 | --- | --- | --- |
@@ -226,8 +227,11 @@ an art direction is picked (`art/previews/comparison.png`).
 - A missing or broken `.glb` logs a warning and the sprite-voxel model is used,
   so art lands one model at a time. Adding a model = recipe + build + add its
   name to `RENDER3D.MODELS` + use it in `World3D`.
-- Done: `ship_player` (its `anim_flame_*` parts flicker). To do: aliens (place
-  balls at `socket_balls`), reading `socket_muzzle` for bullets.
+- Done: the three ships (their `anim_flame*` parts flicker) and the three
+  monsters (balls sit at `socket_balls`). To do: animate the monsters'
+  `anim_*` parts, read `socket_muzzle` for bullets.
+- The build also renders `public/assets/icons/<model>.png` (128 px, transparent,
+  top-down) for 2D menus such as the ship picker.
 
 ## 12. Acceptance checklist (per model)
 

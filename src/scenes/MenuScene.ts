@@ -1,10 +1,11 @@
 import Phaser from "phaser";
-import { GAME, STORAGE } from "../config/constants";
+import { GAME, RENDER3D, STORAGE } from "../config/constants";
+import { selectShip, selectedShip } from "../config/ships";
 
 /**
- * Title / main menu. The first scene the player sees: PLAY, HOW TO PLAY and
- * SCORES. Buttons are large pointer targets (mobile-friendly) and also reachable
- * by keyboard (↑/↓ + Enter, or the highlighted first letter).
+ * Title / main menu. The first scene the player sees: a ship picker, then PLAY,
+ * HOW TO PLAY and SCORES. Buttons are large pointer targets (mobile-friendly);
+ * ←/→ change ship and Enter plays.
  */
 export default class MenuScene extends Phaser.Scene {
   constructor() {
@@ -50,9 +51,11 @@ export default class MenuScene extends Phaser.Scene {
         .setOrigin(0.5);
     }
 
-    this.makeButton(cx, 360, "PLAY", () => this.scene.start("GameScene"));
-    this.makeButton(cx, 430, "HOW TO PLAY", () => this.scene.start("HowToPlayScene"));
-    this.makeButton(cx, 500, "SCORES", () =>
+    this.makeShipPicker(cx, 330);
+
+    this.makeButton(cx, 450, "PLAY", () => this.scene.start("GameScene"));
+    this.makeButton(cx, 520, "HOW TO PLAY", () => this.scene.start("HowToPlayScene"));
+    this.makeButton(cx, 590, "SCORES", () =>
       this.scene.start("LeaderboardScene", { browse: true }),
     );
 
@@ -65,6 +68,44 @@ export default class MenuScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     this.input.keyboard?.on("keydown-ENTER", () => this.scene.start("GameScene"));
+  }
+
+  /** ◀ ship ▶ carousel; the pick is saved and used by the next run. */
+  private makeShipPicker(x: number, y: number): void {
+    const ships = RENDER3D.SHIPS;
+    let index = ships.indexOf(selectedShip());
+    const icon = this.add.image(x, y, `icon:${ships[index].model}`).setDisplaySize(96, 96);
+    const name = this.add
+      .text(x, y + 58, ships[index].name, {
+        fontFamily: "monospace",
+        fontSize: "18px",
+        color: "#ffd166",
+      })
+      .setOrigin(0.5);
+
+    const step = (dir: number) => {
+      index = (index + dir + ships.length) % ships.length;
+      selectShip(ships[index]);
+      icon.setTexture(`icon:${ships[index].model}`).setDisplaySize(96, 96);
+      name.setText(ships[index].name);
+      this.sound.play("blip", { volume: 0.4 });
+    };
+    for (const dir of [-1, 1]) {
+      const arrow = this.add
+        .text(x + dir * 110, y, dir < 0 ? "◀" : "▶", {
+          fontFamily: "monospace",
+          fontSize: "36px",
+          color: "#4ea1ff",
+        })
+        .setOrigin(0.5)
+        .setPadding(16)
+        .setInteractive({ useHandCursor: true });
+      arrow.on("pointerover", () => arrow.setColor("#ffd166"));
+      arrow.on("pointerout", () => arrow.setColor("#4ea1ff"));
+      arrow.on("pointerdown", () => step(dir));
+    }
+    this.input.keyboard?.on("keydown-LEFT", () => step(-1));
+    this.input.keyboard?.on("keydown-RIGHT", () => step(1));
   }
 
   private makeButton(x: number, y: number, label: string, onClick: () => void): void {

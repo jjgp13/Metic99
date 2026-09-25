@@ -283,8 +283,11 @@ def export_glb(root, path):
                               export_apply=True, export_yup=True)
 
 
-def render_previews(root, out_prefix):
+def render_previews(root, out_prefix, icon_path=None):
     """Top-down (the game's view) + 3/4 renders for review.
+
+    With icon_path, also renders a small transparent top-down icon the game's 2D
+    menus can show (e.g. the ship picker).
 
     Uses Cycles on the CPU: the GPU renderers (Workbench/EEVEE) crash in
     background mode with the dev machine's AMD driver.
@@ -318,7 +321,7 @@ def render_previews(root, out_prefix):
 
     size = max(max(root.dimensions.x, root.dimensions.y), 1.0)
 
-    def shot(suffix, loc, ortho):
+    def shot(path, loc, ortho):
         cam.location = loc
         # Straight down with +Y (the nose) at the top of the frame, like the game.
         cam.rotation_euler = (0, 0, 0) if ortho else (-Vector(loc)).to_track_quat("-Z", "Y").to_euler()
@@ -328,8 +331,13 @@ def render_previews(root, out_prefix):
         else:
             cam_data.type = "PERSP"
             cam_data.lens = 50
-        scene.render.filepath = f"{out_prefix}_{suffix}.png"
+        scene.render.filepath = path
         bpy.ops.render.render(write_still=True)
 
-    shot("top", (0, 0, size * 4), ortho=True)
-    shot("34", (0, -size * 2.2, size * 1.9), ortho=False)
+    shot(f"{out_prefix}_top.png", (0, 0, size * 4), ortho=True)
+    shot(f"{out_prefix}_34.png", (0, -size * 2.2, size * 1.9), ortho=False)
+    if icon_path:
+        scene.render.film_transparent = True
+        scene.render.resolution_x = scene.render.resolution_y = 128
+        shot(icon_path, (0, 0, size * 4), ortho=True)
+        scene.render.film_transparent = False

@@ -94,6 +94,7 @@ export const STORAGE = {
   FASTEST_MS: "metic-fastest-ms",
   LAST_NAME: "metic-last-name", // remembers the player's last arcade initials
   LAST_LEN: "metic-last-len", // remembers the chosen initials length
+  SHIP: "metic-ship", // player ship model picked on the menu
 } as const;
 
 /** Arcade global leaderboard (Supabase-backed). */
@@ -215,7 +216,30 @@ export const RENDER3D = {
 
   // Blender-built .glb models (public/assets/models/<name>.glb, see
   // docs/ART_SPEC.md). Any that fail to load fall back to sprite voxels.
-  MODELS: ["ship_player"],
+  MODELS: [
+    "ship_player",
+    "ship_dart",
+    "ship_pod",
+    "alien_darter",
+    "alien_lumberer",
+    "alien_drifter",
+  ],
+
+  // Player ships selectable on the menu (model name + label). The first one is
+  // the default. Icons: public/assets/icons/<model>.png (built with the models).
+  SHIPS: [
+    { model: "ship_player", name: "FALCON" },
+    { model: "ship_dart", name: "DART" },
+    { model: "ship_pod", name: "POD" },
+  ],
+
+  // Monster models, picked at random per spawn for now (per-model behavior is
+  // planned). Values are the debris colors their explosion bursts into.
+  ALIEN_MODELS: {
+    alien_darter: [0xf2913d, 0x5a2d96, 0x7ff6ff],
+    alien_lumberer: [0x2bb3a3, 0x1b7468, 0xf5f5f0],
+    alien_drifter: [0x8e4fd8, 0xf29bc1, 0xff6be6],
+  } as Record<string, readonly number[]>,
 
   // Idle motion: aliens sway (yaw) to show off their depth.
   ALIEN_SWAY: 0.5, // rad
