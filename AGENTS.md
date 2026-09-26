@@ -65,7 +65,7 @@ src/
                       submitScore, plus getTop/getRank reads
   sim/
     energy.ts         Phaser-free energy rules: energyForKill, EnergyMeter
-                      (charge/spend/drain per spender), SlowTime (drain | stop).
+                      (charge/spend/drain per spender), SlowTime (slow | freeze).
                       Kept pure so a future server sim can share it.
   objects/
     Alien.ts          Pure alien state (x/y, digits, result, `kind`) + per-kind
@@ -265,12 +265,13 @@ Green=multiplication, Yellow=division.
   (alien movement + spawn clock); the ship, bullets and difficulty clock keep
   full speed. Two playtest modes, switched in game with `M` or by tapping the
   mode bar under the keypad (remembered in `STORAGE.SLOW_MODE`):
-  - `drain` (default): toggle; field at 60% while energy drains 16/s; needs 10
-    to switch on; turns off when tapped again or when empty.
-  - `stop`: one-shot; pays 50 for a 1.5 s full stop.
-  Both buy roughly the same field-time per energy, so the playtest compares
-  feel, not strength. Slow time **holds** (no drain, stop timer paused) while
-  the hit-recovery freeze already stops the field. The field is tinted while
+  - `slow` (default): field at 30% while energy drains 14/s (~7 s per bar).
+  - `freeze`: field fully stopped while energy drains 20/s (~5 s per bar).
+  Both are toggles: 10 energy to switch on, off when pressed again or when
+  empty; switching mode while on keeps it running. Both buy the same
+  field-time per energy (~5 s per full bar), so the playtest compares feel,
+  not strength. Slow time **holds** (no drain) while the hit-recovery freeze
+  already stops the field. The field is tinted while
   slow time runs.
 - **Energy HUD** sits in the gutters beside the keypad (meter on the left with
   a mark at the current mode's activation cost, tall SLOW button on the right)
@@ -371,6 +372,11 @@ curve is in `src/config/difficulty.ts` (`difficultyAt(elapsedMs, score)`).
 ## Decision Log
 
 Newest first. Format: `YYYY-MM-DD — decision — rationale`.
+
+- **2026-09-25 — Stronger slow time: 30% slow vs full freeze.** The first
+  playtest found 60% too weak. The modes are now `slow` (30%) and `freeze`
+  (0%), both draining toggles tuned to ~5 s of saved field-time per full bar;
+  the one-shot 1.5 s stop was dropped as the freeze toggle covers it.
 
 - **2026-09-25 — Monsters get their own movement; readability boxes replace
   fixed lanes.** The kind moved from World3D (random) into `Alien`, so logic

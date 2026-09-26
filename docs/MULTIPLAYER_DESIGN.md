@@ -25,9 +25,9 @@ reason.
   the rest fills the energy bar. The player chooses to spend it on:
   - **Send:** drop aliens on the current target (more energy = harder monster).
   - **Slow time:** slow the player's own field. Both candidate strengths are
-    built and switchable in game (`M`) for playtesting: `drain` (60% speed
-    while energy drains) and `stop` (a short full stop for a fixed cost), tuned
-    to buy about the same field-time per energy. Slow time pauses while the
+    built and switchable in game (`M`) for playtesting: `slow` (30% speed)
+    and `freeze` (full stop), both draining energy while on and tuned to buy
+    the same field-time per energy (60% was too weak in the first playtest). Slow time pauses while the
     hit-recovery freeze already stops the field.
   - Energy code (`src/sim/energy.ts`) is Phaser-free and the meter tracks
     spending per use (`"slow"`, `"send"`), so sending only adds a new spender

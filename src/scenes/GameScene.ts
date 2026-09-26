@@ -752,7 +752,7 @@ export default class GameScene extends Phaser.Scene {
   /** Playtest switch between the two slow-time modes; remembered across runs. */
   private toggleSlowMode(): void {
     if (this.gameOver || this.paused) return;
-    const next: SlowMode = this.slowTime.currentMode === "drain" ? "stop" : "drain";
+    const next: SlowMode = this.slowTime.currentMode === "slow" ? "freeze" : "slow";
     this.slowTime.setMode(next);
     saveSlowMode(next);
     this.modeText.setText(slowModeLabel(next));
@@ -848,7 +848,7 @@ export default class GameScene extends Phaser.Scene {
     this.slowLabel.setAlpha(usable ? 1 : 0.35);
     this.slowTint
       .setVisible(active)
-      .setAlpha(this.slowTime.currentMode === "stop" ? 0.2 : 0.1);
+      .setAlpha(this.slowTime.currentMode === "freeze" ? 0.2 : 0.1);
   }
 
   // ---------------------------------------------------------------------------
@@ -1015,16 +1015,16 @@ export default class GameScene extends Phaser.Scene {
 
 function slowModeLabel(mode: SlowMode): string {
   const text =
-    mode === "drain"
-      ? `SLOW: ${Math.round(SLOW_TIME.DRAIN.FACTOR * 100)}% SPEED, DRAINS`
-      : `SLOW: FULL STOP ${SLOW_TIME.STOP.DURATION_MS / 1000}s, COSTS ${SLOW_TIME.STOP.COST}`;
-  return `${text}  [M]`;
+    mode === "slow"
+      ? `SLOW: ${Math.round(SLOW_TIME.MODES.slow.FACTOR * 100)}% SPEED`
+      : "SLOW: FULL FREEZE";
+  return `${text}, DRAINS  [M]`;
 }
 
 function loadSlowMode(): SlowMode {
   try {
     const stored = localStorage.getItem(STORAGE.SLOW_MODE);
-    if (stored === "drain" || stored === "stop") return stored;
+    if (stored === "slow" || stored === "freeze") return stored;
   } catch {
     // Storage blocked: use the default mode.
   }

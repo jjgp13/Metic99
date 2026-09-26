@@ -82,15 +82,12 @@ export class EnergyMeter {
 }
 
 /**
- * Slow time, in one of two playtest modes:
- * - "drain": a toggle. While on, the field runs at DRAIN.FACTOR and energy
- *   drains every second; it switches off when tapped again or when empty.
- * - "stop": a one-shot. Pays STOP.COST and fully stops the field for
- *   STOP.DURATION_MS.
+ * Slow time: a toggle that drains energy while on and slows the field to the
+ * current mode's FACTOR ("slow" = 30%, "freeze" = full stop). It switches off
+ * when pressed again or when the meter runs dry.
  */
 export class SlowTime {
-  private draining = false;
-  private stopLeftMs = 0;
+  private on = false;
 
   constructor(private mode: SlowMode) {}
 
@@ -99,54 +96,41 @@ export class SlowTime {
   }
 
   get active(): boolean {
-    return this.draining || this.stopLeftMs > 0;
+    return this.on;
   }
 
-  /** Energy the current mode needs before it can be switched on. */
+  /** Energy needed before it can be switched on. */
   get threshold(): number {
-    return this.mode === "drain" ? SLOW_TIME.DRAIN.MIN_START : SLOW_TIME.STOP.COST;
+    return SLOW_TIME.MIN_START;
   }
 
   canTrigger(meter: EnergyMeter): boolean {
-    if (this.mode === "drain") return this.draining || meter.canSpend(this.threshold);
-    return this.stopLeftMs <= 0 && meter.canSpend(this.threshold);
+    return this.on || meter.canSpend(this.threshold);
   }
 
   /** The player pressed SLOW. Returns true if something changed. */
   trigger(meter: EnergyMeter): boolean {
     if (!this.canTrigger(meter)) return false;
-    if (this.mode === "drain") {
-      this.draining = !this.draining;
-      return true;
-    }
-    meter.spend(SLOW_TIME.STOP.COST, "slow");
-    this.stopLeftMs = SLOW_TIME.STOP.DURATION_MS;
+    this.on = !this.on;
     return true;
   }
 
-  /** Switching modes cancels any running effect (energy already spent is gone). */
+  /** Switching modes keeps it running, just at the new mode's strength. */
   setMode(mode: SlowMode): void {
     this.mode = mode;
-    this.draining = false;
-    this.stopLeftMs = 0;
   }
 
   /**
    * Advance by real (unslowed) ms and return the field speed factor
    * (1 = normal). While `held` (e.g. the hit-recovery freeze already stops the
-   * field) nothing drains or counts down, so energy isn't wasted.
+   * field) nothing drains, so energy isn't wasted.
    */
   update(deltaMs: number, meter: EnergyMeter, held: boolean): number {
-    if (this.draining) {
-      if (!held) meter.drain((SLOW_TIME.DRAIN.PER_SEC * deltaMs) / 1000, "slow");
-      if (meter.value <= 0) this.draining = false;
-      return this.draining ? SLOW_TIME.DRAIN.FACTOR : 1;
-    }
-    if (this.stopLeftMs > 0) {
-      if (!held) this.stopLeftMs -= deltaMs;
-      return 0;
-    }
-    return 1;
+    if (!this.on) return 1;
+    const { FACTOR, PER_SEC } = SLOW_TIME.MODES[this.mode];
+    if (!held) meter.drain((PER_SEC * deltaMs) / 1000, "slow");
+    if (meter.value <= 0) this.on = false;
+    return this.on ? FACTOR : 1;
   }
 }
 
