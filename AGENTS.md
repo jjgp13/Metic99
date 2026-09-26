@@ -63,11 +63,16 @@ src/
   services/
     leaderboard.ts    Supabase global high scores: startMatch + match-gated
                       submitScore, plus getTop/getRank reads
+  sim/
+    energy.ts         Phaser-free energy rules: energyForKill, EnergyMeter
+                      (charge/spend/drain per spender), SlowTime (SLOW / FREEZE powers).
+                      Kept pure so a future server sim can share it.
   objects/
-    Alien.ts          Pure alien state (x/y, digits, result) + `behavior`-driven
-                      movement; no rendering. Built from one `AlienConfig`.
-                      Optional `model` + `ability`; `glideTo`/`hold` override
-                      the behavior for scripted moves (knockback, splits).
+    Alien.ts          Pure alien state (x/y, digits, result, `kind`) + per-kind
+                      movement patterns and readability box; no rendering.
+                      Built from one `AlienConfig`. Optional `model` +
+                      `ability`; `glideTo`/`hold` override the pattern for
+                      scripted moves (knockback, splits).
     abilities.ts      Monster abilities (Blinker, Shielded, Splitter): pure
                       state with update/onHit/onKilled hooks + `AbilityHost`.
     Bullet.ts         Pure bullet state {x, y, active}.
@@ -172,20 +177,25 @@ Green=multiplication, Yellow=division.
 - **Renderer is a view:** `World3D.render(snapshot)` diffs the snapshot's
   aliens/bullets against its meshes (create/move/remove). Game code never
   imports Three.js, which keeps the path open to a shared sim for multiplayer.
-- **Motion polish:** aliens sway (yaw), the ship banks toward its target,
+- **Motion polish:** aliens sway (yaw) and bank into sideways moves, the ship
+  banks toward its target, the strafer shakes before it dives,
   explosions burst into voxel debris in the alien's colors with a flash from one
   reused point light (adding lights at runtime would trigger shader recompiles).
 - **Models in play:** the player flies the ship picked on the menu
   (`RENDER3D.SHIPS`: FALCON `ship_player`, DART `ship_dart`, POD `ship_pod`; the
-  pick is stored under `STORAGE.SHIP`). Each alien gets a random monster model
-  from `RENDER3D.ALIEN_MODELS` (darter / lumberer / drifter), chosen in
-  `World3D` for now, with its balls at the model's `socket_balls`. Explosion
-  debris uses that model's colors. **Ability aliens** set `Alien.model` and
-  wear their ability's model (`ABILITY.MODEL`, debris in
-  `RENDER3D.ABILITY_MODELS`); the renderer mirrors ability state (ball lids,
-  the Blinker's `anim_lid`, the shield bubble + shatter, a pop when the sum
-  changes). Per-monster behavior is planned (see
-  Roadmap), and then the monster type moves into the `Alien` state.
+  pick is stored under `STORAGE.SHIP`). Each alien draws the model of its
+  `kind` (`MONSTERS[kind].MODEL`: darter / lumberer / strafer / drifter), with
+  its balls at the model's `socket_balls`. The kind lives in the `Alien` state
+  (game logic picks it); `World3D` only draws it. Explosion debris uses the
+  model's colors (`RENDER3D.ALIEN_MODELS`). The models' `anim_*` parts move
+  with simple sine motion (`RENDER3D.ANIM`): darter tail wags, lumberer legs
+  swing in step with its stomp (body lifts while stepping), drifter skirt spins
+  and pulses, strafer wings flap (faster in windup/dive).
+  **Ability aliens** set `Alien.model` and wear their ability's model
+  (`ABILITY.MODEL`, debris in `RENDER3D.ABILITY_MODELS`) while moving as their
+  `kind`; the renderer mirrors ability state (ball lids, the Blinker's
+  `anim_lid`, the Shielded's `anim_emitter` and shield bubble + shatter, the
+  splitters' pulsing `anim_nucleus_*`, a pop when the sum changes).
 - One WebGL context for the whole page (singleton), hidden outside GameScene.
 - Dev only: `window.__metic = { game, world }` for console inspection.
 - **Art direction for new 3D models:** see [`docs/ART_SPEC.md`](docs/ART_SPEC.md)
@@ -195,18 +205,43 @@ Green=multiplication, Yellow=division.
 
 - Each alien carries **≥ 2 number balls** (a sum needs two numbers); `result` =
   sum of the balls. `enemiesInField: Map<result, Alien>` keeps results unique so
-  a typed number maps to exactly one target. **Personality:** speed scales
-  inversely with ball count (`ENEMY.SPEED_BY_BALLS`) — 2-number aliens dart in,
-  3+ lumber.
+  a typed number maps to exactly one target.
+- **Monster kinds** (`MONSTERS` in constants, movement in `Alien.advance`).
+  3+ ball sums are always lumberers; 2-ball sums pick darter/strafer by
+  `ENEMY.TWO_BALL_KINDS` weight:
+  - **Darter** (2 balls): fast zig-zag dive (×1.25 speed, ±26 px around its lane).
+  - **Lumberer** (3 balls): slow stop-and-go stomp: moves half of each
+    `STOMP_MS` cycle and stands still for the other half (same ×0.85 average).
+  - **Strafer** (2 balls, Galaga-style): flies into a band at the top, patrols
+    sideways for `DIFFICULTY.STRAFER_PATROL_MS` (5 s → 2.8 s, time to read its
+    sum), hovers and shakes for `WINDUP_MS` (telegraph), then dives fast.
+  - **Drifter** (2 balls, bonus): crosses sideways through a mid band and
+    leaves; **non-lethal**. Solving it gives `ENERGY_BURST` energy (plus normal
+    score). It runs on its own spawn clock (first after 15 s, then every
+    18–28 s, one at a time) and does **not** count toward any spawn cap. Stray
+    bullets fly through it (it must be solved, not hit by accident).
+- **Drifter energy:** a solved drifter charges its `ENERGY_BURST` on top of the
+  normal kill energy (one `addEnergy()` call, capped by the meter) and pops
+  "+N ENERGY" where it died.
 - **Scoring** rewards skill (`SCORE` in constants):
   `BASE × ballCountBonus × speedBonus × difficultyMult × comboMult`, where speed
   bonus decays from solving fast→slow, difficulty = `1 + d`, and the combo
   multiplier grows with an unbroken kill streak (a hit resets it).
 - **Mastery stats** persist in `localStorage` (`STORAGE.*`): high score, best
   combo, total kills, fastest solve; a rank (`RANKS`) is shown on game over.
-- Aliens fall in **fixed vertical lanes** (no horizontal homing) so sprites and
-  numbers never overlap. Spawns reject a lane too close to an existing alien
-  (min gap `ENEMY.MIN_SPAWN_GAP`); if no clear lane, the spawn is skipped.
+- **Readability rule** (docs/MULTIPLAYER_DESIGN.md §3): ball rows must never
+  overlap by accident. Each alien owns a **box** around its ball row and body
+  (`MONSTERS[kind]` `HALF_W` / `BALLS_Y` / `BOTTOM`, widened for 3 balls).
+  Two layers keep boxes apart:
+  1. **Spawner:** a new alien enters just above the top only where its whole
+     horizontal **sweep** (zig-zag width, patrol span) clears the sweep of every
+     alien still above `ENEMY.ENTRY_ZONE_Y`, and its box clears everyone.
+     No room → the spawn retries in `SPAWN_RETRY_MS`.
+  2. **Runtime guard** (`GameScene.advanceReadable`): a move that would bring
+     two boxes within `ENEMY.READ_GAP` is not made. It is retried one axis at a
+     time; the refused axis holds still, and a refused sideways move turns
+     zig-zags/patrols around (the drifter waits). Aliens queue behind each
+     other instead of overlapping.
 - Ship is input-driven only: it lerps horizontally to the targeted alien's x and
   auto-fires when lined up (`PLAYER.SHOOT_RANGE`, `FIRE_COOLDOWN`). The **active
   target STOPS** while locked: once its answer is typed it holds position (it
@@ -228,8 +263,30 @@ Green=multiplication, Yellow=division.
   may be on screen until late game (`DIFFICULTY.SECOND_HARD_AT` = d≥0.85, then
   two), so the player never juggles two multi-number sums at once. When the cap
   is hit the spawn is forced to an easy 2-ball enemy.
-- Input: on-screen keypad **and** physical keyboard (0–9, Backspace, Esc).
-  Max 2 typed digits.
+- Input: on-screen keypad **and** physical keyboard (0–9, Backspace, Esc,
+  Space = SLOW, F = FREEZE, P = pause). Max 2 typed digits.
+- **Energy** (`ENERGY`, `src/sim/energy.ts`): each kill charges a 0–100 meter by
+  `BASE × ballBonus × digitBonus × speedBonus × comboBonus` (more balls, bigger
+  average digit, faster solve, longer streak = more; ~8 for an easy early kill,
+  30+ for a fast 3-ball streak kill). Overflow is lost. The meter only charges
+  and spends; each use is a separate spender (`"slow"` and `"freeze"` now,
+  `"send"` reserved for the battle royale). Per-run earned/spent totals show on game over.
+- **Time powers** (`SLOW_TIME`): the player spends energy on their OWN field
+  (alien movement + spawn clock); the ship, bullets and difficulty clock keep
+  full speed. Two powers, each with its own button, sharing the one meter:
+  - **SLOW** (left button, Space): field at 30%, drains 12/s (~8 s per bar,
+    saves ~5.8 s of alien movement). The economical option; aliens still creep.
+  - **FREEZE** (right button, F): field fully stopped, drains 25/s (~4 s per
+    bar, saves ~4 s). The emergency option: total safety at twice the burn.
+  Both are toggles needing 10 energy to start; only one runs at a time.
+  Pressing the running one turns it off, pressing the other switches over, and
+  it turns off when empty. Powers **hold** (no drain) while the hit-recovery
+  freeze already stops the field. The field is tinted (cyan / ice) while one
+  runs.
+- **Energy HUD**: SLOW and FREEZE are tall buttons in the gutters either side
+  of the keypad (one per thumb); the meter is a bar under the keypad with a
+  mark at the 10-energy start cost. Nothing covers the field or keys in
+  portrait.
 - HUD (score, lives, difficulty bar, typed display) draws above gameplay
   (`depth 5`) so entering aliens never obscure it.
 - High score persisted in `localStorage` (`metic-highscore`).
@@ -239,38 +296,52 @@ Green=multiplication, Yellow=division.
   Tap the overlay or press `P` to resume.
 - **Monster abilities** (`objects/abilities.ts`, tunables `ABILITY`,
   `BLINKER`, `SHIELD`, `SPLITTER`). An ability is a special rule layered on
-  top of the movement `behavior`, built from three hooks: `update(delta)`
+  top of the movement `kind`, built from three hooks: `update(delta)`
   (state the renderer reads, e.g. `cover` = how hidden the balls are),
   `onHit` (return true to absorb the shot) and `onKilled`. Field-wide effects
   go through `AbilityHost` (GameScene: `rerollSum`, `spawnSplitling`), so new
-  abilities (Hider, Orbiter, Worm) reuse the hooks. Built so far:
-  - **Shielded:** a magenta shield ring around the body. The first correct
-    answer breaks it (scores, extends the streak), rolls a new unique sum, and
+  abilities (Hider, Orbiter, Worm) reuse the hooks. An ability alien wears its
+  ability's model (readability box from `MODEL_BOXES`) and moves as
+  `ABILITY.KIND` at `ABILITY.SPEED`: **the harder to kill, the slower it
+  moves and the longer its pattern takes to reach the player.** Built so far:
+  - **Shielded** (moves as a lumberer, 70% speed): a magenta shield ring
+    around the body. The first correct answer breaks it (scores, charges
+    energy and extends the streak like a kill), rolls a new unique sum, and
     knocks the alien back and holds it while the new balls pop in. The second
     answer kills it.
-  - **Blinker:** its balls have eyelids that close on a fixed rhythm (first
-    open 3.2s, then open 2.4s → flutter 0.6s → shut 1.1s). The flutter is the
-    telegraph, and the body's own eye closes in sync. The answer never changes,
-    so it can be typed from memory.
-  - **Splitter:** when killed it pops into two 2-ball splitlings that glide
-    to lanes a full `MIN_SPAWN_GAP` apart (never closer to the player than
-    `SPLITTER.MAX_CHILD_Y`). A splitling whose landing lane isn't clear is
-    not spawned, and they start halfway out so their balls never overlap.
+  - **Blinker** (moves as a strafer, patrols 1.5× longer, dives at 60%): its
+    balls have eyelids that close on a fixed rhythm (first open 3.2s, then
+    open 2.4s → flutter 0.6s → shut 1.1s). The flutter is the telegraph, and
+    the body's own eye closes in sync. The answer never changes, so it can be
+    typed from memory. Blinking runs on real time: SLOW/FREEZE and the
+    post-hit freeze stop movement, not the blinking.
+  - **Splitter** (moves as a darter, 70% speed): when killed it pops into two
+    2-ball splitlings (darters wearing `alien_splitling`) that glide out to
+    either side (never closer to the player than `SPLITTER.MAX_CHILD_Y`). A
+    splitling whose start or landing box would break the readability rule is
+    not spawned; they start halfway out so their balls never overlap.
   - **Solo ramp:** abilities unlock by difficulty (Shielded d≥0.25, Blinker
     0.4, Splitter 0.55). A spawn gets one with `abilityChance` (20%→40%), with
     at most 1 ability alien on screen (2 from d≥0.8). Ability aliens always
     carry 2 balls, add +1 threat, and pay a kill multiplier
     (`ABILITY.SCORE_MULT`). The first sighting per run shows a one-line intro
-    banner. Ability clocks run on real time, so the post-hit freeze never
-    holds a Blinker shut.
+    banner.
   - **Play-testing (dev only):** `?ability=blinker,shielded,splitter` makes
     every allowed spawn one of the listed abilities, ignoring unlocks.
+- **Bullets hit only their target.** Results are unique on the field, and each
+  bullet carries the alien whose answer fired it (`Bullet.target`); it flies
+  through every other alien, so only the solved alien can die or lose its
+  shield.
+- **Lives** are a playtest constant, `PLAYER.LIVES` (3 by default; 1 = the
+  battle-royale knockout rule). With 1 life the hit recovery below never runs:
+  the only hit ends the game, so slow time is the sole safety tool.
 - **Hit recovery**: on losing a life (but not the last) the whole field **freezes
   for `RECOVERY.FREEZE_MS` (3s)** so the player can read the board, then resumes
   at `RECOVERY.POST_HIT_FACTOR` (80%) speed for the rest of the run. The slowdown
   is flat (non-stacking) and the difficulty curve keeps ramping underneath, so
   absolute speed still climbs over time. The ship can still fire during the
-  freeze (so a frozen board can be cleared).
+  freeze (so a frozen board can be cleared). The freeze is a countdown that
+  only runs while unpaused, so pausing doesn't eat it.
 
 ## Difficulty design
 
@@ -299,6 +370,7 @@ alone** so the number of concurrent unsolved sums grows only with points:
 | Max on screen  | 4    | 8    | d (safety net) |
 | Max balls      | 2    | 3    | d |
 | Max digit      | 3    | 9    | d |
+| Strafer patrol | 5000 | 2800 ms | d |
 
 `MIN_BALLS` is fixed at 2. All knobs live in `src/config/constants.ts`; the
 curve is in `src/config/difficulty.ts` (`difficultyAt(elapsedMs, score)`).
@@ -312,15 +384,17 @@ curve is in `src/config/difficulty.ts` (`difficultyAt(elapsedMs, score)`).
 5. [x] Fair targeting: locked target holds still; concurrent-alien cap
 6. [x] Enemy personality by ball count + skill-based scoring + mastery ranks
 6b. [x] Selectable player ship (3 models) + random monster models (darter,
-       lumberer, drifter). **Next:** give each monster its own behavior and
-       character; keep adding ship/monster variations.
-6c. [x] **Monster abilities:** ability system (update/onHit/onKilled hooks) with
-       Shielded, Blinker and Splitter (+ splitling), unlocked by difficulty in
-       solo play. **Next:** Hider, Orbiter and Worm on the same hooks; later these
-       are the aliens players send each other.
-7. [ ] **Drifter bonus enemy** — non-lethal alien that crosses horizontally
-       (`behavior: "wander"`); spot & solve it for bonus points, no life cost.
-       Next up.
+       lumberer, drifter).
+6c. [x] **Monster movement patterns** — kind in the `Alien` state; darter
+       zig-zag, lumberer stomp, new Galaga-style strafer (patrol → dive),
+       readability boxes + sweep-aware spawner, animated `anim_*` parts.
+6d. [x] **Monster abilities:** ability system (update/onHit/onKilled hooks) with
+       Shielded, Blinker and Splitter (+ splitling), riding on the movement
+       kinds and unlocked by difficulty in solo play. **Next:** Hider, Orbiter
+       and Worm on the same hooks; later these are the aliens players send
+       each other.
+7. [x] **Drifter bonus enemy** — non-lethal, crosses sideways; solving it
+       gives an energy burst on top of the normal kill energy.
 8. [ ] **Handwriting input** — draw a digit on a canvas overlay; recognize it as
        the typed number (alongside the keypad).
 9. [ ] Other operations (subtraction/multiplication/division) via color-coded balls
@@ -332,9 +406,10 @@ curve is in `src/config/difficulty.ts` (`difficultyAt(elapsedMs, score)`).
 12. [ ] Publish on GitHub Pages (workflow added; enable Pages = "GitHub Actions"
        and add repo secrets `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY`).
 13. [ ] **Battle-royale multiplayer (Tetris 99-style)** — see
-       `docs/MULTIPLAYER_DESIGN.md`. Single player first: energy bar + slow
-       time, alien movement patterns, monster abilities; then offline bots, then
-       the WebSocket match server (8–16 players to start).
+       `docs/MULTIPLAYER_DESIGN.md`. Single player first: [x] energy bar + slow
+       time (two modes under playtest; lives constant for 1 vs 3), [ ] alien
+       movement patterns, [ ] monster abilities; then offline bots (and energy
+       "send"), then the WebSocket match server (8–16 players to start).
 
 ## Conventions
 
@@ -343,6 +418,8 @@ curve is in `src/config/difficulty.ts` (`difficultyAt(elapsedMs, score)`).
 - Verify changes: `npx tsc --noEmit` and `npm run build` must pass.
 - **Git workflow:** feature branches are **local only** (never push them). Merge
   into `master` locally and push only `master` (pushing it deploys GitHub Pages).
+  Every local merge into `master` is followed, without asking, by deleting the
+  merged branch (`git branch -d`) and pushing `master` (after tsc + build pass).
 - Commit trailer: `Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>`.
 
 ---
@@ -351,14 +428,46 @@ curve is in `src/config/difficulty.ts` (`difficultyAt(elapsedMs, score)`).
 
 Newest first. Format: `YYYY-MM-DD — decision — rationale`.
 
-- **2026-09-25 — Monster abilities as a hook-based system; Shielded, Blinker
-  and Splitter first.** An ability is a separate field from the movement
-  `behavior`, with `update`/`onHit`/`onKilled` hooks plus an `AbilityHost` for
-  field effects. The first three each prove one hook (hide state, absorb a
-  hit, spawn on death), and Hider/Orbiter/Worm reuse them. Solo play unlocks
-  them by difficulty with a one-time intro banner. Every hide is telegraphed and
-  follows a fixed rhythm (learnable). Four new models: `alien_shielded`,
-  `alien_blinker`, `alien_splitter`, `alien_splitling`.
+- **2026-09-25 — Monster abilities as a hook-based system on top of the
+  movement kinds; Shielded, Blinker and Splitter first.** An ability is a
+  separate field from the movement `kind`, with `update`/`onHit`/`onKilled`
+  hooks plus an `AbilityHost` for field effects. The first three each prove one
+  hook (hide state, absorb a hit, spawn on death), and Hider/Orbiter/Worm reuse
+  them. Balance rule (owner): the harder an ability is to kill, the slower it
+  moves and the longer its pattern takes (Shielded = slow lumberer, Blinker =
+  long-patrol strafer with a slow dive, Splitter = slower darter). A shield
+  break charges energy like a kill; blinking runs on real time. Solo play
+  unlocks them by difficulty with a one-time intro banner. Four new models:
+  `alien_shielded`, `alien_blinker`, `alien_splitter`, `alien_splitling`.
+- **2026-09-25 — Bullets hit only the alien that was solved.** Replaces "any
+  alien in the path is hit": results are unique on the field, so a bullet
+  carries its target and flies through everything else. A stray shot can no
+  longer kill an unsolved alien or break a shield (owner's call).
+
+- **2026-09-25 — SLOW and FREEZE are both player powers.** The first playtest
+  found 60% slow too weak; rather than pick 30% slow vs full freeze, the player
+  gets both (two buttons, one meter), and they differ in trade-off: SLOW is
+  cheaper per saved second, FREEZE is total but burns twice as fast. The M
+  playtest switch and the one-shot 1.5 s stop were removed.
+
+- **2026-09-25 — Monsters get their own movement; readability boxes replace
+  fixed lanes.** The kind moved from World3D (random) into `Alien`, so logic
+  and a future shared sim know it. Darter zig-zags, lumberer stomps, the new
+  strafer patrols the top then dives (read time + a telegraphed windup), and
+  the drifter crosses as a non-lethal energy bonus outside the spawn caps.
+  Sideways movement broke the lane guarantee, so each alien owns a box: the
+  spawner reserves sweep columns near the top, and a runtime guard never lets
+  a move enter another box (queue/turn around instead). Soak-tested: 0
+  overlapping frames in ~8.5 min of simulated play.
+- **2026-09-25 — Energy bar + slow time (two playtest modes).** Kills charge a
+  0–100 meter (more balls, bigger digits, fast solves, streaks charge more).
+  Slow time spends it on the player's own field: `drain` (60% while draining)
+  vs `stop` (1.5 s full stop for 50), switchable in game with `M` so the owner
+  can compare by playing; tuned to buy similar field-time per energy. Energy
+  rules live in Phaser-free `src/sim/energy.ts` with a per-spender meter, so
+  "send" plugs in later and a server sim can share it. Lives stay a constant
+  (`PLAYER.LIVES`) for 1-vs-3 tests; with 1 life the hit freeze is
+  unreachable. The hit freeze became a pause-safe countdown.
 
 - **2026-09-25 — Battle-royale direction (docs/MULTIPLAYER_DESIGN.md).** Kills
   charge an energy bar (no automatic attacks), spent on sending aliens or

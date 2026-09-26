@@ -1,9 +1,9 @@
-import { ABILITY, BLINKER, ENEMY, GAME, SHIELD, SPLITTER } from "../config/constants";
+import { ABILITY, BLINKER, GAME, SHIELD, SPLITTER } from "../config/constants";
 import type Alien from "./Alien";
 
 /**
  * Monster abilities: special rules layered on top of an alien's movement
- * `behavior`. An ability is pure game state with three hooks, so new abilities
+ * (its monster `kind`, see ABILITY.KIND). An ability is pure game state with three hooks, so new abilities
  * (Hider, Orbiter, Worm, …) reuse them instead of adding one-off code to the
  * scene:
  *
@@ -26,7 +26,8 @@ export interface AbilityHost {
    * Returns false if no free sum was found (the alien keeps its old one). */
   rerollSum(alien: Alien): boolean;
   /** Spawn a 2-ball splitling that glides out of `parent` to (x, y). Returns
-   * false (and spawns nothing) if that spot isn't clear of other aliens. */
+   * false (and spawns nothing) if its box there would break the readability
+   * rule (another alien within READ_GAP). */
   spawnSplitling(parent: Alien, x: number, y: number): boolean;
 }
 
@@ -101,15 +102,15 @@ export class Shielded extends Ability {
 
 /**
  * Splitter: when destroyed it pops into two 2-ball splitlings that glide out to
- * lanes on either side. A splitling whose lane isn't clear is simply not
- * spawned, so splitting never causes overlap.
+ * lanes on either side. A splitling whose landing spot isn't clear is simply
+ * not spawned, so splitting never causes overlap.
  */
 export class Splitter extends Ability {
   readonly kind = "splitter";
 
   onKilled(alien: Alien, host: AbilityHost): void {
     // Keep the pair inside the field as a unit so they stay a full lane apart.
-    const min = ENEMY.LANE_MARGIN + SPLITTER.SPREAD_PX;
+    const min = SPLITTER.EDGE_PX + SPLITTER.SPREAD_PX;
     const center = Math.min(Math.max(alien.x, min), GAME.WIDTH - min);
     const y = Math.min(alien.y, SPLITTER.MAX_CHILD_Y);
     for (const side of [-1, 1]) host.spawnSplitling(alien, center + side * SPLITTER.SPREAD_PX, y);

@@ -86,7 +86,10 @@ swatch is fine; renaming one breaks recipes.
   origin = visual center of the body.
 - **Aliens face -Y** (face/mouth/fangs toward the player, since they descend)
   and put `socket_balls` above the body at +Y, far enough out that the 9 px
-  balls don't hide the face (darter +28, drifter +26, lumberer +30).
+  balls don't hide the face (darter +28, drifter +26, lumberer +30,
+  strafer +30). Game logic keeps a copy of each offset (`MONSTERS[kind].BALLS_Y`,
+  plus `HALF_W`/`BOTTOM`) for its readability box: **update them together** when
+  a monster's size or socket changes.
 - **Export:** glTF binary (`.glb`), `export_yup=True`, modifiers applied. The
   runtime loader rotates each model `rotation.x = +π/2` so Blender +Y → screen up
   and Blender +Z → toward the camera. *Verify once with an asymmetric test model.*
@@ -210,9 +213,10 @@ including preview reviews.
 
 Example recipes exist (2026-09-24) for `alien_darter`, `alien_lumberer`,
 `alien_drifter`, and two alternative ship styles `ship_dart` (sleek delta) and
-`ship_pod` (chunky round). **All five are in the game:** the player picks a
-ship on the menu, and each alien spawns as a random monster (behavior per
-monster comes later). More variations of both will follow in this style.
+`ship_pod` (chunky round); `alien_strafer` followed (2026-09-25). **All are in
+the game:** the player picks a ship on the menu, and each monster kind has its
+own model and movement (AGENTS.md → Gameplay rules). More variations of both
+will follow in this style.
 
 Ability monsters (2026-09-25) wear a model that shows their ability before it
 triggers: `alien_shielded` (grey armored beetle with a glowing shield emitter),
@@ -225,7 +229,8 @@ triggers: `alien_shielded` (grey armored beetle with a glowing shield emitter),
 | `ship_player` | The player | Fat lavender hull, cyan canopy, twin glowing engines |
 | `alien_darter` | 2-number alien, fast | Small, sleek, pointed; tail/fins trailing |
 | `alien_lumberer` | 3-number alien, slow | Big round body, heavy limbs, plated back |
-| `alien_drifter` | Bonus, non-lethal (roadmap) | Jellyfish/UFO, glowing rim, crosses sideways |
+| `alien_drifter` | Bonus, non-lethal; crosses sideways | Jellyfish/UFO, glowing rim, tentacle skirt |
+| `alien_strafer` | 2-number, patrols the top then dives (Galaga-style) | Magenta wasp, wide flapping wings (silver fore, purple hind), cyan eyes |
 | `alien_shielded` | Ability: needs two answers | Grey armored beetle, magenta emitter; shield bubble drawn in code |
 | `alien_blinker` | Ability: balls blink shut | Magenta one-eyed head with lashes; `anim_lid` closes with the balls |
 | `alien_splitter` / `alien_splitling` | Ability: pops into two 2-ball aliens | Two pink lobes on a glowing seam / one lobe |
@@ -241,12 +246,16 @@ triggers: `alien_shielded` (grey armored beetle with a glowing shield emitter),
 - A missing or broken `.glb` logs a warning and the sprite-voxel model is used,
   so art lands one model at a time. Adding a model = recipe + build + add its
   name to `RENDER3D.MODELS` + use it in `World3D`.
-- Done: the three ships (their `anim_flame*` parts flicker) and the three
-  monsters (balls sit at `socket_balls`). Ability monsters animate their parts:
-  `anim_lid` (scaled along Blender Y = the glTF node's Z by the blink),
-  `anim_emitter` (pulses while the shield is up) and `anim_nucleus*` (pulse).
-  To do: animate the base monsters' `anim_*` parts, read `socket_muzzle` for
-  bullets.
+- Done: the three ships (their `anim_flame*` parts flicker) and the four
+  monsters (balls sit at `socket_balls`). `World3D` finds a monster's parts by
+  name, `anim_<role>[_<side>]`, and moves them with sine motion
+  (`RENDER3D.ANIM`): `tail` wags, `leg_*` swing in diagonal pairs synced to the
+  lumberer's stomp, `skirt` spins and pulses, `wing_L/R` flap. Parts keep their
+  Blender frame, so local Y = up (toward the camera) and local Z = tail→head;
+  put a part's origin at its hinge. Ability monsters add `lid` (the
+  Blinker's eyelid, scaled along local Z by the blink), `emitter` (pulses
+  while the shield is up) and `nucleus_L/R` (pulse out of phase). To do:
+  `anim_eye` blinks, read `socket_muzzle` for bullets.
 - The build also renders `public/assets/icons/<model>.png` (128 px, transparent,
   top-down) for 2D menus such as the ship picker.
 

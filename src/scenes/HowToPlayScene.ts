@@ -12,6 +12,7 @@ export default class HowToPlayScene extends Phaser.Scene {
 
   create(): void {
     const cx = GAME.WIDTH / 2;
+    const lives: number = PLAYER.LIVES;
 
     this.add
       .text(cx, 60, "HOW TO PLAY", {
@@ -36,45 +37,51 @@ export default class HowToPlayScene extends Phaser.Scene {
       {
         heading: "STAY ALIVE",
         body:
-          `You have ${PLAYER.LIVES} lives. An alien that reaches your\n` +
-          "line costs one. Lose all of them and it's\n" +
-          "game over.",
+          `You have ${lives} ${lives === 1 ? "life" : "lives"}. An alien reaching your line\n` +
+          "costs one. Lose them all: game over.",
       },
       {
         heading: "SCORE BIG",
         body:
-          "Solve fast and keep a kill streak for combo\n" +
-          "bonuses. Harder sums and later waves pay more.",
+          "Fast solves, streaks and harder sums pay\n" +
+          "more. The board toughens as you score.",
       },
       {
-        heading: "SPECIAL ALIENS",
+        heading: "ENERGY",
         body:
-          "As your score climbs, some aliens gain powers:\n" +
-          "SHIELDED  answer twice; a new sum appears\n" +
-          "BLINKER   read it while its eyes are open\n" +
-          "SPLITTER  pops into two small aliens",
+          "Kills charge the EN meter. Spend it on SLOW\n" +
+          "(30% speed, lasts longer) or FREEZE (full\n" +
+          "stop, burns energy twice as fast).",
+      },
+      {
+        heading: "MONSTERS",
+        body:
+          "Each kind moves its own way. Solve the\n" +
+          "harmless glowing jellyfish for energy.\n" +
+          "SHIELDED answer twice · SPLITTER pops in 2\n" +
+          "BLINKER read its sum while the eyes are open",
       },
       {
         heading: "CONTROLS",
-        body: "0-9 type · Backspace delete · Esc clear · P pause",
+        body: "0-9 · Esc clear · Space slow · F freeze · P pause",
       },
     ];
 
-    let y = 105;
+    let y = 100;
     for (const s of sections) {
       this.add.text(40, y, s.heading, {
         fontFamily: "monospace",
         fontSize: "17px",
         color: "#4ea1ff",
       });
-      y += 26;
+      y += 24;
       this.add.text(40, y, s.body, {
         fontFamily: "monospace",
         fontSize: "14px",
         color: "#ffffff",
         lineSpacing: 4,
       });
-      y += s.body.split("\n").length * 20 + 10;
+      y += s.body.split("\n").length * 20 + 2;
     }
 
     this.makeBackButton(cx, GAME.HEIGHT - 50);

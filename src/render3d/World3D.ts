@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import type Phaser from "phaser";
-import { ENEMY, GAME, PLAYER, RENDER3D } from "../config/constants";
+import { ENEMY, GAME, MONSTERS, PLAYER, RENDER3D } from "../config/constants";
 import type Alien from "../objects/Alien";
 import type { Bullet } from "../objects/Bullet";
 import { Shielded } from "../objects/abilities";
@@ -19,12 +19,24 @@ export interface WorldSnapshot {
   aliensHidden: boolean;
 }
 
+/** A model's `anim_*` part, with its rest rotation and mirror side. */
+interface AnimPart {
+  obj: THREE.Object3D;
+  role: string;
+  rest: THREE.Euler;
+  /** +1 for right-side / front-right-diagonal parts, -1 for their mirrors. */
+  side: number;
+}
+
 interface AlienView {
   root: THREE.Group;
   body: THREE.Object3D;
   /** Blender model name, or null when drawn with the sprite-voxel fallback. */
   model: string | null;
+  parts: AnimPart[];
   phase: number;
+  lastX: number;
+  bank: number;
   /** Row origin (the model's socket_balls) and the ball groups built there. */
   ballsAt: THREE.Vector3;
   balls: THREE.Group[];
@@ -32,8 +44,6 @@ interface AlienView {
   sumVersion: number;
   /** ms left of the "new sum" pop-in. */
   popLeft: number;
-  /** Model parts named anim_<role>, keyed by role (e.g. "lid", "nucleus_L"). */
-  parts: Map<string, THREE.Object3D>;
   /** Shield bubble while a Shielded alien's shield is up. */
   shield: THREE.Group | null;
 }
@@ -47,6 +57,7 @@ interface Debris {
 
 const toWorldX = (x: number) => x - GAME.WIDTH / 2;
 const toWorldY = (y: number) => GAME.HEIGHT / 2 - y;
+const isShieldUp = (a: Alien) => a.ability instanceof Shielded && a.ability.shieldUp;
 
 /**
  * The 3D view of the playfield, drawn with Three.js on a canvas that sits
@@ -216,7 +227,7 @@ export default class World3D {
     this.syncCanvasRect();
     this.updateStars(dt);
     this.syncShip(s, time, dt);
-    this.syncAliens(s, time, delta);
+    this.syncAliens(s, time, dt);
     this.syncBullets(s);
     this.updateDebris(dt, delta);
     this.updateCameraShake(delta);
@@ -354,7 +365,7 @@ export default class World3D {
     });
   }
 
-  private syncAliens(s: WorldSnapshot, time: number, delta: number): void {
+  private syncAliens(s: WorldSnapshot, time: number, dt: number): void {
     const seen = new Set<Alien>();
     for (const a of s.aliens) {
       if (!a.active) continue;
@@ -364,11 +375,26 @@ export default class World3D {
         v = this.createAlienView(a);
         this.alienViews.set(a, v);
       }
-      v.root.position.set(toWorldX(a.x), toWorldY(a.y), 0);
+      // The strafer telegraphs its dive with a short shake.
+      const shake =
+        a.mode === "windup" ? THREE.MathUtils.randFloatSpread(2) * RENDER3D.ANIM.WINDUP_SHAKE : 0;
+      v.root.position.set(toWorldX(a.x + shake), toWorldY(a.y), 0);
       v.root.visible = !s.aliensHidden;
+
+      // Bank into sideways moves (zig-zag, patrol, crossing) on top of the sway.
+      if (dt > 0) {
+        const target = THREE.MathUtils.clamp(
+          ((a.x - v.lastX) / dt) * RENDER3D.ALIEN_BANK_PER_PXS,
+          -RENDER3D.ALIEN_BANK_MAX,
+          RENDER3D.ALIEN_BANK_MAX,
+        );
+        v.bank += (target - v.bank) * Math.min(1, dt * RENDER3D.SHIP_BANK_RESPONSE);
+      }
+      v.lastX = a.x;
       v.body.rotation.y =
-        Math.sin(time * RENDER3D.ALIEN_SWAY_SPEED + v.phase) * RENDER3D.ALIEN_SWAY;
-      this.syncAbility(a, v, time, delta);
+        v.bank + Math.sin(time * RENDER3D.ALIEN_SWAY_SPEED + v.phase) * RENDER3D.ALIEN_SWAY * (1 - Math.abs(v.bank));
+      this.animateParts(a, v, time);
+      this.syncAbility(a, v, time, dt);
     }
     for (const [a, v] of this.alienViews) {
       if (seen.has(a)) continue;
@@ -378,36 +404,22 @@ export default class World3D {
   }
 
   /** Mirror an alien's sum and ability state into its view. */
-  private syncAbility(a: Alien, v: AlienView, time: number, delta: number): void {
+  private syncAbility(a: Alien, v: AlienView, time: number, dt: number): void {
     // A new sum (e.g. a shield broke): rebuild the balls and pop them in.
     if (a.sumVersion !== v.sumVersion) {
       this.buildBalls(a, v);
       v.popLeft = RENDER3D.SUM_POP_MS;
     }
     if (v.popLeft > 0) {
-      v.popLeft = Math.max(0, v.popLeft - delta);
+      v.popLeft = Math.max(0, v.popLeft - dt * 1000);
       const k = v.popLeft / RENDER3D.SUM_POP_MS;
       v.balls.forEach((b) => b.scale.setScalar(1 + (RENDER3D.SUM_POP_SCALE - 1) * k * k));
     }
 
     const cover = a.ability?.cover ?? 0;
     for (const b of v.balls) setBallCover(b, cover);
-    // The Blinker's own eyelid (pivoted at its top edge) closes with its balls.
-    // Blender's Y axis is the glTF node's Z after the Y-up export.
-    const lid = v.parts.get("lid");
-    if (lid) lid.scale.z = Math.max(0.05, cover);
 
-    // Pulsing parts: nuclei (splitter/splitling) and the shield emitter.
-    for (const [role, part] of v.parts) {
-      if (role.startsWith("nucleus")) {
-        const off = role.endsWith("_L") ? Math.PI : 0;
-        part.scale.setScalar(1 + 0.15 * Math.sin(time * 0.006 + off + v.phase));
-      }
-    }
-
-    const shieldUp = a.ability instanceof Shielded && a.ability.shieldUp;
-    const emitter = v.parts.get("emitter");
-    if (emitter) emitter.scale.setScalar(shieldUp ? 1 + 0.2 * Math.sin(time * 0.008) : 0.6);
+    const shieldUp = isShieldUp(a);
     if (shieldUp && !v.shield) {
       v.shield = this.createShield();
       v.root.add(v.shield);
@@ -454,24 +466,67 @@ export default class World3D {
     );
   }
 
+  /**
+   * Simple sine motion of a monster's `anim_*` parts (docs/ART_SPEC.md §6).
+   * Parts keep their Blender frame after the glTF export: local Y is the model's
+   * up axis (toward the camera) and local Z runs tail-to-head.
+   */
+  private animateParts(a: Alien, v: AlienView, time: number): void {
+    const A = RENDER3D.ANIM;
+    const stepping = Math.max(0, Math.sin(a.gait)); // lumberer: 0 while standing
+    if (a.kind === "lumberer") v.body.position.z = stepping * A.STOMP_LIFT;
+    for (const p of v.parts) {
+      const { obj, rest } = p;
+      switch (p.role) {
+        case "tail": // darter: wags side to side
+          obj.rotation.y = rest.y + Math.sin(time * A.TAIL_SPEED + v.phase) * A.TAIL_WAG;
+          break;
+        case "leg": // lumberer: diagonal pairs swing opposite ways, in step with its stomp
+          obj.rotation.y = rest.y + p.side * Math.cos(a.gait) * A.LEG_SWING;
+          break;
+        case "skirt": {
+          // drifter: slow spin and a breathing pulse
+          obj.rotation.y = rest.y + time * A.SKIRT_SPIN;
+          const k = 1 + Math.sin(time * A.SKIRT_PULSE_SPEED + v.phase) * A.SKIRT_PULSE;
+          obj.scale.set(k, 1, k);
+          break;
+        }
+        case "lid": // blinker: its own eyelid (pivoted at the top edge) closes with its balls
+          obj.scale.z = Math.max(0.05, a.ability?.cover ?? 0);
+          break;
+        case "nucleus": // splitter / splitling: the nuclei pulse out of phase
+          obj.scale.setScalar(1 + 0.15 * Math.sin(time * 0.006 + (p.side < 0 ? Math.PI : 0) + v.phase));
+          break;
+        case "emitter": // shielded: pulses while the shield is up, dims once it breaks
+          obj.scale.setScalar(isShieldUp(a) ? 1 + 0.2 * Math.sin(time * 0.008) : 0.6);
+          break;
+        case "wing": {
+          // strafer: flaps, twice as fast once it commits to the dive
+          const speed = a.mode === "windup" || a.mode === "dive" ? A.WING_SPEED * 2 : A.WING_SPEED;
+          obj.rotation.z = rest.z + p.side * Math.sin(time * speed + v.phase) * A.WING_FLAP;
+          break;
+        }
+      }
+    }
+  }
+
   private createAlienView(a: Alien): AlienView {
     const root = new THREE.Group();
-    // Ability aliens wear their ability's model; others a random monster.
-    const loaded = Object.keys(RENDER3D.ALIEN_MODELS).filter((m) => this.gltfModels.has(m));
-    const model =
-      a.model && this.gltfModels.has(a.model)
-        ? a.model
-        : loaded.length
-          ? loaded[Math.floor(Math.random() * loaded.length)]
-          : null;
+    // Ability aliens (and splitlings) wear their own model; others their kind's.
+    const name = a.model ?? MONSTERS[a.kind].MODEL;
+    const model = this.gltfModels.has(name) ? name : null;
     let body: THREE.Object3D;
     let ballsAt = new THREE.Vector3(0, ENEMY.BALL_OFFSET_Y, 0);
-    const parts = new Map<string, THREE.Object3D>();
+    const parts: AnimPart[] = [];
     if (model) {
       body = this.instantiate(model)!;
       ballsAt = this.ballSocket(model) ?? ballsAt;
       body.traverse((o) => {
-        if (o.name.startsWith("anim_")) parts.set(o.name.slice(5), o);
+        const m = /^anim_([a-z]+)(?:_([A-Z]+))?/.exec(o.name);
+        if (!m) return;
+        // R, and the FR/BL leg diagonal, move one way; their mirrors the other.
+        const side = m[2] === "L" || m[2] === "FL" || m[2] === "BR" ? -1 : 1;
+        parts.push({ obj: o, role: m[1], rest: o.rotation.clone(), side });
       });
     } else {
       body = new THREE.Mesh(this.model(a.bodyKey, 0, RENDER3D.ALIEN_DEPTH).geometry, this.litMaterial);
@@ -484,6 +539,8 @@ export default class World3D {
       body,
       model,
       phase: Math.random() * Math.PI * 2,
+      lastX: a.x,
+      bank: 0,
       ballsAt,
       balls: [],
       sumVersion: -1,

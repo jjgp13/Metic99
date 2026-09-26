@@ -11,7 +11,8 @@ HERE = os.path.join(os.path.dirname(__file__), "..", "previews")
 ROWS = [
     ("MONSTERS", [("alien_darter", "Darter · 2-number, fast"),
                   ("alien_lumberer", "Lumberer · 3-number, slow"),
-                  ("alien_drifter", "Drifter · bonus, non-lethal")]),
+                  ("alien_drifter", "Drifter · bonus, non-lethal"),
+                  ("alien_strafer", "Strafer · patrols, then dives")]),
     ("ABILITY MONSTERS", [("alien_shielded", "Shielded · answer twice"),
                           ("alien_blinker", "Blinker · balls blink shut"),
                           ("alien_splitter", "Splitter · pops in two"),
