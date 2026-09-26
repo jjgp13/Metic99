@@ -24,13 +24,13 @@ reason.
 - **Energy only (no automatic attacks).** A kill first cancels incoming aliens;
   the rest fills the energy bar. The player chooses to spend it on:
   - **Send:** drop aliens on the current target (more energy = harder monster).
-  - **Slow time:** slow the player's own field. Both candidate strengths are
-    built and switchable in game (`M`) for playtesting: `drain` (60% speed
-    while energy drains) and `stop` (a short full stop for a fixed cost), tuned
-    to buy about the same field-time per energy. Slow time pauses while the
-    hit-recovery freeze already stops the field.
+  - **Slow / Freeze:** two powers on the player's own field, each with its
+    own button. SLOW (30% speed) is the economical one; FREEZE (full stop) is
+    the emergency one and drains twice as fast. Both drain energy while on
+    and pause while the hit-recovery freeze already stops the field. (The
+    first playtest found 60% slow too weak.)
   - Energy code (`src/sim/energy.ts`) is Phaser-free and the meter tracks
-    spending per use (`"slow"`, `"send"`), so sending only adds a new spender
+    spending per use (`"slow"`, `"freeze"`, `"send"`), so sending only adds a new spender
     plus the "cancel incoming first" step before `charge()`.
 - **First matches: 8–16 players**, with bots filling empty seats. Grow to 99
   later.

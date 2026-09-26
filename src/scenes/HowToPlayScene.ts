@@ -49,9 +49,9 @@ export default class HowToPlayScene extends Phaser.Scene {
       {
         heading: "ENERGY",
         body:
-          "Kills charge the EN meter (harder, faster\n" +
-          "and streak kills charge more). Press SLOW\n" +
-          "to slow your field. M switches slow mode.",
+          "Kills charge the EN meter. Spend it on SLOW\n" +
+          "(30% speed, lasts longer) or FREEZE (full\n" +
+          "stop, burns energy twice as fast).",
       },
       {
         heading: "MONSTERS",
@@ -61,7 +61,7 @@ export default class HowToPlayScene extends Phaser.Scene {
       },
       {
         heading: "CONTROLS",
-        body: "0-9 type · Bksp · Esc clear · Space slow · P pause",
+        body: "0-9 · Esc clear · Space slow · F freeze · P pause",
       },
     ];
 
