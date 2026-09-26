@@ -9,7 +9,6 @@ import {
   RANKS,
   RECOVERY,
   SCORE,
-  SLOW_TIME,
   STORAGE,
   type AlienKind,
   type SlowMode,
@@ -28,6 +27,11 @@ const KEYPAD_TOP = PLAYER.Y + 52;
 const KEYPAD_BOTTOM = PLAYER.Y + 214;
 const GUTTER_H = KEYPAD_BOTTOM - KEYPAD_TOP;
 const ENERGY_COLOR = 0x5ef0ff;
+const METER_X = GAME.WIDTH / 2 - 180; // under the keypad, same width
+const METER_W = 360;
+const METER_Y = KEYPAD_BOTTOM + 22;
+const POWER_COLOR: Record<SlowMode, number> = { slow: ENERGY_COLOR, freeze: 0xb8d8ff };
+const POWER_ON_FILL: Record<SlowMode, number> = { slow: 0x1f6f7a, freeze: 0x3a5a8c };
 
 /**
  * GameScene owns the actual gameplay. A Phaser Scene has a lifecycle:
@@ -87,13 +91,13 @@ export default class GameScene extends Phaser.Scene {
 
   // Energy: kills charge it, SLOW spends it (sending comes with multiplayer).
   private energy = new EnergyMeter();
-  private slowTime = new SlowTime(SLOW_TIME.DEFAULT_MODE);
+  private slowTime = new SlowTime();
   private energyFill!: Phaser.GameObjects.Rectangle;
-  private energyTick!: Phaser.GameObjects.Rectangle;
   private energyText!: Phaser.GameObjects.Text;
-  private slowBtn!: Phaser.GameObjects.Rectangle;
-  private slowLabel!: Phaser.GameObjects.Text;
-  private modeText!: Phaser.GameObjects.Text;
+  private powerButtons = {} as Record<
+    SlowMode,
+    { bg: Phaser.GameObjects.Rectangle; text: Phaser.GameObjects.Text }
+  >;
   private slowTint!: Phaser.GameObjects.Rectangle;
 
   // Pause: while paused the field is frozen and aliens are hidden so the
@@ -154,7 +158,7 @@ export default class GameScene extends Phaser.Scene {
     this.freezeLeftMs = 0;
     this.postHitSlow = false;
     this.energy = new EnergyMeter();
-    this.slowTime = new SlowTime(loadSlowMode());
+    this.slowTime = new SlowTime();
     this.paused = false;
     this.pauseOverlay = [];
   }
@@ -721,13 +725,13 @@ export default class GameScene extends Phaser.Scene {
   }
 
   // ---------------------------------------------------------------------------
-  // Energy & slow time
+  // Energy & time powers (SLOW / FREEZE)
   // ---------------------------------------------------------------------------
   private addEnergy(gain: number): void {
     const stored = this.energy.charge(gain);
     if (stored < 0.5) return;
     const pop = this.add
-      .text(30, KEYPAD_TOP - 18, `+${Math.round(stored)}`, {
+      .text(METER_X + METER_W * this.energy.fraction, METER_Y - 8, `+${Math.round(stored)}`, {
         fontFamily: "monospace",
         fontSize: "14px",
         color: "#5ef0ff",
@@ -736,34 +740,25 @@ export default class GameScene extends Phaser.Scene {
       .setDepth(6);
     this.tweens.add({
       targets: pop,
-      y: pop.y - 30,
+      y: pop.y - 20,
       alpha: 0,
       duration: 700,
       onComplete: () => pop.destroy(),
     });
   }
 
-  private triggerSlow(): void {
+  private triggerPower(mode: SlowMode): void {
     if (this.gameOver || this.paused) return;
-    if (this.slowTime.trigger(this.energy)) this.sound.play("blip", { volume: 0.5, rate: 0.6 });
-    this.updateEnergyHud();
-  }
-
-  /** Playtest switch between the two slow-time modes; remembered across runs. */
-  private toggleSlowMode(): void {
-    if (this.gameOver || this.paused) return;
-    const next: SlowMode = this.slowTime.currentMode === "slow" ? "freeze" : "slow";
-    this.slowTime.setMode(next);
-    saveSlowMode(next);
-    this.modeText.setText(slowModeLabel(next));
+    if (this.slowTime.trigger(mode, this.energy)) {
+      this.sound.play("blip", { volume: 0.5, rate: mode === "freeze" ? 0.4 : 0.6 });
+    }
     this.updateEnergyHud();
   }
 
   private buildEnergyHud(): void {
     const HUD_DEPTH = 5;
-    const midY = KEYPAD_TOP + GUTTER_H / 2;
 
-    // Field tint while slow time runs. It is drawn on the transparent Phaser
+    // Field tint while a power runs. It is drawn on the transparent Phaser
     // canvas, so it tints the 3D playfield underneath (and sits below the HUD).
     this.slowTint = this.add
       .rectangle(GAME.WIDTH / 2, 0, GAME.WIDTH, PLAYER.Y + 20, ENERGY_COLOR, 1)
@@ -771,84 +766,84 @@ export default class GameScene extends Phaser.Scene {
       .setDepth(4)
       .setVisible(false);
 
-    // Left gutter: vertical energy meter.
+    // Tall power buttons in the gutters beside the keypad, one per thumb.
+    const makeButton = (mode: SlowMode, x: number, label: string) => {
+      const color = POWER_COLOR[mode];
+      const bg = this.add
+        .rectangle(x, KEYPAD_TOP + GUTTER_H / 2, 48, GUTTER_H, 0x1b2340)
+        .setStrokeStyle(2, color)
+        .setDepth(HUD_DEPTH)
+        .setInteractive({ useHandCursor: true });
+      const text = this.add
+        .text(x, KEYPAD_TOP + GUTTER_H / 2, label.split("").join("\n"), {
+          fontFamily: "monospace",
+          fontSize: "18px",
+          color: "#ffffff",
+          align: "center",
+          lineSpacing: label.length > 4 ? 0 : 8,
+        })
+        .setOrigin(0.5)
+        .setDepth(HUD_DEPTH);
+      bg.on("pointerdown", () => this.triggerPower(mode));
+      this.powerButtons[mode] = { bg, text };
+    };
+    makeButton("slow", 30, "SLOW");
+    makeButton("freeze", GAME.WIDTH - 30, "FREEZE");
+
+    // Horizontal energy meter under the keypad.
     this.add
-      .text(30, KEYPAD_TOP - 4, "EN", { fontFamily: "monospace", fontSize: "12px", color: "#5ef0ff" })
-      .setOrigin(0.5, 1)
+      .text(30, METER_Y, "EN", { fontFamily: "monospace", fontSize: "12px", color: "#5ef0ff" })
+      .setOrigin(0.5)
       .setDepth(HUD_DEPTH);
     this.add
-      .rectangle(30, midY, 18, GUTTER_H, 0x1b2340)
+      .rectangle(METER_X, METER_Y, METER_W, 12, 0x1b2340)
+      .setOrigin(0, 0.5)
       .setStrokeStyle(1, 0x33406e)
       .setDepth(HUD_DEPTH);
     this.energyFill = this.add
-      .rectangle(30, KEYPAD_BOTTOM, 14, 0, ENERGY_COLOR)
-      .setOrigin(0.5, 1)
+      .rectangle(METER_X, METER_Y, 0, 8, ENERGY_COLOR)
+      .setOrigin(0, 0.5)
       .setDepth(HUD_DEPTH);
-    // Marks how much energy the current slow mode needs before it can be used.
-    this.energyTick = this.add.rectangle(30, KEYPAD_BOTTOM, 26, 2, 0xffd166).setDepth(HUD_DEPTH);
+    // Marks the energy needed to switch a power on.
+    this.add
+      .rectangle(METER_X + METER_W * (this.slowTime.threshold / this.energy.max), METER_Y, 2, 18, 0xffd166)
+      .setDepth(HUD_DEPTH);
     this.energyText = this.add
-      .text(30, KEYPAD_BOTTOM + 6, "0", { fontFamily: "monospace", fontSize: "12px", color: "#ffffff" })
-      .setOrigin(0.5, 0)
-      .setDepth(HUD_DEPTH);
-
-    // Right gutter: a tall SLOW button (also Space), easy to hit with a thumb.
-    this.slowBtn = this.add
-      .rectangle(GAME.WIDTH - 30, midY, 48, GUTTER_H, 0x1b2340)
-      .setStrokeStyle(2, ENERGY_COLOR)
-      .setDepth(HUD_DEPTH)
-      .setInteractive({ useHandCursor: true });
-    this.slowLabel = this.add
-      .text(GAME.WIDTH - 30, midY, "S\nL\nO\nW", {
-        fontFamily: "monospace",
-        fontSize: "20px",
-        color: "#ffffff",
-        align: "center",
-        lineSpacing: 6,
-      })
+      .text(GAME.WIDTH - 30, METER_Y, "0", { fontFamily: "monospace", fontSize: "12px", color: "#ffffff" })
       .setOrigin(0.5)
       .setDepth(HUD_DEPTH);
     this.add
-      .text(GAME.WIDTH - 30, KEYPAD_BOTTOM + 6, "SPACE", {
+      .text(GAME.WIDTH / 2, METER_Y + 22, "SPACE slow  ·  F freeze", {
         fontFamily: "monospace",
-        fontSize: "10px",
+        fontSize: "11px",
         color: "#8892b0",
-      })
-      .setOrigin(0.5, 0)
-      .setDepth(HUD_DEPTH);
-    this.slowBtn.on("pointerdown", () => this.triggerSlow());
-
-    // Below the keypad: which slow mode is active; tap it (or M) to switch.
-    const modeBg = this.add
-      .rectangle(GAME.WIDTH / 2, KEYPAD_BOTTOM + 34, 340, 30, 0x0b1020)
-      .setStrokeStyle(1, 0x33406e)
-      .setDepth(HUD_DEPTH)
-      .setInteractive({ useHandCursor: true });
-    this.modeText = this.add
-      .text(GAME.WIDTH / 2, KEYPAD_BOTTOM + 34, slowModeLabel(this.slowTime.currentMode), {
-        fontFamily: "monospace",
-        fontSize: "13px",
-        color: "#ffd166",
       })
       .setOrigin(0.5)
       .setDepth(HUD_DEPTH);
-    modeBg.on("pointerdown", () => this.toggleSlowMode());
 
     this.updateEnergyHud();
   }
 
   private updateEnergyHud(): void {
     const e = this.energy;
-    this.energyFill.setSize(14, GUTTER_H * e.fraction);
-    this.energyTick.setY(KEYPAD_BOTTOM - GUTTER_H * (this.slowTime.threshold / e.max));
+    this.energyFill.setSize(METER_W * e.fraction, 8);
     this.energyText.setText(String(Math.floor(e.value)));
 
-    const active = this.slowTime.active;
-    const usable = active || this.slowTime.canTrigger(e);
-    this.slowBtn.setFillStyle(active ? 0x1f6f7a : 0x1b2340).setAlpha(usable ? 1 : 0.35);
-    this.slowLabel.setAlpha(usable ? 1 : 0.35);
-    this.slowTint
-      .setVisible(active)
-      .setAlpha(this.slowTime.currentMode === "freeze" ? 0.2 : 0.1);
+    const running = this.slowTime.mode;
+    const usable = this.slowTime.canTrigger(e);
+    for (const mode of ["slow", "freeze"] as const) {
+      const { bg, text } = this.powerButtons[mode];
+      const on = running === mode;
+      bg.setFillStyle(on ? POWER_ON_FILL[mode] : 0x1b2340).setAlpha(on || usable ? 1 : 0.35);
+      text.setAlpha(on || usable ? 1 : 0.35);
+    }
+    if (running) {
+      this.slowTint
+        .setVisible(true)
+        .setFillStyle(POWER_COLOR[running], running === "freeze" ? 0.22 : 0.1);
+    } else {
+      this.slowTint.setVisible(false);
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -891,11 +886,11 @@ export default class GameScene extends Phaser.Scene {
       }
       if (e.key === " ") {
         e.preventDefault();
-        this.triggerSlow();
+        this.triggerPower("slow");
         return;
       }
-      if (e.key === "m" || e.key === "M") {
-        this.toggleSlowMode();
+      if (e.key === "f" || e.key === "F") {
+        this.triggerPower("freeze");
         return;
       }
       if (e.key >= "0" && e.key <= "9") this.handleInput(e.key);
@@ -977,8 +972,8 @@ export default class GameScene extends Phaser.Scene {
         `Score: ${this.score}    Best: ${best}\n` +
           `Best combo: ${bestCombo}    Kills: ${totalKills}\n` +
           `Fastest solve: ${fastestStr}\n` +
-          `Energy ${Math.round(this.energy.earned)} earned, ` +
-          `${Math.round(this.energy.spent.slow)} on slow (${this.slowTime.currentMode})`,
+          `Energy earned ${Math.round(this.energy.earned)} · used ` +
+          `${Math.round(this.energy.spent.slow)} slow, ${Math.round(this.energy.spent.freeze)} freeze`,
         { fontFamily: "monospace", fontSize: "16px", color: "#ffffff", align: "center", lineSpacing: 8 },
       )
       .setOrigin(0.5)
@@ -1010,31 +1005,5 @@ export default class GameScene extends Phaser.Scene {
     } else {
       this.scene.start("MenuScene");
     }
-  }
-}
-
-function slowModeLabel(mode: SlowMode): string {
-  const text =
-    mode === "slow"
-      ? `SLOW: ${Math.round(SLOW_TIME.MODES.slow.FACTOR * 100)}% SPEED`
-      : "SLOW: FULL FREEZE";
-  return `${text}, DRAINS  [M]`;
-}
-
-function loadSlowMode(): SlowMode {
-  try {
-    const stored = localStorage.getItem(STORAGE.SLOW_MODE);
-    if (stored === "slow" || stored === "freeze") return stored;
-  } catch {
-    // Storage blocked: use the default mode.
-  }
-  return SLOW_TIME.DEFAULT_MODE;
-}
-
-function saveSlowMode(mode: SlowMode): void {
-  try {
-    localStorage.setItem(STORAGE.SLOW_MODE, mode);
-  } catch {
-    // Not persisted; the switch still applies for this session.
   }
 }

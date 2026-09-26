@@ -5,8 +5,8 @@ import { ENERGY, SCORE, SLOW_TIME, type SlowMode } from "../config/constants";
  * future shared sim / match server (docs/MULTIPLAYER_DESIGN.md §5, phase 2).
  *
  * The meter only knows how to charge and spend. Each way of spending is its own
- * small controller (SlowTime below; "send" later) that asks the meter for
- * energy, so adding a spender doesn't touch the others.
+ * small controller (SlowTime below for slow/freeze; "send" later) that asks the
+ * meter for energy, so adding a spender doesn't touch the others.
  */
 
 /** Everything about a kill that energy cares about. */
@@ -34,13 +34,13 @@ export function energyForKill(k: KillInfo): number {
 }
 
 /** Where energy can go. "send" (attack an opponent) arrives with multiplayer. */
-export type EnergySpender = "slow" | "send";
+export type EnergySpender = SlowMode | "send";
 
 export class EnergyMeter {
   public value = 0;
   /** Per-run totals, shown on game over to compare playtest settings. */
   public earned = 0;
-  public readonly spent: Record<EnergySpender, number> = { slow: 0, send: 0 };
+  public readonly spent: Record<EnergySpender, number> = { slow: 0, freeze: 0, send: 0 };
 
   constructor(public readonly max: number = ENERGY.MAX) {}
 
@@ -82,42 +82,34 @@ export class EnergyMeter {
 }
 
 /**
- * Slow time: a toggle that drains energy while on and slows the field to the
- * current mode's FACTOR ("slow" = 30%, "freeze" = full stop). It switches off
- * when pressed again or when the meter runs dry.
+ * Time powers: SLOW (field at 30%) and FREEZE (field stopped). Each is a toggle
+ * that drains energy while on; only one runs at a time. Pressing the running
+ * one turns it off, pressing the other switches over, and it turns off by
+ * itself when the meter runs dry.
  */
 export class SlowTime {
-  private on = false;
+  private running: SlowMode | null = null;
 
-  constructor(private mode: SlowMode) {}
-
-  get currentMode(): SlowMode {
-    return this.mode;
+  get mode(): SlowMode | null {
+    return this.running;
   }
 
-  get active(): boolean {
-    return this.on;
-  }
-
-  /** Energy needed before it can be switched on. */
+  /** Energy needed before a power can be switched on. */
   get threshold(): number {
     return SLOW_TIME.MIN_START;
   }
 
+  /** Whether pressing a power would do something: once one runs, switching
+   * over or off is always allowed; starting needs `threshold` energy. */
   canTrigger(meter: EnergyMeter): boolean {
-    return this.on || meter.canSpend(this.threshold);
+    return this.running !== null || meter.canSpend(this.threshold);
   }
 
-  /** The player pressed SLOW. Returns true if something changed. */
-  trigger(meter: EnergyMeter): boolean {
+  /** The player pressed SLOW or FREEZE. Returns true if something changed. */
+  trigger(mode: SlowMode, meter: EnergyMeter): boolean {
     if (!this.canTrigger(meter)) return false;
-    this.on = !this.on;
+    this.running = this.running === mode ? null : mode;
     return true;
-  }
-
-  /** Switching modes keeps it running, just at the new mode's strength. */
-  setMode(mode: SlowMode): void {
-    this.mode = mode;
   }
 
   /**
@@ -126,11 +118,11 @@ export class SlowTime {
    * field) nothing drains, so energy isn't wasted.
    */
   update(deltaMs: number, meter: EnergyMeter, held: boolean): number {
-    if (!this.on) return 1;
-    const { FACTOR, PER_SEC } = SLOW_TIME.MODES[this.mode];
-    if (!held) meter.drain((PER_SEC * deltaMs) / 1000, "slow");
-    if (meter.value <= 0) this.on = false;
-    return this.on ? FACTOR : 1;
+    if (this.running === null) return 1;
+    const { FACTOR, PER_SEC } = SLOW_TIME.MODES[this.running];
+    if (!held) meter.drain((PER_SEC * deltaMs) / 1000, this.running);
+    if (meter.value <= 0) this.running = null;
+    return this.running === null ? 1 : FACTOR;
   }
 }
 

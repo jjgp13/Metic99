@@ -167,7 +167,6 @@ export const STORAGE = {
   LAST_NAME: "metic-last-name", // remembers the player's last arcade initials
   LAST_LEN: "metic-last-len", // remembers the chosen initials length
   SHIP: "metic-ship", // player ship model picked on the menu
-  SLOW_MODE: "metic-slow-mode", // playtest: last slow-time mode picked in game
 } as const;
 
 /** Arcade global leaderboard (Supabase-backed). */
@@ -270,8 +269,8 @@ export const RECOVERY = {
  *   SLOW_MULT by SCORE.SLOW_MS (same window as the score's speed bonus).
  * - comboBonus: +COMBO_STEP per consecutive kill, capped at COMBO_MAX.
  *
- * An easy early kill gives ~8 (about 0.4 s of FREEZE); a fast 3-ball kill on a
- * streak gives 30+.
+ * An easy early kill gives ~8 (about 0.7 s of SLOW or 0.3 s of FREEZE); a fast
+ * 3-ball kill on a streak gives 30+.
  */
 export const ENERGY = {
   MAX: 100,
@@ -284,25 +283,25 @@ export const ENERGY = {
   COMBO_MAX: 2.0,
 } as const;
 
-/** Slow-time playtest modes, switchable in game (M key / mode bar). */
+/** The two ways to spend energy on time: each has its own button. */
 export type SlowMode = "slow" | "freeze";
 
 /**
- * Slow time: spend energy to slow the player's own field (aliens + spawn clock).
+ * Time powers: spend energy on the player's own field (aliens + spawn clock).
  * The ship and bullets keep full speed, and the difficulty clock keeps running.
- * Both modes are toggles that drain energy while on. They are tuned to buy the
- * same field-time per energy (a full bar "saves" ~5 s of alien movement in
- * each), so a playtest compares how they FEEL, not which one is stronger:
- * - slow: field at FACTOR for ~7 s from a full bar.
- * - freeze: field fully stopped for ~5 s from a full bar.
+ * Both are toggles that drain energy while on; only one runs at a time.
+ * They trade efficiency for safety:
+ * - slow: the economical option. Field at 30% for ~8 s per full bar
+ *   (saves ~5.8 s of alien movement), but aliens still creep.
+ * - freeze: the emergency option. Field fully stopped, but it burns twice as
+ *   fast: ~4 s per full bar (saves ~4 s).
  */
 export const SLOW_TIME = {
-  DEFAULT_MODE: "slow" as SlowMode,
   MODES: {
-    slow: { FACTOR: 0.3, PER_SEC: 14 },
-    freeze: { FACTOR: 0, PER_SEC: 20 },
+    slow: { FACTOR: 0.3, PER_SEC: 12 },
+    freeze: { FACTOR: 0, PER_SEC: 25 },
   } as Record<SlowMode, { FACTOR: number; PER_SEC: number }>,
-  MIN_START: 10, // energy needed to switch on (stops tap-flicker at empty)
+  MIN_START: 10, // energy needed to switch either on (stops tap-flicker at empty)
 } as const;
 
 /** Number ball colors map to future math operations (sum/sub/mul/div). */

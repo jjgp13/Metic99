@@ -65,7 +65,7 @@ src/
                       submitScore, plus getTop/getRank reads
   sim/
     energy.ts         Phaser-free energy rules: energyForKill, EnergyMeter
-                      (charge/spend/drain per spender), SlowTime (slow | freeze).
+                      (charge/spend/drain per spender), SlowTime (SLOW / FREEZE powers).
                       Kept pure so a future server sim can share it.
   objects/
     Alien.ts          Pure alien state (x/y, digits, result, `kind`) + per-kind
@@ -254,28 +254,29 @@ Green=multiplication, Yellow=division.
   two), so the player never juggles two multi-number sums at once. When the cap
   is hit the spawn is forced to an easy 2-ball enemy.
 - Input: on-screen keypad **and** physical keyboard (0–9, Backspace, Esc,
-  Space = SLOW, M = slow mode, P = pause). Max 2 typed digits.
+  Space = SLOW, F = FREEZE, P = pause). Max 2 typed digits.
 - **Energy** (`ENERGY`, `src/sim/energy.ts`): each kill charges a 0–100 meter by
   `BASE × ballBonus × digitBonus × speedBonus × comboBonus` (more balls, bigger
   average digit, faster solve, longer streak = more; ~8 for an easy early kill,
   30+ for a fast 3-ball streak kill). Overflow is lost. The meter only charges
-  and spends; each use is a separate spender (`"slow"` now, `"send"` reserved
-  for the battle royale). Per-run earned/spent totals show on game over.
-- **Slow time** (`SLOW_TIME`): the player spends energy to slow their OWN field
+  and spends; each use is a separate spender (`"slow"` and `"freeze"` now,
+  `"send"` reserved for the battle royale). Per-run earned/spent totals show on game over.
+- **Time powers** (`SLOW_TIME`): the player spends energy on their OWN field
   (alien movement + spawn clock); the ship, bullets and difficulty clock keep
-  full speed. Two playtest modes, switched in game with `M` or by tapping the
-  mode bar under the keypad (remembered in `STORAGE.SLOW_MODE`):
-  - `slow` (default): field at 30% while energy drains 14/s (~7 s per bar).
-  - `freeze`: field fully stopped while energy drains 20/s (~5 s per bar).
-  Both are toggles: 10 energy to switch on, off when pressed again or when
-  empty; switching mode while on keeps it running. Both buy the same
-  field-time per energy (~5 s per full bar), so the playtest compares feel,
-  not strength. Slow time **holds** (no drain) while the hit-recovery freeze
-  already stops the field. The field is tinted while
-  slow time runs.
-- **Energy HUD** sits in the gutters beside the keypad (meter on the left with
-  a mark at the current mode's activation cost, tall SLOW button on the right)
-  plus a mode bar below it, so it never covers the field or keys in portrait.
+  full speed. Two powers, each with its own button, sharing the one meter:
+  - **SLOW** (left button, Space): field at 30%, drains 12/s (~8 s per bar,
+    saves ~5.8 s of alien movement). The economical option; aliens still creep.
+  - **FREEZE** (right button, F): field fully stopped, drains 25/s (~4 s per
+    bar, saves ~4 s). The emergency option: total safety at twice the burn.
+  Both are toggles needing 10 energy to start; only one runs at a time.
+  Pressing the running one turns it off, pressing the other switches over, and
+  it turns off when empty. Powers **hold** (no drain) while the hit-recovery
+  freeze already stops the field. The field is tinted (cyan / ice) while one
+  runs.
+- **Energy HUD**: SLOW and FREEZE are tall buttons in the gutters either side
+  of the keypad (one per thumb); the meter is a bar under the keypad with a
+  mark at the 10-energy start cost. Nothing covers the field or keys in
+  portrait.
 - HUD (score, lives, difficulty bar, typed display) draws above gameplay
   (`depth 5`) so entering aliens never obscure it.
 - High score persisted in `localStorage` (`metic-highscore`).
@@ -373,10 +374,11 @@ curve is in `src/config/difficulty.ts` (`difficultyAt(elapsedMs, score)`).
 
 Newest first. Format: `YYYY-MM-DD — decision — rationale`.
 
-- **2026-09-25 — Stronger slow time: 30% slow vs full freeze.** The first
-  playtest found 60% too weak. The modes are now `slow` (30%) and `freeze`
-  (0%), both draining toggles tuned to ~5 s of saved field-time per full bar;
-  the one-shot 1.5 s stop was dropped as the freeze toggle covers it.
+- **2026-09-25 — SLOW and FREEZE are both player powers.** The first playtest
+  found 60% slow too weak; rather than pick 30% slow vs full freeze, the player
+  gets both (two buttons, one meter), and they differ in trade-off: SLOW is
+  cheaper per saved second, FREEZE is total but burns twice as fast. The M
+  playtest switch and the one-shot 1.5 s stop were removed.
 
 - **2026-09-25 — Monsters get their own movement; readability boxes replace
   fixed lanes.** The kind moved from World3D (random) into `Alien`, so logic
