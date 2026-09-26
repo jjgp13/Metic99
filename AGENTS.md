@@ -366,6 +366,8 @@ curve is in `src/config/difficulty.ts` (`difficultyAt(elapsedMs, score)`).
 - Verify changes: `npx tsc --noEmit` and `npm run build` must pass.
 - **Git workflow:** feature branches are **local only** (never push them). Merge
   into `master` locally and push only `master` (pushing it deploys GitHub Pages).
+  Every local merge into `master` is followed, without asking, by deleting the
+  merged branch (`git branch -d`) and pushing `master` (after tsc + build pass).
 - Commit trailer: `Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>`.
 
 ---
