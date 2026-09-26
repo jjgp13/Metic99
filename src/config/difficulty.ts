@@ -1,4 +1,4 @@
-import { DIFFICULTY } from "./constants";
+import { ABILITY, DIFFICULTY } from "./constants";
 
 export interface DifficultyParams {
   /** Normalized difficulty in [0,1). 0 = easiest, approaches 1 with score/time. */
@@ -17,6 +17,10 @@ export interface DifficultyParams {
   maxUnsolved: number;
   /** How long a strafer patrols before diving (its read time). */
   straferPatrolMs: number;
+  /** Chance a spawn gets one of the unlocked monster abilities. */
+  abilityChance: number;
+  /** Max concurrent ability aliens (1, then 2 late in a run). */
+  maxAbilityOnScreen: number;
 }
 
 type Range = { easy: number; hard: number };
@@ -55,5 +59,7 @@ export function difficultyAt(elapsedMs: number, score = 0): DifficultyParams {
     // Score ALONE opens up concurrent unsolved sums (1 → 2 → 3).
     maxUnsolved: Math.round(lerp(DIFFICULTY.MAX_UNSOLVED, dScore)),
     straferPatrolMs: lerp(DIFFICULTY.STRAFER_PATROL_MS),
+    abilityChance: lerp(ABILITY.CHANCE),
+    maxAbilityOnScreen: d < ABILITY.SECOND_AT ? 1 : 2,
   };
 }

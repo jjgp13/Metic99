@@ -232,6 +232,18 @@ def anim_part(obj, role, root):
     return obj
 
 
+def pivot(obj, point):
+    """Move obj's origin to `point` without moving its mesh.
+
+    anim_* parts scale/rotate around their origin; e.g. an eyelid pivoted at its
+    top edge can be scaled along Y to close downward.
+    """
+    offset = Vector(point) - obj.location
+    obj.data.transform(Matrix.Translation(-offset))
+    obj.location = Vector(point)
+    return obj
+
+
 def socket(name, location, root):
     """Empty the game reads for a position: socket_balls, socket_muzzle, ..."""
     empty = bpy.data.objects.new(f"socket_{name}", None)

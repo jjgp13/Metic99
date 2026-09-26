@@ -4,7 +4,8 @@ import type Phaser from "phaser";
 import { ENEMY, GAME, MONSTERS, PLAYER, RENDER3D } from "../config/constants";
 import type Alien from "../objects/Alien";
 import type { Bullet } from "../objects/Bullet";
-import { createNumberBall } from "./NumberBall";
+import { Shielded } from "../objects/abilities";
+import { createNumberBall, setBallCover } from "./NumberBall";
 import { voxelizeFrame, type VoxelModel } from "./voxelize";
 
 /** What the renderer needs from the game each frame. It only reads this. */
@@ -36,6 +37,15 @@ interface AlienView {
   phase: number;
   lastX: number;
   bank: number;
+  /** Row origin (the model's socket_balls) and the ball groups built there. */
+  ballsAt: THREE.Vector3;
+  balls: THREE.Group[];
+  /** Alien.sumVersion the balls were built for; a change rebuilds them. */
+  sumVersion: number;
+  /** ms left of the "new sum" pop-in. */
+  popLeft: number;
+  /** Shield bubble while a Shielded alien's shield is up. */
+  shield: THREE.Group | null;
 }
 
 interface Debris {
@@ -47,6 +57,7 @@ interface Debris {
 
 const toWorldX = (x: number) => x - GAME.WIDTH / 2;
 const toWorldY = (y: number) => GAME.HEIGHT / 2 - y;
+const isShieldUp = (a: Alien) => a.ability instanceof Shielded && a.ability.shieldUp;
 
 /**
  * The 3D view of the playfield, drawn with Three.js on a canvas that sits
@@ -86,6 +97,15 @@ export default class World3D {
   private shipFlames: THREE.Object3D[] = [];
   private bank = 0;
   private readonly alienViews = new Map<Alien, AlienView>();
+  /** Shared shield geometry/materials, built on first use. */
+  private shieldParts: {
+    dome: THREE.IcosahedronGeometry;
+    edges: THREE.EdgesGeometry;
+    ring: THREE.TorusGeometry;
+    domeMat: THREE.MeshBasicMaterial;
+    edgeMat: THREE.LineBasicMaterial;
+    ringMat: THREE.MeshBasicMaterial;
+  } | null = null;
   private readonly bulletViews = new Map<Bullet, THREE.Mesh>();
 
   private readonly stars: THREE.Points;
@@ -218,15 +238,22 @@ export default class World3D {
   public explode(x: number, y: number, alien?: Alien): void {
     const view = alien && this.alienViews.get(alien);
     const palette = view?.model
-      ? RENDER3D.ALIEN_MODELS[view.model]
+      ? (RENDER3D.ALIEN_MODELS[view.model] ?? RENDER3D.ABILITY_MODELS[view.model])
       : alien
         ? this.model(alien.bodyKey, 0, RENDER3D.ALIEN_DEPTH).palette
         : [0xffd166, 0xef476f, 0x4ea1ff];
+    this.burst(x, y, palette, RENDER3D.DEBRIS_COUNT);
+    this.flash.position.set(toWorldX(x), toWorldY(y), 60);
+    this.flashLeft = RENDER3D.FLASH_MS;
+  }
+
+  /** Throw `count` voxel debris cubes in `palette` colors out of logical (x, y). */
+  private burst(x: number, y: number, palette: readonly number[], count: number): void {
     const wx = toWorldX(x);
     const wy = toWorldY(y);
     const { min, max } = RENDER3D.DEBRIS_SPEED;
 
-    for (let i = 0; i < RENDER3D.DEBRIS_COUNT; i++) {
+    for (let i = 0; i < count; i++) {
       const hex = palette[Math.floor(Math.random() * palette.length)];
       const mesh = new THREE.Mesh(this.debrisGeometry, this.debrisMaterial(hex));
       mesh.position.set(wx, wy, 0);
@@ -239,9 +266,6 @@ export default class World3D {
       this.scene.add(mesh);
       this.debris.push({ mesh, vel, spin, age: 0 });
     }
-
-    this.flash.position.set(wx, wy, 60);
-    this.flashLeft = RENDER3D.FLASH_MS;
   }
 
   /** Same semantics as Phaser's camera.shake (intensity = fraction of view). */
@@ -370,12 +394,76 @@ export default class World3D {
       v.body.rotation.y =
         v.bank + Math.sin(time * RENDER3D.ALIEN_SWAY_SPEED + v.phase) * RENDER3D.ALIEN_SWAY * (1 - Math.abs(v.bank));
       this.animateParts(a, v, time);
+      this.syncAbility(a, v, time, dt);
     }
     for (const [a, v] of this.alienViews) {
       if (seen.has(a)) continue;
       this.scene.remove(v.root);
       this.alienViews.delete(a);
     }
+  }
+
+  /** Mirror an alien's sum and ability state into its view. */
+  private syncAbility(a: Alien, v: AlienView, time: number, dt: number): void {
+    // A new sum (e.g. a shield broke): rebuild the balls and pop them in.
+    if (a.sumVersion !== v.sumVersion) {
+      this.buildBalls(a, v);
+      v.popLeft = RENDER3D.SUM_POP_MS;
+    }
+    if (v.popLeft > 0) {
+      v.popLeft = Math.max(0, v.popLeft - dt * 1000);
+      const k = v.popLeft / RENDER3D.SUM_POP_MS;
+      v.balls.forEach((b) => b.scale.setScalar(1 + (RENDER3D.SUM_POP_SCALE - 1) * k * k));
+    }
+
+    const cover = a.ability?.cover ?? 0;
+    for (const b of v.balls) setBallCover(b, cover);
+
+    const shieldUp = isShieldUp(a);
+    if (shieldUp && !v.shield) {
+      v.shield = this.createShield();
+      v.root.add(v.shield);
+    } else if (!shieldUp && v.shield) {
+      v.root.remove(v.shield);
+      v.shield = null;
+      this.burst(a.x, a.y, [RENDER3D.SHIELD_COLOR, 0xf5d0ff], RENDER3D.SHIELD_SHARDS);
+    }
+    if (v.shield) v.shield.scale.setScalar(1 + 0.04 * Math.sin(time * 0.005 + v.phase));
+  }
+
+  /**
+   * Shield bubble: a faint faceted dome around the body plus a bold ring that
+   * reads at phone size. Its radius stays inside the ball row, so it never
+   * covers a number. Magenta, never a ball (operation) color.
+   */
+  private createShield(): THREE.Group {
+    const r = RENDER3D.SHIELD_RADIUS;
+    if (!this.shieldParts) {
+      const dome = new THREE.IcosahedronGeometry(r, 1);
+      this.shieldParts = {
+        dome,
+        edges: new THREE.EdgesGeometry(dome),
+        ring: new THREE.TorusGeometry(r, 1.7, 6, 28),
+        domeMat: new THREE.MeshBasicMaterial({
+          color: RENDER3D.SHIELD_COLOR,
+          transparent: true,
+          opacity: 0.16,
+          depthWrite: false,
+        }),
+        edgeMat: new THREE.LineBasicMaterial({
+          color: RENDER3D.SHIELD_COLOR,
+          transparent: true,
+          opacity: 0.55,
+        }),
+        ringMat: new THREE.MeshBasicMaterial({ color: RENDER3D.SHIELD_COLOR }),
+      };
+    }
+    const p = this.shieldParts;
+    return new THREE.Group().add(
+      new THREE.Mesh(p.dome, p.domeMat),
+      new THREE.LineSegments(p.edges, p.edgeMat),
+      new THREE.Mesh(p.ring, p.ringMat),
+    );
   }
 
   /**
@@ -403,6 +491,15 @@ export default class World3D {
           obj.scale.set(k, 1, k);
           break;
         }
+        case "lid": // blinker: its own eyelid (pivoted at the top edge) closes with its balls
+          obj.scale.z = Math.max(0.05, a.ability?.cover ?? 0);
+          break;
+        case "nucleus": // splitter / splitling: the nuclei pulse out of phase
+          obj.scale.setScalar(1 + 0.15 * Math.sin(time * 0.006 + (p.side < 0 ? Math.PI : 0) + v.phase));
+          break;
+        case "emitter": // shielded: pulses while the shield is up, dims once it breaks
+          obj.scale.setScalar(isShieldUp(a) ? 1 + 0.2 * Math.sin(time * 0.008) : 0.6);
+          break;
         case "wing": {
           // strafer: flaps, twice as fast once it commits to the dive
           const speed = a.mode === "windup" || a.mode === "dive" ? A.WING_SPEED * 2 : A.WING_SPEED;
@@ -415,7 +512,8 @@ export default class World3D {
 
   private createAlienView(a: Alien): AlienView {
     const root = new THREE.Group();
-    const name = MONSTERS[a.kind].MODEL;
+    // Ability aliens (and splitlings) wear their own model; others their kind's.
+    const name = a.model ?? MONSTERS[a.kind].MODEL;
     const model = this.gltfModels.has(name) ? name : null;
     let body: THREE.Object3D;
     let ballsAt = new THREE.Vector3(0, ENEMY.BALL_OFFSET_Y, 0);
@@ -436,18 +534,41 @@ export default class World3D {
     }
     root.add(body);
 
-    // Number balls sit in a row above the body and never rotate, so the digits
-    // always face the camera and stay readable.
+    const v: AlienView = {
+      root,
+      body,
+      model,
+      phase: Math.random() * Math.PI * 2,
+      lastX: a.x,
+      bank: 0,
+      ballsAt,
+      balls: [],
+      sumVersion: -1,
+      popLeft: 0,
+      parts,
+      shield: null,
+    };
+    this.buildBalls(a, v);
+    this.scene.add(root);
+    return v;
+  }
+
+  /**
+   * Number balls sit in a row above the body and never rotate, so the digits
+   * always face the camera and stay readable. Blinker balls get eyelids.
+   */
+  private buildBalls(a: Alien, v: AlienView): void {
+    v.balls.forEach((b) => v.root.remove(b));
     const totalW = (a.digits.length - 1) * ENEMY.BALL_SPACING;
     const tint = RENDER3D.BALL_TINT[a.ballTexture] ?? RENDER3D.BALL_TINT.blueBalls;
-    a.digits.forEach((d, i) => {
-      const ball = createNumberBall(d, tint);
-      ball.position.set(ballsAt.x - totalW / 2 + i * ENEMY.BALL_SPACING, ballsAt.y, 0);
-      root.add(ball);
+    const lids = a.ability?.kind === "blinker" ? RENDER3D.BALL_LID_COLOR : undefined;
+    v.balls = a.digits.map((d, i) => {
+      const ball = createNumberBall(d, tint, lids);
+      ball.position.set(v.ballsAt.x - totalW / 2 + i * ENEMY.BALL_SPACING, v.ballsAt.y, 0);
+      v.root.add(ball);
+      return ball;
     });
-
-    this.scene.add(root);
-    return { root, body, model, parts, phase: Math.random() * Math.PI * 2, lastX: a.x, bank: 0 };
+    v.sumVersion = a.sumVersion;
   }
 
   /** Where a model's `socket_balls` empty sits, in view space (cached per model). */

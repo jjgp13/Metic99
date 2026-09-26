@@ -126,12 +126,16 @@ Balls are **glass spheres with the number floating inside**
 - Balls do not rotate. Radius `RENDER3D.BALL_RADIUS` (9 px), row spacing
   `ENEMY.BALL_SPACING` (20 px). Color = operation (`RENDER3D.BALL_TINT`, §4).
 
+**Eyelid balls (built, the Blinker's ability):** `createNumberBall(n, tint,
+lidColor)` adds two opaque hemispherical lids hinged on the ball's horizontal
+axis; `setBallCover(ball, 0..1)` swings them shut. Open, they rest tilted back
+(`RENDER3D.BALL_LID_OPEN_ANGLE`) so a thin magenta rim marks the ball even
+before it blinks.
+
 ### Ideas to iterate on (not decided)
 
 The balls are also a design space for monsters. Candidates to prototype:
 
-- **Eyelid balls:** a sphere opens and closes like an eye; the number is only
-  readable while it's open (timing pressure, a "blinking" monster).
 - **Monsters made of balls:** the body itself is a cluster of number spheres
   (caterpillar, molecule, grape bunch) instead of balls floating above a body.
 - Whatever we try, the number must stay the most readable element on screen.
@@ -184,6 +188,7 @@ Keep samples low (~24) → ~1 s per image.
 | `lathe(profile, swatch, segments)` | Spins a `(radius, z)` side profile around Z: saucers, domes, shells, rims, pods |
 | `radial(count, build_one)` | Places parts evenly around Z (tentacles, legs, rim lights, scutes) |
 | `socket(name, loc)` / `anim_part(obj, role)` | Sockets and animated parts (§6) |
+| `pivot(obj, point)` | Moves an `anim_*` part's origin (e.g. an eyelid hinged at its top edge) |
 | `join`, `paint`, `export_glb`, `render_previews` | Plumbing |
 
 ### Variants
@@ -213,6 +218,12 @@ the game:** the player picks a ship on the menu, and each monster kind has its
 own model and movement (AGENTS.md → Gameplay rules). More variations of both
 will follow in this style.
 
+Ability monsters (2026-09-25) wear a model that shows their ability before it
+triggers: `alien_shielded` (grey armored beetle with a glowing shield emitter),
+`alien_blinker` (magenta head that is one big eye, with an `anim_lid`),
+`alien_splitter` (two pink cell lobes on a glowing seam) and `alien_splitling`
+(one lobe, spawned in pairs by the splitter).
+
 | Model | Gameplay role | Look |
 | --- | --- | --- |
 | `ship_player` | The player | Fat lavender hull, cyan canopy, twin glowing engines |
@@ -220,6 +231,9 @@ will follow in this style.
 | `alien_lumberer` | 3-number alien, slow | Big round body, heavy limbs, plated back |
 | `alien_drifter` | Bonus, non-lethal; crosses sideways | Jellyfish/UFO, glowing rim, tentacle skirt |
 | `alien_strafer` | 2-number, patrols the top then dives (Galaga-style) | Magenta wasp, wide flapping wings (silver fore, purple hind), cyan eyes |
+| `alien_shielded` | Ability: needs two answers | Grey armored beetle, magenta emitter; shield bubble drawn in code |
+| `alien_blinker` | Ability: balls blink shut | Magenta one-eyed head with lashes; `anim_lid` closes with the balls |
+| `alien_splitter` / `alien_splitling` | Ability: pops into two 2-ball aliens | Two pink lobes on a glowing seam / one lobe |
 | `alien_attack` | Sent by an opponent (battle royale) | Any alien + attacker's color glow ring |
 | `ball_chip` | Number ball | Coin + digit texture (§7) |
 
@@ -238,8 +252,10 @@ will follow in this style.
   (`RENDER3D.ANIM`): `tail` wags, `leg_*` swing in diagonal pairs synced to the
   lumberer's stomp, `skirt` spins and pulses, `wing_L/R` flap. Parts keep their
   Blender frame, so local Y = up (toward the camera) and local Z = tail→head;
-  put a part's origin at its hinge. To do: `anim_eye` blinks, read
-  `socket_muzzle` for bullets.
+  put a part's origin at its hinge. Ability monsters add `lid` (the
+  Blinker's eyelid, scaled along local Z by the blink), `emitter` (pulses
+  while the shield is up) and `nucleus_L/R` (pulse out of phase). To do:
+  `anim_eye` blinks, read `socket_muzzle` for bullets.
 - The build also renders `public/assets/icons/<model>.png` (128 px, transparent,
   top-down) for 2D menus such as the ship picker.
 

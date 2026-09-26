@@ -66,7 +66,9 @@ the single-player game** (2026-09-25):
 - **Strafer (Galaga-style):** patrols a band at the top for a few seconds,
   then dives.
 
-Abilities (mainly for sent aliens):
+Abilities (mainly for sent aliens). **Built (2026-09-25): Shielded, Blinker,
+Splitter** on a hook-based ability system (see AGENTS.md → Gameplay rules); in
+solo play they unlock as difficulty rises. The others reuse the same hooks.
 - **Blinker:** balls open and close like eyelids.
 - **Hider:** tucks its balls behind its body at intervals.
 - **Orbiter:** balls circle the body.

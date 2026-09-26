@@ -57,7 +57,9 @@ export default class HowToPlayScene extends Phaser.Scene {
         heading: "MONSTERS",
         body:
           "Each kind moves its own way. Solve the\n" +
-          "harmless glowing jellyfish for energy.",
+          "harmless glowing jellyfish for energy.\n" +
+          "SHIELDED answer twice · SPLITTER pops in 2\n" +
+          "BLINKER read its sum while the eyes are open",
       },
       {
         heading: "CONTROLS",
@@ -65,21 +67,21 @@ export default class HowToPlayScene extends Phaser.Scene {
       },
     ];
 
-    let y = 108;
+    let y = 100;
     for (const s of sections) {
       this.add.text(40, y, s.heading, {
         fontFamily: "monospace",
         fontSize: "17px",
         color: "#4ea1ff",
       });
-      y += 26;
+      y += 24;
       this.add.text(40, y, s.body, {
         fontFamily: "monospace",
         fontSize: "14px",
         color: "#ffffff",
         lineSpacing: 4,
       });
-      y += s.body.split("\n").length * 20 + 6;
+      y += s.body.split("\n").length * 20 + 2;
     }
 
     this.makeBackButton(cx, GAME.HEIGHT - 50);

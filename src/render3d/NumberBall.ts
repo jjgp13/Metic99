@@ -84,8 +84,11 @@ function glassMaterial(tint: number): THREE.ShaderMaterial {
   return mat;
 }
 
-/** Build one ball showing `n`, tinted by its math operation. Centered on the origin. */
-export function createNumberBall(n: number, tint: number): THREE.Group {
+/**
+ * Build one ball showing `n`, tinted by its math operation. Centered on the
+ * origin. With `lidColor` it gets two eyelids (see setBallCover).
+ */
+export function createNumberBall(n: number, tint: number, lidColor?: number): THREE.Group {
   const r = RENDER3D.BALL_RADIUS;
   sphereGeometry ??= new THREE.SphereGeometry(r, SPHERE_SEGMENTS.width, SPHERE_SEGMENTS.height);
   digitGeometry ??= new THREE.PlaneGeometry(r * 1.6, r * 1.6);
@@ -98,5 +101,50 @@ export function createNumberBall(n: number, tint: number): THREE.Group {
 
   const ball = new THREE.Group();
   ball.add(digit, glass);
+  if (lidColor !== undefined) addLids(ball, lidColor);
+  setBallCover(ball, 0);
   return ball;
+}
+
+const lidMaterials = new Map<number, THREE.MeshStandardMaterial>();
+let lidGeometry: THREE.SphereGeometry | null = null;
+
+/**
+ * Eyelids: two opaque hemispherical shells just outside the glass, hinged on
+ * the ball's horizontal axis. Open, they rest tilted back behind the ball (their
+ * inner faces are culled, so only a thin rim shows at the top and bottom edge);
+ * closing swings the upper lid down and the lower lid up until they meet.
+ */
+function addLids(ball: THREE.Group, color: number): void {
+  lidGeometry ??= new THREE.SphereGeometry(
+    RENDER3D.BALL_RADIUS * 1.12,
+    16,
+    6,
+    0,
+    Math.PI * 2,
+    0,
+    Math.PI / 2, // the +Y hemisphere
+  );
+  let mat = lidMaterials.get(color);
+  if (!mat) {
+    mat = new THREE.MeshStandardMaterial({ color, roughness: 0.6, flatShading: true });
+    lidMaterials.set(color, mat);
+  }
+  const upper = new THREE.Group().add(new THREE.Mesh(lidGeometry, mat));
+  const lowerShell = new THREE.Mesh(lidGeometry, mat);
+  lowerShell.rotation.z = Math.PI; // the -Y hemisphere
+  const lower = new THREE.Group().add(lowerShell);
+  upper.name = "lid_upper";
+  lower.name = "lid_lower";
+  ball.add(upper, lower);
+}
+
+/** Close a ball's lids: 0 = open (number readable) … 1 = shut. No-op without lids. */
+export function setBallCover(ball: THREE.Object3D, cover: number): void {
+  const angle = RENDER3D.BALL_LID_OPEN_ANGLE * (1 - cover);
+  const upper = ball.getObjectByName("lid_upper");
+  const lower = ball.getObjectByName("lid_lower");
+  // Rotating about X by -a tips the upper shell's pole (+Y) away from the camera.
+  if (upper) upper.rotation.x = -angle;
+  if (lower) lower.rotation.x = angle;
 }

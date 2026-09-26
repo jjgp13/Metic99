@@ -1,4 +1,5 @@
-import { ENEMY, GAME, MONSTERS, type AlienKind } from "../config/constants";
+import { ENEMY, GAME, MODEL_BOXES, MONSTERS, type AlienKind } from "../config/constants";
+import type { Ability } from "./abilities";
 
 /**
  * Where an alien is in its movement pattern. Most kinds only "move"; the
@@ -30,6 +31,21 @@ export interface AlienConfig {
   patrolMs?: number;
   /** Strafer / drifter: body y of the band it patrols or crosses. */
   bandY?: number;
+  /** Model to wear instead of the kind's (ability aliens); its box comes from
+   * MODEL_BOXES while the movement still follows `kind`. */
+  model?: string;
+  /** Special rule layered on top of the movement (objects/abilities.ts). */
+  ability?: Ability;
+}
+
+/** A scripted move (knockback, splitting apart) that overrides the pattern. */
+interface Glide {
+  fromX: number;
+  fromY: number;
+  toX: number;
+  toY: number;
+  t: number;
+  ms: number;
 }
 
 const TAU = Math.PI * 2;
@@ -38,7 +54,8 @@ const TAU = Math.PI * 2;
  * An Alien is pure game state: a position in the 2D logical playfield, the
  * numbers it carries, its kind and how that kind moves. It knows nothing about
  * rendering — the 3D view (World3D) reads these fields every frame and draws
- * the kind's model, its animation and the number balls.
+ * the kind's model, its animation and the number balls. An optional `ability`
+ * adds special rules on top of the movement.
  */
 export default class Alien {
   public x: number;
@@ -50,13 +67,17 @@ export default class Alien {
   /** Lethal aliens cost a life at the player line; the drifter is a bonus. */
   public readonly lethal: boolean;
   /** The number the player must type to target this alien. */
-  public readonly result: number;
-  public readonly digits: readonly number[];
-  /** How many numbers this alien carries (2 = easy sum, 3 = harder, …). */
-  public readonly ballCount: number;
+  public result: number;
+  public digits: readonly number[];
+  /** Bumped whenever the sum changes, so the renderer rebuilds the balls. */
+  public sumVersion = 0;
   public readonly bodyKey: string;
   public readonly ballTexture: string;
-  public readonly spawnedAt: number;
+  /** When the current sum appeared (speed bonus); reset when it changes. */
+  public spawnedAt: number;
+  /** Model worn instead of the kind's (ability aliens), else null. */
+  public readonly model: string | null;
+  public readonly ability: Ability | null;
 
   // Readability box around the ball row and body, relative to (x, y).
   public readonly halfW: number;
@@ -74,9 +95,11 @@ export default class Alien {
   /** Horizontal direction for sideways movers (+1 right, -1 left). */
   private dir: 1 | -1;
   /** Center of the sideways sweep (darter lane, strafer patrol). */
-  private readonly laneX: number;
+  private laneX: number;
   private readonly bandY: number;
   private modeLeftMs: number;
+  private glide: Glide | null = null;
+  private holdMs = 0;
 
   constructor(config: AlienConfig) {
     this.kind = config.kind;
@@ -85,21 +108,22 @@ export default class Alien {
     this.y = config.y;
     this.result = config.result;
     this.digits = config.digits;
-    this.ballCount = config.digits.length;
     this.bodyKey = config.bodyKey;
     this.ballTexture = config.ballTexture;
     this.spawnedAt = config.spawnedAt;
+    this.model = config.model ?? null;
+    this.ability = config.ability ?? null;
     this.fallSpeed = config.fallSpeed;
     this.homeSpeed = config.homeSpeed;
     this.laneX = config.x;
     this.bandY = config.bandY ?? 0;
     this.modeLeftMs = config.patrolMs ?? 0;
 
-    const m = MONSTERS[config.kind];
+    const box = (this.model && MODEL_BOXES[this.model]) || MONSTERS[config.kind];
     const ballRowHalf = ((this.ballCount - 1) * ENEMY.BALL_SPACING) / 2 + ENEMY.BALL_RADIUS;
-    this.halfW = Math.max(m.HALF_W, ballRowHalf);
-    this.top = m.BALLS_Y + ENEMY.BALL_RADIUS;
-    this.bottom = m.BOTTOM;
+    this.halfW = Math.max(box.HALF_W, ballRowHalf);
+    this.top = box.BALLS_Y + ENEMY.BALL_RADIUS;
+    this.bottom = box.BOTTOM;
     const lateral =
       config.kind === "darter"
         ? MONSTERS.darter.ZIG_AMPLITUDE
@@ -112,6 +136,11 @@ export default class Alien {
     if (config.kind === "drifter") this.dir = config.x < GAME.WIDTH / 2 ? 1 : -1;
     else this.dir = Math.random() < 0.5 ? 1 : -1;
     this.gait = Math.random() * TAU;
+  }
+
+  /** How many numbers this alien carries (2 = easy sum, 3 = harder, …). */
+  public get ballCount(): number {
+    return this.digits.length;
   }
 
   /**
@@ -146,8 +175,48 @@ export default class Alien {
     return this.dir > 0 ? this.x > GAME.WIDTH + this.halfW : this.x < -this.halfW;
   }
 
-  /** Move one frame according to the alien's kind. */
+  /** Replace the sum (e.g. a shield broke). The caller keeps results unique;
+   * the ball count stays the same, so the readability box does too. */
+  public setSum(digits: number[], result: number, now: number): void {
+    this.digits = digits;
+    this.result = result;
+    this.spawnedAt = now;
+    this.sumVersion++;
+  }
+
+  /**
+   * Ease to (x, y) over `ms`, ignoring the movement pattern until it arrives.
+   * The glide moves in per-frame steps, so the readability rule can still hold
+   * a step back; a sideways glide also recenters the lane it sweeps around.
+   */
+  public glideTo(x: number, y: number, ms: number): void {
+    this.glide = { fromX: this.x, fromY: this.y, toX: x, toY: y, t: 0, ms };
+    this.laneX = x;
+  }
+
+  /** Stay put for `ms` (after any glide) before the pattern resumes. */
+  public hold(ms: number): void {
+    this.holdMs = ms;
+  }
+
+  /** Move one frame according to the alien's kind (or a scripted glide/hold). */
   public advance(delta: number): void {
+    if (this.glide) {
+      const g = this.glide;
+      const ease = (t: number) => 1 - (1 - t / g.ms) ** 3; // ease-out
+      const k0 = ease(g.t);
+      g.t = Math.min(g.t + delta, g.ms);
+      const dk = ease(g.t) - k0;
+      this.x += (g.toX - g.fromX) * dk;
+      this.y += (g.toY - g.fromY) * dk;
+      if (g.t >= g.ms) this.glide = null;
+      return;
+    }
+    if (this.holdMs > 0) {
+      this.holdMs -= delta;
+      return;
+    }
+
     const dt = delta / 1000;
     switch (this.kind) {
       case "darter": {

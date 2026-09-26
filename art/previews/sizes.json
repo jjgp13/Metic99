@@ -1,7 +1,11 @@
 {
+  "alien_blinker": 39.1,
   "alien_darter": 31.1,
   "alien_drifter": 34.9,
   "alien_lumberer": 45.9,
+  "alien_shielded": 32.7,
+  "alien_splitling": 26.8,
+  "alien_splitter": 44.2,
   "alien_strafer": 38.1,
   "ship_dart": 40.0,
   "ship_player": 36.0,
