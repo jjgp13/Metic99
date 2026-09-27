@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { GAME, LEADERBOARD, STORAGE } from "../config/constants";
 import { submitScore } from "../services/leaderboard";
+import { onKeyDown } from "../ui/keyboard";
 
 interface NameEntryData {
   score: number;
@@ -251,7 +252,7 @@ export default class NameEntryScene extends Phaser.Scene {
   }
 
   private bindKeyboard(): void {
-    this.input.keyboard?.on("keydown", (e: KeyboardEvent) => {
+    onKeyDown(this, (e) => {
       if (this.submitting) return;
       if (e.key === "ArrowLeft") this.selectSlot(this.current - 1);
       else if (e.key === "ArrowRight") this.selectSlot(this.current + 1);

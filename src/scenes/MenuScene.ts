@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { GAME, RENDER3D, STORAGE } from "../config/constants";
 import { selectShip, selectedShip } from "../config/ships";
+import { onKeyDown } from "../ui/keyboard";
 
 /**
  * Title / main menu. The first scene the player sees: a ship picker, then PLAY,
@@ -67,7 +68,9 @@ export default class MenuScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
-    this.input.keyboard?.on("keydown-ENTER", () => this.scene.start("GameScene"));
+    onKeyDown(this, (e) => {
+      if (e.key === "Enter") this.scene.start("GameScene");
+    });
   }
 
   /** ◀ ship ▶ carousel; the pick is saved and used by the next run. */
@@ -104,8 +107,10 @@ export default class MenuScene extends Phaser.Scene {
       arrow.on("pointerout", () => arrow.setColor("#4ea1ff"));
       arrow.on("pointerdown", () => step(dir));
     }
-    this.input.keyboard?.on("keydown-LEFT", () => step(-1));
-    this.input.keyboard?.on("keydown-RIGHT", () => step(1));
+    onKeyDown(this, (e) => {
+      if (e.key === "ArrowLeft") step(-1);
+      else if (e.key === "ArrowRight") step(1);
+    });
   }
 
   private makeButton(x: number, y: number, label: string, onClick: () => void): void {
