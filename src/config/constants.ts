@@ -32,6 +32,64 @@ export const SIM = {
   MAX_STEPS_PER_FRAME: 8,
 } as const;
 
+/**
+ * Bot players (src/sim/Bot.ts, docs/MULTIPLAYER_DESIGN.md §7). A bot solves
+ * like a person: notice an alien (REACTION), work out the sum (THINK_BASE +
+ * PER_BALL per ball + PER_CARRY per carry, spread log-normally by NOISE), type
+ * it (PER_KEY per digit), and sometimes get it wrong (ERROR_RATE: off by 1 or
+ * 10), noticing after NOTICE_WRONG. FOCUS = chance it goes for the most
+ * dangerous alien rather than any readable one, and that it drops what it is
+ * thinking about when a clearly worse threat appears. Times in ms of game time.
+ */
+export const BOT = {
+  LEVELS: {
+    rookie: {
+      REACTION: 900,
+      THINK_BASE: 400,
+      PER_BALL: 700,
+      PER_CARRY: 500,
+      NOISE: 0.35,
+      PER_KEY: 250,
+      ERROR_RATE: 0.12,
+      NOTICE_WRONG: 700,
+      FOCUS: 0.6,
+    },
+    pilot: {
+      REACTION: 600,
+      THINK_BASE: 250,
+      PER_BALL: 450,
+      PER_CARRY: 300,
+      NOISE: 0.3,
+      PER_KEY: 180,
+      ERROR_RATE: 0.06,
+      NOTICE_WRONG: 500,
+      FOCUS: 0.85,
+    },
+    ace: {
+      REACTION: 350,
+      THINK_BASE: 150,
+      PER_BALL: 250,
+      PER_CARRY: 120,
+      NOISE: 0.25,
+      PER_KEY: 110,
+      ERROR_RATE: 0.02,
+      NOTICE_WRONG: 300,
+      FOCUS: 0.98,
+    },
+  },
+  // A mistake is off by 10 this often (else off by 1).
+  TENS_SLIP: 0.3,
+  // A strafer about to dive counts as this many px closer when picking targets.
+  DIVE_DANGER_PX: 200,
+  // While still thinking, a newly seen alien this much more dangerous (px)
+  // makes the bot switch to it (with chance FOCUS), dropping its thinking.
+  SWITCH_MARGIN_PX: 120,
+  // Balls hidden more than this (Blinker lids) can't be read.
+  MAX_READ_COVER: 0.5,
+} as const;
+
+export type BotLevel = keyof typeof BOT.LEVELS;
+
 export const BULLET = {
   SPEED: 700, // px/sec upward
   MUZZLE_OFFSET: 24, // px above the ship where bullets spawn

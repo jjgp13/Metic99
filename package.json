@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "bots": "vite-node scripts/bot-report.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.106.2",

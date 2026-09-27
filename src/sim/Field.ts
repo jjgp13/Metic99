@@ -69,6 +69,12 @@ export type FieldEvent =
   | { type: "hit"; alien: Alien; livesLeft: number }
   | { type: "knockedOut" };
 
+/** One kill: how many balls its sum had and how long it took (spawn → hit). */
+export interface Solve {
+  balls: number;
+  ms: number;
+}
+
 export interface FieldOptions {
   seed: number;
   /** Lives for this run (solo: PLAYER.LIVES; battle: 1). */
@@ -114,6 +120,8 @@ export class Field {
   kills = 0;
   bestCombo = 0;
   fastestSolveMs = Infinity;
+  /** Every kill's solve time (spawn → hit), to compare players and bots. */
+  readonly solves: Solve[] = [];
 
   readonly energy = new EnergyMeter();
   readonly slowTime = new SlowTime();
@@ -357,6 +365,7 @@ export class Field {
     if (!absorbed) {
       this.kills += 1;
       this.fastestSolveMs = Math.min(this.fastestSolveMs, solveMs);
+      this.solves.push({ balls: digits.length, ms: solveMs });
     }
 
     const abilityMult = !absorbed && alien.ability ? ABILITY.SCORE_MULT[alien.ability.kind] : 1;

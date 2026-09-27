@@ -23,7 +23,9 @@ import {
   type FieldEvent,
   type FieldInput,
 } from "../sim/Field";
+import { Bot } from "../sim/Bot";
 import { randomSeed } from "../sim/rng";
+import { summarizeSolves } from "../sim/stats";
 import { inputMode, setInputMode } from "../config/inputMode";
 import type { InkEvent } from "../handwriting/inkReader";
 import DrawPad from "../ui/DrawPad";
@@ -58,6 +60,8 @@ const ANSWER_Y = PLAYER.Y + 36;
 export default class GameScene extends Phaser.Scene {
   private world!: World3D;
   private field!: Field;
+  /** Dev only (`?bot=ace`): a bot plays this field through the same inputs. */
+  private autopilot: Bot | null = null;
   /** Real time not yet simulated; the sim runs in whole SIM.STEP_MS steps. */
   private stepAccMs = 0;
   private typedText!: Phaser.GameObjects.Text;
@@ -159,6 +163,11 @@ export default class GameScene extends Phaser.Scene {
       if (kinds?.length) forcedAbilities = kinds;
     }
     this.field = new Field({ seed, forcedAbilities });
+    this.autopilot = null;
+    if (import.meta.env.DEV) {
+      const level = new URLSearchParams(window.location.search).get("bot") ?? "";
+      if (Bot.isLevel(level)) this.autopilot = Bot.forSeat(level, seed);
+    }
   }
 
   update(time: number, delta: number): void {
@@ -203,6 +212,7 @@ export default class GameScene extends Phaser.Scene {
 
   /** One fixed sim step, then show what happened in it. */
   private step(dt: number): void {
+    this.autopilot?.update(this.field, dt);
     this.field.step(dt);
     for (const e of this.field.takeEvents()) this.show(e);
   }
@@ -452,6 +462,17 @@ export default class GameScene extends Phaser.Scene {
         color: "#ffd166",
       })
       .setDepth(HUD_DEPTH);
+
+    if (this.autopilot) {
+      this.add
+        .text(GAME.WIDTH - 12, 62, `AUTOPILOT: ${this.autopilot.level.toUpperCase()}`, {
+          fontFamily: "monospace",
+          fontSize: "12px",
+          color: "#5ef0ff",
+        })
+        .setOrigin(1, 0.5)
+        .setDepth(HUD_DEPTH);
+    }
 
     // Pause button (also bound to the P key).
     const pauseBtn = this.add
@@ -841,6 +862,15 @@ export default class GameScene extends Phaser.Scene {
     this.gameOver = true;
     this.reticle.clear();
     this.pad.setEnabled(false);
+    if (import.meta.env.DEV) {
+      // Calibrate the bots against your own play: compare with `npm run bots`.
+      const who = this.autopilot ? `bot ${this.autopilot.level}` : "you";
+      console.info(
+        `[metic] ${who}: survived ${Math.round(this.field.elapsedMs / 1000)} s, ` +
+          `score ${this.field.score}, ${this.field.kills} kills. Solve times by ball count:`,
+      );
+      console.table(summarizeSolves(this.field.solves));
+    }
 
     // Merge this run into the persistent mastery stats.
     const num = (k: string) => Number(localStorage.getItem(k) ?? 0);

@@ -40,6 +40,8 @@ loop. See the Decision Log.
 - **TypeScript** — strict mode.
 - **Vitest** — unit tests for Phaser-free logic (`src/**/*.test.ts`, `npm test`).
 - Node.js LTS required. `npm install` → `npm run dev` (port 5173) → `npm run build`.
+  `npm run bots` plays every bot level headless and prints a report
+  (`scripts/bot-report.ts`; `-- --lives 1 --seeds 20 --minutes 5`).
 
 ## Project layout
 
@@ -87,6 +89,9 @@ src/
                       fired, solved, hit, knockedOut).
     Swarm.ts          The aliens inside a Field: game clock, seeded spawners,
                       movement + readability guard, AbilityHost.
+    Bot.ts            Bot player: reads only what's on screen, acts only via
+                      `field.apply()`; skill levels in `BOT` (rookie/pilot/ace).
+    stats.ts          Solve-time summaries (players vs bots calibration).
   objects/
     Alien.ts          Pure alien state (x/y, digits, result, `kind`) + per-kind
                       movement patterns and readability box; no rendering.
@@ -365,6 +370,15 @@ Green=multiplication, Yellow=division.
   (digits, back, clear, power) and fixed steps. Every input is logged with
   its step (`field.inputLog`), so `replayField(seed, log)` rebuilds the exact
   run. Dev console: `__metic.game.scene.getScene("GameScene").field.inputLog`.
+- **Bots** (`src/sim/Bot.ts`, `BOT`): notice (reaction) → think (base + per
+  ball + per carry, log-normal spread) → type the whole answer at once;
+  slips (off by 1/10) at `ERROR_RATE`, noticed and cleared after
+  `NOTICE_WRONG`. They go for the most dangerous readable alien (chance
+  `FOCUS`), can't read shut Blinker lids, start the next sum while a shot
+  flies, and drop a sum mid-thought when a clearly worse threat appears.
+  Seeded per seat (`Bot.forSeat`). No powers yet (M4). Dev: `?bot=ace` puts a
+  bot on autopilot on your field; at game over the console prints your (or
+  the bot's) solve times by ball count to compare with `npm run bots`.
 - **Keyboard:** raw key listeners use `onKeyDown` (`src/ui/keyboard.ts`).
   Phaser 3.90 re-delivers earlier keys when several arrive in one frame
   ("12" → "112", FREEZE toggled twice); the helper drops repeats.
@@ -499,7 +513,8 @@ curve is in `src/config/difficulty.ts` (`difficultyAt(elapsedMs, score)`).
        written down, [x] M1 seeded random numbers + game clock, [x] M2a
        Phaser-free `Field` (aliens, spawning, readability) + fixed timestep,
        [x] M2b ship/combat/scoring/lives/energy/input into the sim (input log
-       + exact replay), [ ] M3 bots, [ ] M5+ match, send.
+       + exact replay), [x] M3 bot v1 (solving, 3 skill levels, `?bot=`,
+       `npm run bots`), [ ] M4 bot powers, [ ] M5+ match, send.
 
 ## Conventions
 
@@ -523,6 +538,16 @@ curve is in `src/config/difficulty.ts` (`difficultyAt(elapsedMs, score)`).
 ## Decision Log
 
 Newest first. Format: `YYYY-MM-DD — decision — rationale`.
+
+- **2026-09-27 — Bot v1: human-like solver on the real inputs (battle royale
+  M3).** Bots see only the screen and act only through `field.apply()`, so
+  they can't cheat and replay exactly. Three levels from the design table.
+  Simulation findings (8 seeds, no powers): rookie/pilot/ace survive ~90/110/
+  105 s with 3 lives (~55/70/70 s with 1); aces earn difficulty by scoring,
+  so skill shows as score (3k/10k/27k), not survival. Half of ace deaths were
+  splitlings: two full-speed darters mid-field ≈ 1.6 s for two sums. Slower
+  splitlings (70%) gave aces +10 s; left for the owner to decide. Bots
+  interrupt a sum for a much worse threat (like people do).
 
 - **2026-09-27 — The whole field is sim, driven by inputs (battle royale
   M2b).** Ship, bullets, targeting, the typed answer (incl. wrong auto-clear),

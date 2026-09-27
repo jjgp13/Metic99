@@ -145,6 +145,18 @@ the agreed shape.
   when high, off when it passes; otherwise bank energy and SEND above a
   personality threshold (aggressive vs turtle).
 - Each bot draws from its own seeded stream, so a match replays exactly.
+- **Built (M3):** `src/sim/Bot.ts`, levels in `BOT` (constants). Beyond the
+  table: a strafer about to dive counts as more dangerous, drifters come
+  last, shut Blinker lids can't be read, and mid-thought the bot drops its
+  sum for a newly seen alien ≥ `SWITCH_MARGIN_PX` more dangerous (chance
+  `FOCUS`, once per newcomer). `npm run bots` prints survival, score, slips
+  and solve times per level; `?bot=ace` (dev) plays your own field.
+- **What the first simulations showed** (no powers yet): all levels die
+  within ~2 min (~1 min with one life) once difficulty passes ~0.75, so
+  SLOW/FREEZE timing is the survival skill, as intended. Skill shows as
+  score (aces earn difficulty faster). Splitlings were half of ace deaths
+  (two full-speed darters mid-field); slowing them to the splitter's 70%
+  bought aces ~10 s. Open question for the owner.
 
 ## 8. Shared sim (what makes it server-ready)
 
@@ -218,7 +230,7 @@ but marked as such.
 | M1 | Game clock + seeded random numbers in solo play | Rng unit tests; same `?seed` → same aliens in the browser | done 2026-09-27 |
 | M2a | Extract `Field` (spawning, movement, readability) + fixed timestep | Solo unchanged; headless soak: no box overlaps | done 2026-09-27 |
 | M2b | Combat, energy, abilities, input into `Field`; events out | Same seed + inputs → same state hash | done 2026-09-27 |
-| M3 | Bot v1 (solving) + dev autopilot `?bot=ace` on your own field | Survival per skill level; calibrate vs your solve times | |
+| M3 | Bot v1 (solving) + dev autopilot `?bot=ace` on your own field | Survival per skill level; calibrate vs your solve times | done 2026-09-27 |
 | M4 | Bot energy policy (SLOW/FREEZE) | Headless A/B: survival with vs without powers | |
 | M5 | `Match` with N fields: KOs, placement, `dMatch`, match end | 16 headless bots: the match always ends | |
 | M6 | SEND + incoming queue + cancel; SEND button + incoming meter | Cancel math; sent aliens pass the readability soak | |
