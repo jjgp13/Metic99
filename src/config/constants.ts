@@ -391,6 +391,30 @@ export const SLOW_TIME = {
   MIN_START: 10, // energy needed to switch either on (stops tap-flicker at empty)
 } as const;
 
+/**
+ * Answer feedback: what the player sees while typing. The typed number turns
+ * gold when it matches an alien (which gets lock-on brackets) and red when no
+ * alien's answer can start with it (then it clears itself). The answer stays
+ * shown until its alien dies, which pops the solved sum ("7 + 5 = 12").
+ */
+export const FEEDBACK = {
+  COLOR: { typing: "#ffffff", match: "#ffd166", wrong: "#ef476f" },
+  MATCH_POP_SCALE: 1.5, // typed number pops from this scale on a match
+  MATCH_POP_MS: 180,
+  WRONG_SHAKE_PX: 8,
+  WRONG_CLEAR_MS: 450, // a wrong answer clears itself after this long
+  FLY_MS: 240, // a matched number flies from the display to its alien
+  RETICLE: {
+    COLOR: 0xffd166,
+    PAD: 5, // px around the alien's box (ball row + body)
+    ARM: 9, // corner bracket arm length
+    WIDTH: 3,
+    SNAP_FROM: 1.8, // brackets start this much wider and snap in
+    SNAP_MS: 160,
+  },
+  EQUATION: { FONT_PX: 18, POP_MS: 150, HOLD_MS: 450, FADE_MS: 850, RISE_PX: 34 },
+} as const;
+
 /** Number ball colors map to future math operations (sum/sub/mul/div). */
 export const BALL_COLOR = {
   SUM: "blueBalls",
@@ -505,6 +529,29 @@ export const RENDER3D = {
   STAR_NEAR_Z: -80,
   STAR_FAR_Z: -2600,
   STAR_DRIFT: 45, // world px/s; farther stars *look* slower (true parallax)
+
+  // Answer stars (render3d/AnswerStars.ts): a pool of background stars that
+  // gather into the typed answer behind the field, then burst when it's solved.
+  // Kept dim and deep so the number balls stay the most readable thing.
+  ANSWER_STARS: {
+    COUNT: 170, // pool size; the ones not in the number drift as normal stars
+    Z: -500, // depth of the pool (behind every alien)
+    CENTER_Y: 250, // logical y the number is centered on
+    DIGIT_H: 120, // logical px: digit glyph height
+    DIGIT_ADVANCE: 88, // logical px between two digits' centers
+    SAMPLE_PX: 7, // glyph sampling grid (logical px)
+    MAX_PER_DIGIT: 48, // stars per digit
+    GATHER_RATE: 16, // 1/s: how fast stars fly into the shape (~150 ms)
+    // Point sizes as PointsMaterial counts them (like the starfield): at Z, a
+    // size of 5 is about 1 logical px.
+    SIZE_IDLE: 4,
+    SIZE_FORMED: 28,
+    BRIGHTNESS: 0.7, // formed star color multiplier (dim = background)
+    COLORS: { typing: 0xbfd4ff, match: 0xffd166, wrong: 0xef476f },
+    BURST_SPEED: { min: 250, max: 650 }, // world px/s outward when solved
+    SCATTER_SPEED: { min: 60, max: 160 }, // wrong answer: a small, sad scatter
+    FADE_RATE: 2, // 1/s: released stars fade back to plain stars
+  },
 
   DEBRIS_COUNT: 22,
   DEBRIS_SIZE: 3,

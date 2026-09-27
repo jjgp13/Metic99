@@ -4,6 +4,7 @@ import {
   BULLET,
   DIFFICULTY,
   ENEMY,
+  FEEDBACK,
   GAME,
   MONSTERS,
   PLAYER,
@@ -27,6 +28,7 @@ import {
 } from "../objects/abilities";
 import type { Bullet } from "../objects/Bullet";
 import World3D, { getWorld3D } from "../render3d/World3D";
+import type { AnswerState, AnswerView } from "../render3d/AnswerStars";
 import { selectedShip } from "../config/ships";
 import { EnergyMeter, SlowTime, energyForKill } from "../sim/energy";
 
@@ -69,6 +71,14 @@ export default class GameScene extends Phaser.Scene implements AbilityHost {
 
   private typed = "";
   private typedText!: Phaser.GameObjects.Text;
+  /** What the answer display shows (typed number or the locked answer). */
+  private answer: AnswerView | null = null;
+  /** Counts down while the typed answer is wrong; at 0 it clears itself. */
+  private wrongLeftMs = 0;
+  /** Lock-on brackets around the current target. */
+  private reticle!: Phaser.GameObjects.Graphics;
+  private reticleTarget: Alien | null = null;
+  private reticleAge = 0;
   private scoreText!: Phaser.GameObjects.Text;
   private score = 0;
   private lives: number = PLAYER.LIVES;
@@ -156,6 +166,10 @@ export default class GameScene extends Phaser.Scene implements AbilityHost {
     this.lockedTarget = null;
     this.lockedBullet = null;
     this.typed = "";
+    this.answer = null;
+    this.wrongLeftMs = 0;
+    this.reticleTarget = null;
+    this.reticleAge = 0;
     this.score = 0;
     this.lives = PLAYER.LIVES;
     this.lifeIcons = [];
@@ -199,6 +213,7 @@ export default class GameScene extends Phaser.Scene implements AbilityHost {
         aliens: this.aliens,
         bullets: this.bullets,
         aliensHidden: this.paused,
+        answer: this.paused || this.gameOver ? null : this.answer,
       },
       time,
       delta,
@@ -295,6 +310,14 @@ export default class GameScene extends Phaser.Scene implements AbilityHost {
     // Drop killed aliens and spent bullets; the 3D view removes their meshes.
     this.aliens = this.aliens.filter((a) => a.active);
     this.bullets = this.bullets.filter((b) => b.active);
+
+    // Aliens come and go, so an answer can turn right or wrong without a key.
+    this.refreshAnswer();
+    if (this.answer?.state === "wrong") {
+      this.wrongLeftMs -= delta;
+      if (this.wrongLeftMs <= 0) this.setTyped("");
+    }
+    this.drawReticle(delta);
 
     this.updateEnergyHud();
   }
@@ -617,12 +640,13 @@ export default class GameScene extends Phaser.Scene implements AbilityHost {
     this.bullets.push(bullet);
     this.sound.play("shoot", { volume: 0.4 });
     // Clear the typed answer once we have committed to a shot, but keep the
-    // target LOCKED so it keeps fleeing until a bullet actually destroys it.
-    this.setTyped("");
+    // target LOCKED until a bullet actually destroys it. Lock first, so the
+    // display goes straight on showing the locked answer.
     if (target && target.active) {
       this.lockedTarget = target;
       this.lockedBullet = bullet;
     }
+    this.setTyped("");
 
     // If the locked target sits at/below the muzzle, an upward bullet can't
     // reach it, so resolve the hit point-blank to guarantee the kill.
@@ -656,6 +680,7 @@ export default class GameScene extends Phaser.Scene implements AbilityHost {
     this.sound.play("explode", { volume: 0.3, rate: 1.6 });
     this.addScore(this.computeScore(solved.digits.length, solved.solveMs), alien.x, alien.y);
     this.addEnergy(energyForKill({ ...solved, combo: this.combo }));
+    this.popEquation(solved.digits, alien);
     if (this.lockedTarget === alien) {
       this.lockedTarget = null;
       this.lockedBullet = null;
@@ -680,6 +705,7 @@ export default class GameScene extends Phaser.Scene implements AbilityHost {
 
     this.explode(alien);
     this.addScore(points, alien.x, alien.y);
+    this.popEquation(alien.digits, alien);
     // The bonus drifter adds its burst on top of the normal kill energy.
     const burst = alien.lethal ? 0 : MONSTERS.drifter.ENERGY_BURST;
     this.addEnergy(energyForKill({ digits: alien.digits, solveMs, combo: this.combo }) + burst);
@@ -729,6 +755,39 @@ export default class GameScene extends Phaser.Scene implements AbilityHost {
   private onAlienEscaped(alien: Alien): void {
     this.enemiesInField.delete(alien.result);
     alien.kill();
+  }
+
+  /**
+   * Show the solved sum ("7 + 5 = 12") above the alien, and burst the answer's
+   * background stars: a clear "that was right" beat that also teaches the sum.
+   */
+  private popEquation(digits: readonly number[], alien: Alien): void {
+    const E = FEEDBACK.EQUATION;
+    const result = digits.reduce((s, d) => s + d, 0);
+    this.world.answerSolved(String(result));
+    const y = alien.y - alien.top - 12;
+    const text = this.add
+      .text(alien.x, y, `${digits.join(" + ")} = ${result}`, {
+        fontFamily: "monospace",
+        fontSize: `${E.FONT_PX}px`,
+        fontStyle: "bold",
+        color: FEEDBACK.COLOR.match,
+        stroke: "#05060f",
+        strokeThickness: 4,
+      })
+      .setOrigin(0.5)
+      .setDepth(5);
+    const half = text.width / 2 + 4;
+    text.setX(Phaser.Math.Clamp(alien.x, half, GAME.WIDTH - half)).setScale(1.4);
+    this.tweens.add({ targets: text, scale: 1, duration: E.POP_MS, ease: "Back.easeOut" });
+    this.tweens.add({
+      targets: text,
+      y: y - E.RISE_PX,
+      alpha: 0,
+      delay: E.HOLD_MS,
+      duration: E.FADE_MS,
+      onComplete: () => text.destroy(),
+    });
   }
 
   /** Label the drifter's energy burst where it was solved (the meter pops too). */
@@ -799,6 +858,7 @@ export default class GameScene extends Phaser.Scene implements AbilityHost {
     this.paused = !this.paused;
 
     // The 3D view hides the aliens while paused (see update()).
+    this.reticle.setVisible(!this.paused);
     if (this.paused) {
       this.typedText.setVisible(false);
 
@@ -857,10 +917,14 @@ export default class GameScene extends Phaser.Scene implements AbilityHost {
       .text(GAME.WIDTH / 2, PLAYER.Y + 36, "_", {
         fontFamily: "monospace",
         fontSize: "32px",
-        color: "#4ea1ff",
+        fontStyle: "bold",
+        color: FEEDBACK.COLOR.typing,
       })
       .setOrigin(0.5)
       .setDepth(HUD_DEPTH);
+
+    // Under the HUD, over the (3D) field.
+    this.reticle = this.add.graphics().setDepth(4);
 
     // Combo / streak multiplier indicator.
     this.comboText = this.add
@@ -1074,7 +1138,125 @@ export default class GameScene extends Phaser.Scene implements AbilityHost {
 
   private setTyped(value: string): void {
     this.typed = value;
-    this.typedText.setText(value === "" ? "_" : value);
+    this.refreshAnswer();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Answer feedback: the display, the lock-on brackets, the flying number
+  // ---------------------------------------------------------------------------
+  /** The typed number and how it reads; with nothing typed, the locked answer
+   * stays shown (gold) until its alien is destroyed. */
+  private answerView(): AnswerView | null {
+    if (this.typed !== "") return { text: this.typed, state: this.typedState() };
+    const lock = this.lockedTarget;
+    return lock?.active ? { text: String(lock.result), state: "match" } : null;
+  }
+
+  /** match = an alien has this answer; typing = one could still (a longer
+   * answer starts with it); wrong = no alien's answer can. */
+  private typedState(): AnswerState {
+    if (this.enemiesInField.has(parseInt(this.typed, 10))) return "match";
+    const canGrow =
+      this.typed.length < 2 &&
+      [...this.enemiesInField.keys()].some((r) => String(r).startsWith(this.typed));
+    return canGrow ? "typing" : "wrong";
+  }
+
+  /** Recompute the answer and react when its text or state changes. */
+  private refreshAnswer(): void {
+    const view = this.answerView();
+    const prev = this.answer;
+    this.answer = view;
+    if (view?.text === prev?.text && view?.state === prev?.state) return;
+
+    const state = view?.state ?? "typing";
+    this.tweens.killTweensOf(this.typedText);
+    this.typedText
+      .setText(view?.text ?? "_")
+      .setColor(FEEDBACK.COLOR[state])
+      .setScale(1)
+      .setX(GAME.WIDTH / 2);
+
+    if (state === "match" && this.typed !== "") {
+      this.sound.play("blip", { volume: 0.35, rate: 1.5 });
+      this.typedText.setScale(FEEDBACK.MATCH_POP_SCALE);
+      this.tweens.add({
+        targets: this.typedText,
+        scale: 1,
+        duration: FEEDBACK.MATCH_POP_MS,
+        ease: "Back.easeOut",
+      });
+      const alien = this.enemiesInField.get(parseInt(this.typed, 10));
+      if (alien) this.flyAnswer(this.typed, alien);
+    } else if (state === "wrong") {
+      this.sound.play("blip", { volume: 0.4, rate: 0.5 });
+      this.wrongLeftMs = FEEDBACK.WRONG_CLEAR_MS;
+      this.tweens.add({
+        targets: this.typedText,
+        x: GAME.WIDTH / 2 + FEEDBACK.WRONG_SHAKE_PX,
+        duration: 45,
+        yoyo: true,
+        repeat: 2,
+        ease: "Sine.easeInOut",
+      });
+    }
+  }
+
+  /** A matched number flies from the display up to its alien. */
+  private flyAnswer(text: string, alien: Alien): void {
+    const fly = this.add
+      .text(this.typedText.x, this.typedText.y, text, {
+        fontFamily: "monospace",
+        fontSize: "32px",
+        fontStyle: "bold",
+        color: FEEDBACK.COLOR.match,
+        stroke: "#05060f",
+        strokeThickness: 4,
+      })
+      .setOrigin(0.5)
+      .setDepth(5);
+    this.tweens.add({
+      targets: fly,
+      x: alien.x,
+      y: alien.y - alien.top,
+      scale: 0.5,
+      alpha: 0.2,
+      duration: FEEDBACK.FLY_MS,
+      ease: "Cubic.easeIn",
+      onComplete: () => fly.destroy(),
+    });
+  }
+
+  /** Corner brackets around the target's box; they snap in when it is acquired. */
+  private drawReticle(delta: number): void {
+    const a = this.target?.active ? this.target : null;
+    if (a !== this.reticleTarget) {
+      this.reticleTarget = a;
+      this.reticleAge = 0;
+    }
+    this.reticle.clear();
+    if (!a) return;
+    this.reticleAge += delta;
+    const R = FEEDBACK.RETICLE;
+    const t = Math.min(1, this.reticleAge / R.SNAP_MS);
+    const grow = 1 + (R.SNAP_FROM - 1) * (1 - t) * (1 - t);
+    const top = a.y - a.top - R.PAD;
+    const bottom = a.y + a.bottom + R.PAD;
+    const cy = (top + bottom) / 2;
+    const hw = (a.halfW + R.PAD) * grow;
+    const hh = ((bottom - top) / 2) * grow;
+    this.reticle.lineStyle(R.WIDTH, R.COLOR, 0.4 + 0.6 * t);
+    for (const sx of [-1, 1]) {
+      for (const sy of [-1, 1]) {
+        const x = a.x + sx * hw;
+        const y = cy + sy * hh;
+        this.reticle.beginPath();
+        this.reticle.moveTo(x - sx * R.ARM, y);
+        this.reticle.lineTo(x, y);
+        this.reticle.lineTo(x, y - sy * R.ARM);
+        this.reticle.strokePath();
+      }
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -1082,6 +1264,7 @@ export default class GameScene extends Phaser.Scene implements AbilityHost {
   // ---------------------------------------------------------------------------
   private endGame(): void {
     this.gameOver = true;
+    this.reticle.clear();
 
     // Merge this run into the persistent mastery stats.
     const num = (k: string) => Number(localStorage.getItem(k) ?? 0);
