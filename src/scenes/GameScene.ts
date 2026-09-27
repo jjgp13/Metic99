@@ -915,13 +915,20 @@ export default class GameScene extends Phaser.Scene {
       })
       .setOrigin(0.5)
       .setDepth(11);
+    // This run's pace, to compare with the bots (`npm run bots`).
+    const secs = Math.floor(f.elapsedMs / 1000);
+    const survived = `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}`;
+    const medians = summarizeSolves(f.solves)
+      .map((s) => `${s.balls} balls ${s.median.toFixed(1)}s`)
+      .join(" · ");
     this.add
       .text(
         GAME.WIDTH / 2,
-        GAME.HEIGHT / 2 + 20,
+        GAME.HEIGHT / 2 + 24,
         `Score: ${f.score}    Best: ${best}\n` +
           `Best combo: ${bestCombo}    Kills: ${totalKills}\n` +
-          `Fastest solve: ${fastestStr}\n` +
+          `Survived ${survived}    Fastest solve: ${fastestStr}\n` +
+          `Median solve: ${medians || "—"}\n` +
           `Energy earned ${Math.round(f.energy.earned)} · used ` +
           `${Math.round(f.energy.spent.slow)} slow, ${Math.round(f.energy.spent.freeze)} freeze`,
         { fontFamily: "monospace", fontSize: "16px", color: "#ffffff", align: "center", lineSpacing: 8 },
@@ -932,7 +939,7 @@ export default class GameScene extends Phaser.Scene {
       ? "tap / Enter to enter initials"
       : "tap / Enter to play again";
     this.add
-      .text(GAME.WIDTH / 2, GAME.HEIGHT / 2 + 96, continueText, {
+      .text(GAME.WIDTH / 2, GAME.HEIGHT / 2 + 118, continueText, {
         fontFamily: "monospace",
         fontSize: "16px",
         color: "#4ea1ff",

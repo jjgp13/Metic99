@@ -379,6 +379,8 @@ Green=multiplication, Yellow=division.
   Seeded per seat (`Bot.forSeat`). No powers yet (M4). Dev: `?bot=ace` puts a
   bot on autopilot on your field; at game over the console prints your (or
   the bot's) solve times by ball count to compare with `npm run bots`.
+  The GAME OVER screen also shows the run's survival time and median solve
+  time per ball count, so a phone playtest can be compared with the bots.
 - **Keyboard:** raw key listeners use `onKeyDown` (`src/ui/keyboard.ts`).
   Phaser 3.90 re-delivers earlier keys when several arrive in one frame
   ("12" → "112", FREEZE toggled twice); the helper drops repeats.
