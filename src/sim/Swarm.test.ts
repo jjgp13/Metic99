@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { SIM } from "../config/constants";
 import type Alien from "../objects/Alien";
 import { ABILITY_KINDS, type AbilityKind } from "../objects/abilities";
-import { Field } from "./Field";
+import { Swarm } from "./Swarm";
 
 const STEP = SIM.STEP_MS;
 
@@ -17,11 +17,11 @@ interface PlayStats {
 }
 
 /**
- * A scripted player standing in for GameScene: it takes the lowest visible
+ * A scripted player standing in for Field: it takes the lowest visible
  * alien, "thinks" (longer for more balls), types the answer (the target then
  * holds still while the ship lines up), and a moment later the shot lands.
  */
-function play(field: Field, minutes: number): PlayStats {
+function play(field: Swarm, minutes: number): PlayStats {
   const stats: PlayStats = {
     steps: Math.round((minutes * 60_000) / STEP),
     kills: 0,
@@ -73,16 +73,16 @@ function play(field: Field, minutes: number): PlayStats {
 }
 
 /** Everything about the field's aliens, to compare two runs exactly. */
-function fingerprint(field: Field): string {
+function fingerprint(field: Swarm): string {
   return JSON.stringify(
     field.aliens.map((a) => [a.kind, a.digits, a.x, a.y, a.mode, a.ability?.kind ?? null]),
   );
 }
 
-describe("Field", () => {
+describe("Swarm", () => {
   it("keeps every ball row readable (soak: 3 seeds × 8 simulated minutes)", () => {
     for (const seed of [1, 2, 3]) {
-      const stats = play(new Field({ seed }), 8);
+      const stats = play(new Swarm({ seed }), 8);
       expect(stats.overlapSteps, `seed ${seed}`).toBe(0);
       expect(stats.kills).toBeGreaterThan(100);
       expect([...stats.kinds].sort()).toEqual(["darter", "drifter", "lumberer", "strafer"]);
@@ -90,7 +90,7 @@ describe("Field", () => {
   });
 
   it("keeps ability aliens readable too (every spawn forced to an ability)", () => {
-    const field = new Field({ seed: 4, forcedAbilities: [...ABILITY_KINDS] });
+    const field = new Swarm({ seed: 4, forcedAbilities: [...ABILITY_KINDS] });
     const stats = play(field, 8);
     expect(stats.overlapSteps).toBe(0);
     expect([...stats.abilities].sort()).toEqual([...ABILITY_KINDS].sort());
@@ -99,20 +99,20 @@ describe("Field", () => {
   });
 
   it("replays exactly: same seed + same inputs → same field", () => {
-    const a = new Field({ seed: 42 });
-    const b = new Field({ seed: 42 });
+    const a = new Swarm({ seed: 42 });
+    const b = new Swarm({ seed: 42 });
     play(a, 3);
     play(b, 3);
     expect(fingerprint(a)).toBe(fingerprint(b));
     expect(a.aliens.length).toBeGreaterThan(0);
 
-    const other = new Field({ seed: 43 });
+    const other = new Swarm({ seed: 43 });
     play(other, 3);
     expect(fingerprint(other)).not.toBe(fingerprint(a));
   });
 
   it("runs the game clock in steps and freezes aliens at speed 0", () => {
-    const field = new Field({ seed: 5 });
+    const field = new Swarm({ seed: 5 });
     for (let i = 0; i < 60; i++) field.step(STEP, { score: 0, speed: 1, held: null, locked: null });
     expect(field.elapsedMs).toBeCloseTo(60 * STEP);
     expect(field.aliens.length).toBeGreaterThan(0);
@@ -124,7 +124,7 @@ describe("Field", () => {
   });
 
   it("frees an alien's answer when it is removed", () => {
-    const field = new Field({ seed: 6 });
+    const field = new Swarm({ seed: 6 });
     field.step(STEP, { score: 0, speed: 1, held: null, locked: null });
     const [alien] = field.aliens;
     expect(field.alienFor(alien.result)).toBe(alien);

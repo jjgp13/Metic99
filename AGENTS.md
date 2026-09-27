@@ -57,9 +57,9 @@ src/
     BootScene.ts      Preloads assets; defers animations (static frames for now)
     MenuScene.ts      Title screen: ship picker + PLAY / HOW TO PLAY / SCORES
     HowToPlayScene.ts Static rules screen reached from the menu
-    GameScene.ts      Steps the Field at a fixed 60 Hz and owns the rest of the
-                      loop: input, targeting, ship, bullets, scoring, energy,
-                      HUD. Hands World3D a snapshot every frame.
+    GameScene.ts      Turns keypad/keyboard/pad into Field inputs, steps the
+                      Field at a fixed 60 Hz, and shows its events (sounds,
+                      HUD, pops). Hands World3D a snapshot every frame.
     NameEntryScene.ts Arcade 5-char initials entry shown at game over
     LeaderboardScene.ts Global top-N board; dual-mode (post-run / menu browse)
   services/
@@ -73,15 +73,20 @@ src/
     handwriting.test.ts
   ui/
     DrawPad.ts        The drawing pad: pointer capture, glowing ink, "?" flash
+    keyboard.ts       `onKeyDown`: each key press delivered once (Phaser bug)
   sim/
     energy.ts         Phaser-free energy rules: energyForKill, EnergyMeter
                       (charge/spend/drain per spender), SlowTime (SLOW / FREEZE powers).
                       Kept pure so a future server sim can share it.
     rng.ts            Seeded random numbers (mulberry32 `Rng`, `derive` for
                       keyed streams, `SpawnStreams` keyed by spawn number).
-    Field.ts          One player's field, Phaser-free: aliens, game clock,
-                      seeded spawners, readability guard, AbilityHost. Driven
-                      by `step(dt, ctx)`; emits events (spawned, reachedPlayer).
+    Field.ts          One player's whole field, Phaser-free: ship, bullets,
+                      typed answer, targeting, score, lives, energy, powers.
+                      Changes only via `apply(input)` + `step(dt)`, logs inputs
+                      (`inputLog`, `replayField`), emits events (spawned,
+                      fired, solved, hit, knockedOut).
+    Swarm.ts          The aliens inside a Field: game clock, seeded spawners,
+                      movement + readability guard, AbilityHost.
   objects/
     Alien.ts          Pure alien state (x/y, digits, result, `kind`) + per-kind
                       movement patterns and readability box; no rendering.
@@ -356,6 +361,13 @@ Green=multiplication, Yellow=division.
   drifters), so the same seed and inputs roll the same aliens. Rule timings
   (solve time, fire cooldown) read the game clock `elapsedMs`, which stops
   while paused. Dev: the seed is logged; `?seed=123` replays it.
+- **Inputs, not state:** the field changes only through `FieldInput`s
+  (digits, back, clear, power) and fixed steps. Every input is logged with
+  its step (`field.inputLog`), so `replayField(seed, log)` rebuilds the exact
+  run. Dev console: `__metic.game.scene.getScene("GameScene").field.inputLog`.
+- **Keyboard:** raw key listeners use `onKeyDown` (`src/ui/keyboard.ts`).
+  Phaser 3.90 re-delivers earlier keys when several arrive in one frame
+  ("12" → "112", FREEZE toggled twice); the helper drops repeats.
 - **Pause** (`P` key or on-screen `II` button): freezes the field, difficulty
   timer, spawning and firing, and **hides all aliens + their number balls** (and
   the typed display) behind an overlay so the player can't solve sums on a break.
@@ -486,7 +498,8 @@ curve is in `src/config/difficulty.ts` (`difficultyAt(elapsedMs, score)`).
        `docs/MULTIPLAYER_DESIGN.md` §10: [x] M0 battle rules/bots/contracts
        written down, [x] M1 seeded random numbers + game clock, [x] M2a
        Phaser-free `Field` (aliens, spawning, readability) + fixed timestep,
-       [ ] M2b combat/energy/input into the sim, [ ] M3+ bots, match, send.
+       [x] M2b ship/combat/scoring/lives/energy/input into the sim (input log
+       + exact replay), [ ] M3 bots, [ ] M5+ match, send.
 
 ## Conventions
 
@@ -510,6 +523,18 @@ curve is in `src/config/difficulty.ts` (`difficultyAt(elapsedMs, score)`).
 ## Decision Log
 
 Newest first. Format: `YYYY-MM-DD — decision — rationale`.
+
+- **2026-09-27 — The whole field is sim, driven by inputs (battle royale
+  M2b).** Ship, bullets, targeting, the typed answer (incl. wrong auto-clear),
+  scoring, lives, hit recovery, energy and SLOW/FREEZE moved from GameScene
+  into `Field`; the aliens part became `Swarm`. The field changes only via
+  `apply(FieldInput)` + `step(dt)` and reports events; GameScene is now input
+  mapping + presentation (1449 → ~930 lines). Inputs apply at once but are
+  logged with their step, which replays identically (an input between steps
+  N and N+1 = start of step N+1), so UI response stays instant. Tests replay
+  runs exactly from seed + log. Found while testing: Phaser 3.90 re-delivers
+  queued keys within a frame (pre-existing: 20 presses → 49 calls); fixed
+  with `onKeyDown`, which drops repeats of the same event object.
 
 - **2026-09-27 — Phaser-free `Field` + fixed 60 Hz timestep (battle royale
   M2a).** Aliens, spawners, the game clock and the readability guard moved

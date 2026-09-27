@@ -21,16 +21,13 @@ import { Rng, SpawnStreams } from "./rng";
 // Keys of the run's seeded random streams (sim/rng.ts), one per purpose.
 const STREAM = { FIELD: 1, SPAWN: 2, DRIFTER: 3 } as const;
 
-/**
- * What happened on the field, for the scene to show (and later for the match
- * to count). The scene drains them with `takeEvents()` after each step.
- */
-export type FieldEvent =
+/** What happened to the aliens; `Field` drains them after each step. */
+export type SwarmEvent =
   | { type: "spawned"; alien: Alien }
   /** A lethal alien reached the player line (it is already removed). */
   | { type: "reachedPlayer"; alien: Alien };
 
-/** What the field needs from the player's side each step. */
+/** What the swarm needs from the player's side (Field) each step. */
 export interface StepContext {
   /** The player's score: difficulty is earned by scoring. */
   score: number;
@@ -42,22 +39,20 @@ export interface StepContext {
   locked: Alien | null;
 }
 
-export interface FieldOptions {
+export interface SwarmOptions {
   seed: number;
   /** Dev play-testing: every allowed spawn gets one of these abilities. */
   forcedAbilities?: AbilityKind[] | null;
 }
 
 /**
- * One player's playfield, free of Phaser and rendering so the same code runs in
- * the browser, in bots and on a future server (docs/MULTIPLAYER_DESIGN.md §8).
- *
- * Owns the aliens, the game clock, the spawners (seeded) and the readability
- * rule. The ship, bullets, score and energy still live in GameScene (they move
- * in with milestone M2b). Call `step()` with a fixed dt: the same seed and the
- * same contexts then give the same field.
+ * The aliens on one player's field: the game clock, the seeded spawners, their
+ * movement and the readability rule, plus the AbilityHost abilities call.
+ * `Field` owns one and adds the player's side (ship, typing, score, energy).
+ * Call `step()` with a fixed dt: the same seed and the same contexts then give
+ * the same swarm.
  */
-export class Field implements AbilityHost {
+export class Swarm implements AbilityHost {
   readonly seed: number;
   aliens: Alien[] = [];
   /** The game clock: ms of play. Only advances in `step()`, so it stops while
@@ -75,9 +70,9 @@ export class Field implements AbilityHost {
   private drifterCountdown: number = MONSTERS.drifter.FIRST_MS;
   private score = 0;
   private locked: Alien | null = null;
-  private events: FieldEvent[] = [];
+  private events: SwarmEvent[] = [];
 
-  constructor(options: FieldOptions) {
+  constructor(options: SwarmOptions) {
     this.seed = options.seed;
     this.forcedAbilities = options.forcedAbilities ?? null;
     this.rng = Rng.derive(this.seed, STREAM.FIELD);
@@ -153,7 +148,7 @@ export class Field implements AbilityHost {
   }
 
   /** Events since the last call, oldest first. */
-  takeEvents(): FieldEvent[] {
+  takeEvents(): SwarmEvent[] {
     const events = this.events;
     this.events = [];
     return events;

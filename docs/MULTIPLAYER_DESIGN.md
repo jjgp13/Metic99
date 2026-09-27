@@ -148,11 +148,12 @@ the agreed shape.
 
 ## 8. Shared sim (what makes it server-ready)
 
-- **Phaser-free `Field`** (one player's aliens, bullets, ship, energy, score,
-  spawner) and **`Match`** (N fields, incoming queues, targeting, KOs,
-  badges, placement) in `src/sim/`. `GameScene` becomes an adapter: input →
-  field, field → screen, and the field's events (kill, hit, shield break) →
-  sounds and effects.
+- **Phaser-free `Field`** (done in M2a/M2b: one player's ship, bullets,
+  typed answer, score, lives, energy and powers, with the aliens in a
+  `Swarm`) and **`Match`** (N fields, incoming queues, targeting, KOs,
+  badges, placement) in `src/sim/`. `GameScene` is an adapter: input →
+  field, field → screen, and the field's events (spawned, fired, solved,
+  hit, knockedOut) → sounds and effects.
 - **Seeded random numbers** (`src/sim/rng.ts`, done in M1): same seed + same
   inputs → same run. Spawner streams are keyed by spawn number
   (`SpawnStreams`), so the Nth alien's first try draws the same numbers for
@@ -164,8 +165,10 @@ the agreed shape.
   scene runs 0–N steps per frame and the renderer interpolates between the
   last two steps. Changing frame times would otherwise make runs differ
   between a 120 Hz phone and a laptop.
-- **Inputs, not state:** a field changes only through `{tick, input}`. Seed +
-  input log = a replay (debugging now, server checks in phase 2).
+- **Inputs, not state** (done in M2b): a field changes only through
+  `apply(FieldInput)` (digits, back, clear, power; send/target come with the
+  match) and `step(dt)`. Each input is logged with its step; seed + input log
+  = an exact replay (`replayField`: debugging now, server checks in phase 2).
 - **The Match ↔ Field seam is the future protocol:**
   `field.receiveAttack()`, `field.takeOutgoing()`, `field.summary()`,
   `field.knockedOut`. Offline these are calls; in phase 1 they become
@@ -214,7 +217,7 @@ but marked as such.
 | M0 | Battle rules, bots and contracts written down (§6–§9) | — | done 2026-09-27 |
 | M1 | Game clock + seeded random numbers in solo play | Rng unit tests; same `?seed` → same aliens in the browser | done 2026-09-27 |
 | M2a | Extract `Field` (spawning, movement, readability) + fixed timestep | Solo unchanged; headless soak: no box overlaps | done 2026-09-27 |
-| M2b | Combat, energy, abilities, input into `Field`; events out | Same seed + inputs → same state hash | |
+| M2b | Combat, energy, abilities, input into `Field`; events out | Same seed + inputs → same state hash | done 2026-09-27 |
 | M3 | Bot v1 (solving) + dev autopilot `?bot=ace` on your own field | Survival per skill level; calibrate vs your solve times | |
 | M4 | Bot energy policy (SLOW/FREEZE) | Headless A/B: survival with vs without powers | |
 | M5 | `Match` with N fields: KOs, placement, `dMatch`, match end | 16 headless bots: the match always ends | |
