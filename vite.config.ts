@@ -6,7 +6,7 @@ import { defineConfig } from "vite";
 function buildId(): string {
   try {
     const sha = execSync("git rev-parse --short HEAD").toString().trim();
-    const dirty = execSync("git status --porcelain").toString().trim() !== "";
+    const dirty = execSync("git status --porcelain --untracked-files=no").toString().trim() !== "";
     return dirty ? `${sha}-dirty` : sha;
   } catch {
     return "unknown";
