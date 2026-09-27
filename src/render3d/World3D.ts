@@ -5,7 +5,7 @@ import { ENEMY, GAME, MONSTERS, PLAYER, RENDER3D } from "../config/constants";
 import type Alien from "../objects/Alien";
 import type { Bullet } from "../objects/Bullet";
 import { Shielded } from "../objects/abilities";
-import AnswerStars, { type AnswerView } from "./AnswerStars";
+import AnswerStars, { type AnswerView, type InkPoint } from "./AnswerStars";
 import { createNumberBall, setBallCover } from "./NumberBall";
 import { voxelizeFrame, type VoxelModel } from "./voxelize";
 
@@ -282,6 +282,11 @@ export default class World3D {
   /** The answer `text` was solved: its stars burst (if they spell it). */
   public answerSolved(text: string): void {
     this.answerStars.solved(text);
+  }
+
+  /** `text` was drawn: its stars start on the ink (per digit, logical px). */
+  public answerInk(text: string, inks: ReadonlyArray<readonly InkPoint[] | null>): void {
+    this.answerStars.fromInk(text, inks);
   }
 
   /** Same semantics as Phaser's camera.shake (intensity = fraction of view). */

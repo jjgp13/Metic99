@@ -30,9 +30,9 @@ export default class HowToPlayScene extends Phaser.Scene {
       {
         heading: "HOW TO SHOOT",
         body:
-          "Each alien's balls form a SUM. Type that\n" +
-          "sum on the keypad or keyboard. Your ship\n" +
-          "slides under the matching alien and fires.",
+          "Each alien's balls form a SUM. Type it on\n" +
+          "the keypad or keyboard, or tap ✎ DRAW and\n" +
+          "write it. Your ship lines up and fires.",
       },
       {
         heading: "STAY ALIVE",

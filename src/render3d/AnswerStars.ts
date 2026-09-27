@@ -9,6 +9,12 @@ export interface AnswerView {
   state: AnswerState;
 }
 
+/** A point in logical px (the drawing pad's ink). */
+export interface InkPoint {
+  x: number;
+  y: number;
+}
+
 const S = RENDER3D.ANSWER_STARS;
 
 /**
@@ -46,6 +52,9 @@ export default class AnswerStars {
   private state: AnswerState = "typing";
   /** Brightness kick on a match, decays to 0. */
   private pulse = 0;
+  /** Handwritten ink for the next `text` to form: digit k's stars start on
+   * inks[k]. Only good for the frame it was given in. */
+  private ink: { text: string; inks: ReadonlyArray<readonly InkPoint[] | null> } | null = null;
 
   constructor(cameraZ: number) {
     this.scale = (cameraZ - S.Z) / cameraZ;
@@ -125,6 +134,15 @@ export default class AnswerStars {
     this.text = null;
   }
 
+  /**
+   * `text` is about to show because it was drawn: the stars of each digit with
+   * ink start ON that ink (logical px) and fly up into the clean digit, so the
+   * player sees what the recognizer read.
+   */
+  public fromInk(text: string, inks: ReadonlyArray<readonly InkPoint[] | null>): void {
+    this.ink = { text, inks };
+  }
+
   /** `pixelScale` = drawing-buffer height / 2 (like PointsMaterial's size). */
   public update(answer: AnswerView | null, dt: number, pixelScale: number): void {
     this.material.uniforms.uScale.value = pixelScale;
@@ -134,10 +152,11 @@ export default class AnswerStars {
         if (this.state === "wrong") this.release(S.SCATTER_SPEED, S.COLORS.wrong);
         else this.release(null, null);
       } else {
-        this.form(text);
+        this.form(text, this.ink?.text === text ? this.ink.inks : []);
       }
       this.text = text;
     }
+    this.ink = null;
     if (answer && answer.state !== this.state) {
       if (answer.state === "match") this.pulse = 1;
     }
@@ -147,40 +166,74 @@ export default class AnswerStars {
 
   // ---------------------------------------------------------------------------
 
-  /** Send the nearest stars to the digits of `text`; the rest are released. */
-  private form(text: string): void {
-    const targets: Array<[number, number]> = [];
+  /**
+   * Send the nearest stars to the digits of `text`; the rest are released.
+   * Digits with ink (`inks[k]`) take their stars from the pool and start them
+   * on the ink instead, each on the ink point that matches its glyph point.
+   */
+  private form(text: string, inks: ReadonlyArray<readonly InkPoint[] | null>): void {
+    const perDigit: Array<Array<[number, number]>> = [];
     const first = -((text.length - 1) * S.DIGIT_ADVANCE) / 2;
     [...text].forEach((ch, k) => {
       const cx = GAME.WIDTH / 2 + first + k * S.DIGIT_ADVANCE;
-      for (const [x, y] of this.glyphs[Number(ch)] ?? []) {
-        targets.push([(cx + x - GAME.WIDTH / 2) * this.scale, (GAME.HEIGHT / 2 - S.CENTER_Y - y) * this.scale]);
-      }
+      perDigit.push(
+        (this.glyphs[Number(ch)] ?? []).map(([x, y]): [number, number] => [
+          (cx + x - GAME.WIDTH / 2) * this.scale,
+          (GAME.HEIGHT / 2 - S.CENTER_Y - y) * this.scale,
+        ]),
+      );
     });
+    const taken = new Uint8Array(this.n);
+    const assign = (i: number, [tx, ty]: [number, number]) => {
+      taken[i] = 1;
+      this.target[i * 2] = tx;
+      this.target[i * 2 + 1] = ty;
+      this.vel[i * 2] = this.vel[i * 2 + 1] = 0;
+    };
+
     // Greedy nearest in random order: stars already in a shape mostly stay
     // near it (typing "1" then "12"), and the newcomers come from close by.
-    const taken = new Uint8Array(this.n);
+    const targets = perDigit.filter((_, k) => !inks[k]?.length).flat();
     shuffle(targets);
-    for (const [tx, ty] of targets) {
-      let best = -1;
-      let bestD = Infinity;
-      for (let i = 0; i < this.n; i++) {
-        if (taken[i]) continue;
-        const dx = this.pos[i * 3] - tx;
-        const dy = this.pos[i * 3 + 1] - ty;
-        const d = dx * dx + dy * dy;
-        if (d < bestD) {
-          bestD = d;
-          best = i;
-        }
-      }
+    for (const t of targets) {
+      const best = this.nearestFree(taken, t[0], t[1]);
       if (best < 0) break;
-      taken[best] = 1;
-      this.target[best * 2] = tx;
-      this.target[best * 2 + 1] = ty;
-      this.vel[best * 2] = this.vel[best * 2 + 1] = 0;
+      assign(best, t);
     }
+
+    perDigit.forEach((glyph, k) => {
+      const ink = inks[k];
+      if (!ink?.length) return;
+      const from = matchShapes(sampleEvenly(ink, glyph.length), glyph);
+      glyph.forEach((t, j) => {
+        const [lx, ly] = from[j];
+        const wx = (lx - GAME.WIDTH / 2) * this.scale;
+        const wy = (GAME.HEIGHT / 2 - ly) * this.scale;
+        const i = this.nearestFree(taken, wx, wy);
+        if (i < 0) return;
+        this.pos[i * 3] = wx;
+        this.pos[i * 3 + 1] = wy;
+        this.heat[i] = 1; // lit from the start: the ink itself turns to stars
+        assign(i, t);
+      });
+    });
     for (let i = 0; i < this.n; i++) this.formed[i] = taken[i];
+  }
+
+  private nearestFree(taken: Uint8Array, x: number, y: number): number {
+    let best = -1;
+    let bestD = Infinity;
+    for (let i = 0; i < this.n; i++) {
+      if (taken[i]) continue;
+      const dx = this.pos[i * 3] - x;
+      const dy = this.pos[i * 3 + 1] - y;
+      const d = dx * dx + dy * dy;
+      if (d < bestD) {
+        bestD = d;
+        best = i;
+      }
+    }
+    return best;
   }
 
   /** Let the formed stars go: flung outward at `speed` (tinted `hex`), or just left to fade. */
@@ -290,6 +343,48 @@ function sampleGlyph(ch: string): Array<[number, number]> {
   ]);
   shuffle(out);
   return out.slice(0, S.MAX_PER_DIGIT);
+}
+
+/** `count` points spread evenly (by index) over the ink, as [x, y]. */
+function sampleEvenly(ink: readonly InkPoint[], count: number): Array<[number, number]> {
+  return Array.from({ length: count }, (_, j) => {
+    const p = ink[Math.round((j / Math.max(1, count - 1)) * (ink.length - 1))];
+    return [p.x, p.y];
+  });
+}
+
+/**
+ * For each glyph point, the ink point in the same place once both shapes are
+ * scaled to a unit box (greedy nearest, each ink point used once), so the ink
+ * morphs into the digit instead of scrambling. Glyph y is up, ink y is down.
+ */
+function matchShapes(ink: Array<[number, number]>, glyph: Array<[number, number]>): Array<[number, number]> {
+  const unit = (pts: Array<[number, number]>, flipY: boolean) => {
+    const xs = pts.map((p) => p[0]);
+    const ys = pts.map((p) => (flipY ? -p[1] : p[1]));
+    const x0 = Math.min(...xs);
+    const y0 = Math.min(...ys);
+    const w = Math.max(1e-6, Math.max(...xs) - x0);
+    const h = Math.max(1e-6, Math.max(...ys) - y0);
+    return pts.map((_, i): [number, number] => [(xs[i] - x0) / w, (ys[i] - y0) / h]);
+  };
+  const a = unit(ink, false);
+  const b = unit(glyph, true);
+  const used = new Uint8Array(ink.length);
+  return b.map(([gx, gy]) => {
+    let best = 0;
+    let bestD = Infinity;
+    for (let i = 0; i < a.length; i++) {
+      if (used[i]) continue;
+      const d = (a[i][0] - gx) ** 2 + (a[i][1] - gy) ** 2;
+      if (d < bestD) {
+        bestD = d;
+        best = i;
+      }
+    }
+    used[best] = 1;
+    return ink[best];
+  });
 }
 
 /** In-place Fisher–Yates shuffle. */

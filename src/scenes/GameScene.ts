@@ -14,6 +14,7 @@ import {
   SPLITTER,
   STORAGE,
   type AlienKind,
+  type InputMode,
   type SlowMode,
 } from "../config/constants";
 import { difficultyAt, type DifficultyParams } from "../config/difficulty";
@@ -31,6 +32,9 @@ import World3D, { getWorld3D } from "../render3d/World3D";
 import type { AnswerState, AnswerView } from "../render3d/AnswerStars";
 import { selectedShip } from "../config/ships";
 import { EnergyMeter, SlowTime, energyForKill } from "../sim/energy";
+import { inputMode, setInputMode } from "../config/inputMode";
+import type { InkEvent } from "../handwriting/inkReader";
+import DrawPad from "../ui/DrawPad";
 
 // Energy HUD sits in the gutters beside the keypad so it never covers the field
 // or the keys: the meter on the left, the SLOW button on the right.
@@ -43,6 +47,10 @@ const METER_W = 360;
 const METER_Y = KEYPAD_BOTTOM + 22;
 const POWER_COLOR: Record<SlowMode, number> = { slow: ENERGY_COLOR, freeze: 0xb8d8ff };
 const POWER_ON_FILL: Record<SlowMode, number> = { slow: 0x1f6f7a, freeze: 0x3a5a8c };
+// The answer display's row, between the ship and the keypad: the input-mode
+// switch sits on its right, the drawing pad's C button on its left.
+const ANSWER_Y = PLAYER.Y + 36;
+const ANSWER_MAX_DIGITS = 2;
 
 /**
  * GameScene owns the actual gameplay. A Phaser Scene has a lifecycle:
@@ -126,6 +134,13 @@ export default class GameScene extends Phaser.Scene implements AbilityHost {
 
   /** Abilities already introduced this run (each gets one intro banner). */
   private seenAbilities = new Set<AbilityKind>();
+
+  // On-screen input: the keypad or the handwriting pad in the same spot (the
+  // keyboard works in both).
+  private keypadParts: Phaser.GameObjects.GameObject[] = [];
+  private pad!: DrawPad;
+  private modeLabel!: Phaser.GameObjects.Text;
+  private padClear: Phaser.GameObjects.GameObject[] = [];
   /** Dev only: `?ability=blinker,shielded` makes every allowed spawn one of
    * these (ignoring unlocks and chance) for play-testing. */
   private forcedAbilities: AbilityKind[] | null = null;
@@ -145,6 +160,8 @@ export default class GameScene extends Phaser.Scene implements AbilityHost {
 
     this.buildHud();
     this.buildKeypad();
+    this.buildDrawPad();
+    this.applyInputMode(inputMode());
     this.buildEnergyHud();
     this.bindKeyboard();
 
@@ -192,6 +209,8 @@ export default class GameScene extends Phaser.Scene implements AbilityHost {
     this.pauseOverlay = [];
     this.seenAbilities.clear();
     this.forcedAbilities = null;
+    this.keypadParts = [];
+    this.padClear = [];
     if (import.meta.env.DEV) {
       const forced = new URLSearchParams(window.location.search).get("ability");
       const kinds = forced
@@ -204,7 +223,10 @@ export default class GameScene extends Phaser.Scene implements AbilityHost {
   update(time: number, delta: number): void {
     // Game over / pause freeze the simulation, but the 3D view keeps rendering
     // (stars drift, the final explosion finishes, pause hides the aliens).
-    if (!this.gameOver && !this.paused) this.tick(time, delta);
+    if (!this.gameOver && !this.paused) {
+      this.tick(time, delta);
+      this.pad.update(delta);
+    }
 
     this.world.render(
       {
@@ -859,6 +881,7 @@ export default class GameScene extends Phaser.Scene implements AbilityHost {
 
     // The 3D view hides the aliens while paused (see update()).
     this.reticle.setVisible(!this.paused);
+    this.pad.setEnabled(!this.paused);
     if (this.paused) {
       this.typedText.setVisible(false);
 
@@ -914,7 +937,7 @@ export default class GameScene extends Phaser.Scene implements AbilityHost {
     }
 
     this.typedText = this.add
-      .text(GAME.WIDTH / 2, PLAYER.Y + 36, "_", {
+      .text(GAME.WIDTH / 2, ANSWER_Y, "_", {
         fontFamily: "monospace",
         fontSize: "32px",
         fontStyle: "bold",
@@ -1089,9 +1112,10 @@ export default class GameScene extends Phaser.Scene implements AbilityHost {
         .rectangle(cx, cy, cellW - 8, cellH - 6, 0x1b2340)
         .setStrokeStyle(2, 0x4ea1ff)
         .setInteractive({ useHandCursor: true });
-      this.add
+      const text = this.add
         .text(cx, cy, label, { fontFamily: "monospace", fontSize: "22px", color: "#ffffff" })
         .setOrigin(0.5);
+      this.keypadParts.push(btn, text);
 
       btn.on("pointerdown", () => {
         btn.setFillStyle(0x33406e);
@@ -1100,6 +1124,77 @@ export default class GameScene extends Phaser.Scene implements AbilityHost {
       btn.on("pointerup", () => btn.setFillStyle(0x1b2340));
       btn.on("pointerout", () => btn.setFillStyle(0x1b2340));
     });
+  }
+
+  /**
+   * The handwriting pad covers the keypad's area (never the field, so the
+   * finger doesn't hide the aliens). The mode switch shows the other mode.
+   */
+  private buildDrawPad(): void {
+    const top = KEYPAD_TOP;
+    const bottom = KEYPAD_BOTTOM;
+    this.pad = new DrawPad(this, GAME.WIDTH / 2, (top + bottom) / 2, 352, bottom - top, (e) =>
+      this.onInk(e),
+    );
+
+    const button = (x: number, w: number, label: string, onPress: () => void) => {
+      const bg = this.add
+        .rectangle(x, ANSWER_Y, w, 26, 0x1b2340)
+        .setStrokeStyle(1, 0x4ea1ff)
+        .setDepth(5)
+        .setInteractive({ useHandCursor: true });
+      const text = this.add
+        .text(x, ANSWER_Y, label, { fontFamily: "monospace", fontSize: "13px", color: "#ffffff" })
+        .setOrigin(0.5)
+        .setDepth(5);
+      bg.on("pointerdown", onPress);
+      return { bg, text };
+    };
+    const mode = button(GAME.WIDTH - 62, 76, "", () =>
+      this.applyInputMode(inputMode() === "draw" ? "keys" : "draw"),
+    );
+    this.modeLabel = mode.text;
+    const clear = button(62, 44, "C", () => this.handleInput("C"));
+    this.padClear = [clear.bg, clear.text];
+  }
+
+  private applyInputMode(mode: InputMode): void {
+    setInputMode(mode);
+    const draw = mode === "draw";
+    for (const o of this.keypadParts) {
+      (o as Phaser.GameObjects.Rectangle).setVisible(!draw);
+      if (o.input) o.input.enabled = !draw;
+    }
+    for (const o of this.padClear) {
+      (o as Phaser.GameObjects.Rectangle).setVisible(draw);
+      if (o.input) o.input.enabled = draw;
+    }
+    this.pad.setVisible(draw);
+    this.modeLabel.setText(draw ? "KEYPAD" : "✎ DRAW");
+  }
+
+  /**
+   * The pad read some ink. Digits go through handleInput like keys, so answer
+   * feedback works unchanged; their stars start on the ink. A drawn answer that
+   * no longer fits after the typed digits starts a fresh answer instead (a
+   * redraw costs more than a key press).
+   */
+  private onInk(e: InkEvent): void {
+    if (this.gameOver || this.paused) return;
+    if (e.type === "scratch") {
+      this.handleInput("C");
+      return;
+    }
+    if (e.type === "unknown") {
+      this.sound.play("blip", { volume: 0.4, rate: 0.5 });
+      return;
+    }
+    const fresh = this.typed.length + e.digits.length > ANSWER_MAX_DIGITS;
+    const text = (fresh ? "" : this.typed) + e.digits;
+    const inks = e.inks.map((g) => g.flat());
+    this.world.answerInk(text, [...text].map((_, i) => inks[i - (text.length - inks.length)] ?? null));
+    if (fresh) this.setTyped("");
+    this.handleInput(e.digits);
   }
 
   private bindKeyboard(): void {
@@ -1124,6 +1219,7 @@ export default class GameScene extends Phaser.Scene implements AbilityHost {
     });
   }
 
+  /** A key: a digit (or several, from the drawing pad), C or <. */
   private handleInput(key: string): void {
     if (this.gameOver) {
       this.proceedAfterGameOver();
@@ -1133,7 +1229,7 @@ export default class GameScene extends Phaser.Scene implements AbilityHost {
     this.sound.play("blip", { volume: 0.3 });
     if (key === "C") this.setTyped("");
     else if (key === "<") this.setTyped(this.typed.slice(0, -1));
-    else if (this.typed.length < 2) this.setTyped(this.typed + key);
+    else if (this.typed.length + key.length <= ANSWER_MAX_DIGITS) this.setTyped(this.typed + key);
   }
 
   private setTyped(value: string): void {
@@ -1157,7 +1253,7 @@ export default class GameScene extends Phaser.Scene implements AbilityHost {
   private typedState(): AnswerState {
     if (this.enemiesInField.has(parseInt(this.typed, 10))) return "match";
     const canGrow =
-      this.typed.length < 2 &&
+      this.typed.length < ANSWER_MAX_DIGITS &&
       [...this.enemiesInField.keys()].some((r) => String(r).startsWith(this.typed));
     return canGrow ? "typing" : "wrong";
   }
@@ -1265,6 +1361,7 @@ export default class GameScene extends Phaser.Scene implements AbilityHost {
   private endGame(): void {
     this.gameOver = true;
     this.reticle.clear();
+    this.pad.setEnabled(false);
 
     // Merge this run into the persistent mastery stats.
     const num = (k: string) => Number(localStorage.getItem(k) ?? 0);
