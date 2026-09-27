@@ -6,6 +6,7 @@ import {
   ENEMY,
   FEEDBACK,
   GAME,
+  KEYPAD_AREA,
   MONSTERS,
   PLAYER,
   RANKS,
@@ -38,8 +39,8 @@ import DrawPad from "../ui/DrawPad";
 
 // Energy HUD sits in the gutters beside the keypad so it never covers the field
 // or the keys: the meter on the left, the SLOW button on the right.
-const KEYPAD_TOP = PLAYER.Y + 52;
-const KEYPAD_BOTTOM = PLAYER.Y + 214;
+const KEYPAD_TOP = KEYPAD_AREA.TOP;
+const KEYPAD_BOTTOM = KEYPAD_AREA.BOTTOM;
 const GUTTER_H = KEYPAD_BOTTOM - KEYPAD_TOP;
 const ENERGY_COLOR = 0x5ef0ff;
 const METER_X = GAME.WIDTH / 2 - 180; // under the keypad, same width
@@ -1133,7 +1134,7 @@ export default class GameScene extends Phaser.Scene implements AbilityHost {
   private buildDrawPad(): void {
     const top = KEYPAD_TOP;
     const bottom = KEYPAD_BOTTOM;
-    this.pad = new DrawPad(this, GAME.WIDTH / 2, (top + bottom) / 2, 352, bottom - top, (e) =>
+    this.pad = new DrawPad(this, GAME.WIDTH / 2, (top + bottom) / 2, KEYPAD_AREA.PAD_W, bottom - top, (e) =>
       this.onInk(e),
     );
 

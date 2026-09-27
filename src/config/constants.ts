@@ -20,6 +20,14 @@ export const PLAYER = {
   SCALE: 2, // ship model scale (16px source art)
 } as const;
 
+/** The box under the ship that holds the keypad or the drawing pad, with the
+ * SLOW / FREEZE buttons in its side gutters. */
+export const KEYPAD_AREA = {
+  TOP: PLAYER.Y + 52,
+  BOTTOM: PLAYER.Y + 214,
+  PAD_W: 352, // drawing pad width (the keypad's 3 columns)
+} as const;
+
 export const BULLET = {
   SPEED: 700, // px/sec upward
   MUZZLE_OFFSET: 24, // px above the ship where bullets spawn
@@ -255,6 +263,7 @@ export const STORAGE = {
   LAST_LEN: "metic-last-len", // remembers the chosen initials length
   SHIP: "metic-ship", // player ship model picked on the menu
   INPUT_MODE: "metic-input", // "keys" (keypad) or "draw" (handwriting pad)
+  HW_LAB: "metic-hw-lab", // handwriting lab samples in progress (?lab=draw)
 } as const;
 
 /** Arcade global leaderboard (Supabase-backed). */
@@ -450,6 +459,16 @@ export const HANDWRITING = {
   },
   PAD_FILL: 0x0b1024,
   PAD_ALPHA: 0.45, // see-through so the answer stars show where the ink was
+} as const;
+
+/**
+ * Handwriting lab (`?lab=draw`, scenes/HandwritingLabScene.ts): asks for each
+ * digit ROUNDS times in random order, then a few 2-digit NUMBERS, on the same
+ * pad as the game, and exports the ink as JSON for tests and tuning.
+ */
+export const HANDWRITING_LAB = {
+  ROUNDS: 3,
+  NUMBERS: ["14", "27", "49", "58", "71", "96"],
 } as const;
 
 /** How the player enters answers on screen (the keyboard works in both). */
