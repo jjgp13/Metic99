@@ -31,6 +31,8 @@ const config: Phaser.Types.Core.GameConfig = {
     mode: Phaser.Scale.FIT, // letterbox to fit the screen, keep aspect ratio
     autoCenter: Phaser.Scale.CENTER_BOTH,
   },
+  // Two touches: a thumb can hit SLOW / FREEZE while the other finger draws.
+  input: { activePointers: 2 },
   scene: [BootScene, MenuScene, HowToPlayScene, GameScene, NameEntryScene, LeaderboardScene],
 };
 

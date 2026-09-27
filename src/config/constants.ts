@@ -254,6 +254,7 @@ export const STORAGE = {
   LAST_NAME: "metic-last-name", // remembers the player's last arcade initials
   LAST_LEN: "metic-last-len", // remembers the chosen initials length
   SHIP: "metic-ship", // player ship model picked on the menu
+  INPUT_MODE: "metic-input", // "keys" (keypad) or "draw" (handwriting pad)
 } as const;
 
 /** Arcade global leaderboard (Supabase-backed). */
@@ -414,6 +415,45 @@ export const FEEDBACK = {
   },
   EQUATION: { FONT_PX: 18, POP_MS: 150, HOLD_MS: 450, FADE_MS: 850, RISE_PX: 34 },
 } as const;
+
+/**
+ * Handwriting input (src/handwriting/, src/ui/DrawPad.ts): the player draws
+ * digits on a pad in the keypad area; a $P point-cloud recognizer reads them.
+ * A finished stroke joins the current digit if it overlaps it sideways, or
+ * starts the next digit if it lies to its right. After a pause every digit is
+ * read, left to right, and sent as typed digits.
+ */
+export const HANDWRITING = {
+  PAUSE_MS: 300, // quiet time after the last stroke before the ink is read
+  // A stroke to the right of the current digit that overlaps it sideways by
+  // less than this fraction (of the narrower of the two) starts the next digit,
+  // so "12" can be written without a pause. A 4's stem or a 5's or 7's bar
+  // overlaps its digit fully. Thin strokes (a 1) count as MIN_STROKE_W wide.
+  NEW_DIGIT_OVERLAP: 0.35,
+  MIN_STROKE_W: 12,
+  MAX_DIGITS: 2,
+  MIN_INK_PX: 10, // ink smaller than this (a tap) is ignored
+  // Recognizer ($P): points per resampled cloud and the largest cloud distance
+  // still accepted (bigger = too unlike every template: shows "?").
+  CLOUD_POINTS: 32,
+  MAX_DISTANCE: 2.0,
+  // Scratch-out = clear: one stroke this much wider than tall that turns back
+  // sideways at least MIN_REVERSALS times (each leg ≥ REVERSAL_PX).
+  SCRATCH: { MIN_ASPECT: 1.6, MIN_W: 50, MIN_REVERSALS: 2, REVERSAL_PX: 10 },
+  INK: {
+    COLOR: 0x5ef0ff,
+    CORE_PX: 4,
+    GLOW_PX: 14,
+    GLOW_ALPHA: 0.22,
+    UNKNOWN_COLOR: 0xef476f,
+    FADE_MS: 180, // read ink fades while its stars fly off
+  },
+  PAD_FILL: 0x0b1024,
+  PAD_ALPHA: 0.45, // see-through so the answer stars show where the ink was
+} as const;
+
+/** How the player enters answers on screen (the keyboard works in both). */
+export type InputMode = "keys" | "draw";
 
 /** Number ball colors map to future math operations (sum/sub/mul/div). */
 export const BALL_COLOR = {

@@ -38,6 +38,7 @@ loop. See the Decision Log.
   share with the client.
 - **Vite** — dev server (HMR) + production bundler.
 - **TypeScript** — strict mode.
+- **Vitest** — unit tests for Phaser-free logic (`src/**/*.test.ts`, `npm test`).
 - Node.js LTS required. `npm install` → `npm run dev` (port 5173) → `npm run build`.
 
 ## Project layout
@@ -51,6 +52,7 @@ src/
     constants.ts      All tunable gameplay/layout values
     difficulty.ts     Logistic difficulty curve
     ships.ts          Player's ship choice (menu picker, saved in localStorage)
+    inputMode.ts      On-screen input choice: keypad or drawing pad (localStorage)
   scenes/
     BootScene.ts      Preloads assets; defers animations (static frames for now)
     MenuScene.ts      Title screen: ship picker + PLAY / HOW TO PLAY / SCORES
@@ -63,6 +65,14 @@ src/
   services/
     leaderboard.ts    Supabase global high scores: startMatch + match-gated
                       submitScore, plus getTop/getRank reads
+  handwriting/        Phaser-free digit recognition (unit-tested)
+    recognizer.ts     $P point-cloud recognizer + scratch-out detector
+    digitTemplates.ts 0–9 templates (~25 variants) built from line/arc/curve
+    inkReader.ts      Strokes → digit groups (sideways overlap) → pause → InkEvent
+    testShapes.ts     Test-only digits in other styles + a seeded shaky hand
+    handwriting.test.ts
+  ui/
+    DrawPad.ts        The drawing pad: pointer capture, glowing ink, "?" flash
   sim/
     energy.ts         Phaser-free energy rules: energyForKill, EnergyMeter
                       (charge/spend/drain per spender), SlowTime (SLOW / FREEZE powers).
@@ -83,7 +93,8 @@ src/
     NumberBall.ts     Glass sphere with the digit inside (number balls);
                       optional eyelids (`setBallCover`) for the Blinker.
     AnswerStars.ts    Background stars that gather into the typed answer
-                      (glyphs sampled once at load) and burst when it's solved.
+                      (glyphs sampled once at load) and burst when it's solved;
+                      a drawn answer's stars start on its ink.
 art/                  3D art source (docs/ART_SPEC.md)
   palette/palette.json  Shared color swatches for all models
   blender/            metic_kit.py helpers, build.py, recipes/<model>.py
@@ -265,8 +276,35 @@ Green=multiplication, Yellow=division.
   may be on screen until late game (`DIFFICULTY.SECOND_HARD_AT` = d≥0.85, then
   two), so the player never juggles two multi-number sums at once. When the cap
   is hit the spawn is forced to an easy 2-ball enemy.
-- Input: on-screen keypad **and** physical keyboard (0–9, Backspace, Esc,
-  Space = SLOW, F = FREEZE, P = pause). Max 2 typed digits.
+- Input: on-screen keypad **or** drawing pad, **and** physical keyboard (0–9,
+  Backspace, Esc, Space = SLOW, F = FREEZE, P = pause). Max 2 typed digits.
+  The **DRAW / KEYPAD** switch right of the answer display picks the on-screen
+  one (saved under `STORAGE.INPUT_MODE`); the keyboard works in both.
+- **Handwriting input** (`HANDWRITING`, `src/handwriting/`, `ui/DrawPad.ts`):
+  the pad replaces the keypad in the same box (never over the field) and has a
+  C button left of the answer display. Two touch pointers are active, so a
+  thumb can hit SLOW/FREEZE while the other finger draws (only the first
+  finger draws).
+  - Recognizer: **$P point cloud** against ~25 hand-built digit templates
+    (1 with/without flag or base, open/closed 4, 7 with/without bar, …). $P
+    ignores stroke order and direction by design, so a 0 drawn either way or a
+    4 drawn stem-first match the same template. Cloud distance above
+    `MAX_DISTANCE` → **"?"** (red ink + "?" in the pad, nothing entered).
+  - **Digits:** a finished stroke joins the current digit if it overlaps it
+    sideways, or starts the next digit if it lies to its right (overlap <
+    `NEW_DIGIT_OVERLAP` of the narrower one). After `PAUSE_MS` (300) with the
+    pen up, all digits are read left to right and entered **together** through
+    `handleInput`, so "12" never passes through "1" (which could match another
+    alien and fire). Pausing between digits also works (each appends). A drawn
+    answer that no longer fits after the typed digits starts a fresh answer.
+  - **Scratch-out** (one wide stroke turning back sideways ≥ 2 times) = C.
+    Taps smaller than `MIN_INK_PX` are ignored. Pause/game over drop the ink.
+  - **Feedback:** the ink glows while drawing; on a read it fades and the
+    answer stars for each drawn digit start ON the ink and fly into the clean
+    digit, so the player sees what was read. Everything after that (gold/red,
+    brackets, solved sum, wrong auto-clear) is the normal answer feedback.
+  - Measured on distorted test digits: ~96% per digit, ~94% for 2-digit reads;
+    the known lookalikes are flat-top 3 ↔ 5 and short-bar 7 ↔ flagged 1.
 - **Answer feedback** (`FEEDBACK`, `RENDER3D.ANSWER_STARS`): the typed number
   is white while typing, **gold** (with a pop and a confirm blip) when it
   matches an alien, and **red** (shake) as soon as no alien's answer can start
@@ -410,9 +448,12 @@ curve is in `src/config/difficulty.ts` (`difficultyAt(elapsedMs, score)`).
        gives an energy burst on top of the normal kill energy.
 7b. [x] **Answer feedback** — gold/red typed number, lock-on brackets, answer
        stars in the background, solved sum popped on each kill.
-8. [ ] **Handwriting input** — draw a digit on a pad in the keypad area (not
-       over the field); a stroke-based recognizer (the "$P" family) reads it.
-       The ink turns into the answer stars, so the player sees what was read.
+8. [x] **Handwriting input** — DRAW/KEYPAD switch; a pad in the keypad area
+       (not over the field); $P point-cloud recognizer with ~25 templates;
+       digits split by sideways overlap and read together after a pause;
+       scratch-out clears, unlike ink shows "?"; the ink turns into the answer
+       stars. **Next:** play-test on phones; maybe learn the player's own
+       strokes as extra templates.
 9. [ ] Other operations (subtraction/multiplication/division) via color-coded balls
 10. [ ] Sprite animations + richer explosion/background VFX
 10b. [x] **3D playfield (Three.js)** — same top-down view, voxel models built
@@ -431,7 +472,7 @@ curve is in `src/config/difficulty.ts` (`difficultyAt(elapsedMs, score)`).
 
 - Keep all tunables in `config/constants.ts`; avoid magic numbers in scenes.
 - Comment only non-obvious intent (per repo style).
-- Verify changes: `npx tsc --noEmit` and `npm run build` must pass.
+- Verify changes: `npx tsc --noEmit`, `npm test` and `npm run build` must pass.
 - **Git workflow:** feature branches are **local only** (never push them). Merge
   into `master` locally and push only `master` (pushing it deploys GitHub Pages).
   Every local merge into `master` is followed, without asking, by deleting the
@@ -444,6 +485,20 @@ curve is in `src/config/difficulty.ts` (`difficultyAt(elapsedMs, score)`).
 
 Newest first. Format: `YYYY-MM-DD — decision — rationale`.
 
+- **2026-09-27 — Handwriting input: $P recognizer, overlap-split digits read
+  together after a pause.** Own $P point-cloud recognizer (no ML model, no
+  browser handwriting API, which iPhone Safari lacks): tiny, ~2 ms per read,
+  and deliberately blind to stroke order/direction, so ~25 shape templates
+  cover 0–9. Of the two ways to enter 2 digits, neither alone was enough: one
+  digit at a time after pauses lets "1" match and fire before "12" is done,
+  and splitting a finished drawing by gaps breaks on 4/7 bars. So strokes are
+  grouped into digits by sideways overlap as each ends (a stroke that begins
+  the next digit may start anywhere to the right), and all digits are entered
+  together after 300 ms. Trade-off: digits that overlap sideways merge (the
+  pause still separates them), and an open 4 whose stem stands clear of its
+  bar reads as two strokes of different digits. The pad replaces the keypad
+  (switch saved in localStorage), and the ink becomes the answer stars. Added
+  Vitest for the recognizer.
 - **2026-09-27 — Answer feedback at the target and in the stars.** The typed
   number was small, below the ship and cleared on fire, so a right answer
   gave no clear signal. Now: gold/red states (wrong clears itself), lock-on
