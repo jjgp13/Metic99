@@ -6,6 +6,7 @@ import HowToPlayScene from "./scenes/HowToPlayScene";
 import GameScene from "./scenes/GameScene";
 import NameEntryScene from "./scenes/NameEntryScene";
 import LeaderboardScene from "./scenes/LeaderboardScene";
+import HandwritingLabScene from "./scenes/HandwritingLabScene";
 import { getWorld3D } from "./render3d/World3D";
 
 /**
@@ -33,7 +34,15 @@ const config: Phaser.Types.Core.GameConfig = {
   },
   // Two touches: a thumb can hit SLOW / FREEZE while the other finger draws.
   input: { activePointers: 2 },
-  scene: [BootScene, MenuScene, HowToPlayScene, GameScene, NameEntryScene, LeaderboardScene],
+  scene: [
+    BootScene,
+    MenuScene,
+    HowToPlayScene,
+    GameScene,
+    NameEntryScene,
+    LeaderboardScene,
+    HandwritingLabScene,
+  ],
 };
 
 const game = new Phaser.Game(config);

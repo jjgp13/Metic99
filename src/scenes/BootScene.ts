@@ -94,6 +94,11 @@ export default class BootScene extends Phaser.Scene {
     );
     void getWorld3D()
       .loadModels(files)
-      .finally(() => this.scene.start("MenuScene"));
+      .finally(() => this.scene.start(labRequested() ? "HandwritingLabScene" : "MenuScene"));
   }
+}
+
+/** `?lab=draw` opens the handwriting lab instead of the menu (not linked in game). */
+function labRequested(): boolean {
+  return new URLSearchParams(window.location.search).get("lab") === "draw";
 }
