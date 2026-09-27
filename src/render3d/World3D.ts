@@ -5,6 +5,7 @@ import { ENEMY, GAME, MONSTERS, PLAYER, RENDER3D } from "../config/constants";
 import type Alien from "../objects/Alien";
 import type { Bullet } from "../objects/Bullet";
 import { Shielded } from "../objects/abilities";
+import AnswerStars, { type AnswerView } from "./AnswerStars";
 import { createNumberBall, setBallCover } from "./NumberBall";
 import { voxelizeFrame, type VoxelModel } from "./voxelize";
 
@@ -17,6 +18,8 @@ export interface WorldSnapshot {
   bullets: readonly Bullet[];
   /** Pause hides the field so sums can't be solved on a break. */
   aliensHidden: boolean;
+  /** The answer the background stars spell out, or null. */
+  answer: AnswerView | null;
 }
 
 /** A model's `anim_*` part, with its rest rotation and mirror side. */
@@ -110,6 +113,8 @@ export default class World3D {
 
   private readonly stars: THREE.Points;
   private readonly starHalfH: Float32Array;
+  private readonly answerStars: AnswerStars;
+  private readonly bufferSize = new THREE.Vector2();
 
   private debris: Debris[] = [];
   private readonly debrisGeometry = new THREE.BoxGeometry(1, 1, 1);
@@ -168,6 +173,9 @@ export default class World3D {
       new THREE.PointsMaterial({ size: 4, vertexColors: true, sizeAttenuation: true }),
     );
     this.scene.add(this.stars);
+
+    this.answerStars = new AnswerStars(this.cameraZ);
+    this.scene.add(this.answerStars.points);
   }
 
   /**
@@ -211,6 +219,7 @@ export default class World3D {
     this.ship = new THREE.Group().add(this.shipBody);
     this.scene.add(this.ship);
     this.bank = 0;
+    this.answerStars.reset();
 
     this.lastRect = "";
     this.renderer.domElement.style.display = "block";
@@ -226,6 +235,8 @@ export default class World3D {
     const dt = delta / 1000;
     this.syncCanvasRect();
     this.updateStars(dt);
+    this.renderer.getDrawingBufferSize(this.bufferSize);
+    this.answerStars.update(s.answer, dt, this.bufferSize.y / 2);
     this.syncShip(s, time, dt);
     this.syncAliens(s, time, dt);
     this.syncBullets(s);
@@ -266,6 +277,11 @@ export default class World3D {
       this.scene.add(mesh);
       this.debris.push({ mesh, vel, spin, age: 0 });
     }
+  }
+
+  /** The answer `text` was solved: its stars burst (if they spell it). */
+  public answerSolved(text: string): void {
+    this.answerStars.solved(text);
   }
 
   /** Same semantics as Phaser's camera.shake (intensity = fraction of view). */

@@ -82,6 +82,8 @@ src/
     voxelize.ts       Extrudes a Phaser sprite frame into a voxel mesh (fallback art).
     NumberBall.ts     Glass sphere with the digit inside (number balls);
                       optional eyelids (`setBallCover`) for the Blinker.
+    AnswerStars.ts    Background stars that gather into the typed answer
+                      (glyphs sampled once at load) and burst when it's solved.
 art/                  3D art source (docs/ART_SPEC.md)
   palette/palette.json  Shared color swatches for all models
   blender/            metic_kit.py helpers, build.py, recipes/<model>.py
@@ -265,6 +267,17 @@ Green=multiplication, Yellow=division.
   is hit the spawn is forced to an easy 2-ball enemy.
 - Input: on-screen keypad **and** physical keyboard (0–9, Backspace, Esc,
   Space = SLOW, F = FREEZE, P = pause). Max 2 typed digits.
+- **Answer feedback** (`FEEDBACK`, `RENDER3D.ANSWER_STARS`): the typed number
+  is white while typing, **gold** (with a pop and a confirm blip) when it
+  matches an alien, and **red** (shake) as soon as no alien's answer can start
+  with it; a wrong answer clears itself after `WRONG_CLEAR_MS`. The matched
+  alien gets gold **lock-on brackets** around its box, and the number flies up
+  to it. The answer stays shown (display + stars) until its alien dies, even
+  after firing. Background **answer stars** (a separate pool at z = -500,
+  drifting as normal stars when idle) gather into the answer's digits in the
+  same colors; they burst gold when it's solved and scatter red when it was
+  wrong. Every kill (and a shield break) pops the solved sum, e.g.
+  `7 + 5 = 12`, above the alien. Pause hides all of it.
 - **Energy** (`ENERGY`, `src/sim/energy.ts`): each kill charges a 0–100 meter by
   `BASE × ballBonus × digitBonus × speedBonus × comboBonus` (more balls, bigger
   average digit, faster solve, longer streak = more; ~8 for an easy early kill,
@@ -395,8 +408,11 @@ curve is in `src/config/difficulty.ts` (`difficultyAt(elapsedMs, score)`).
        each other.
 7. [x] **Drifter bonus enemy** — non-lethal, crosses sideways; solving it
        gives an energy burst on top of the normal kill energy.
-8. [ ] **Handwriting input** — draw a digit on a canvas overlay; recognize it as
-       the typed number (alongside the keypad).
+7b. [x] **Answer feedback** — gold/red typed number, lock-on brackets, answer
+       stars in the background, solved sum popped on each kill.
+8. [ ] **Handwriting input** — draw a digit on a pad in the keypad area (not
+       over the field); a stroke-based recognizer (the "$P" family) reads it.
+       The ink turns into the answer stars, so the player sees what was read.
 9. [ ] Other operations (subtraction/multiplication/division) via color-coded balls
 10. [ ] Sprite animations + richer explosion/background VFX
 10b. [x] **3D playfield (Three.js)** — same top-down view, voxel models built
@@ -428,6 +444,14 @@ curve is in `src/config/difficulty.ts` (`difficultyAt(elapsedMs, score)`).
 
 Newest first. Format: `YYYY-MM-DD — decision — rationale`.
 
+- **2026-09-27 — Answer feedback at the target and in the stars.** The typed
+  number was small, below the ship and cleared on fire, so a right answer
+  gave no clear signal. Now: gold/red states (wrong clears itself), lock-on
+  brackets on the matched alien, the answer kept until the kill, the solved
+  sum popped on each kill, and the owner's idea of background stars forming
+  the answer (glyphs pre-sampled so they form in ~150 ms; kept dim and deep
+  so the balls stay the most readable thing). Handwriting input will
+  reuse the stars to show what the recognizer read.
 - **2026-09-25 — Monster abilities as a hook-based system on top of the
   movement kinds; Shielded, Blinker and Splitter first.** An ability is a
   separate field from the movement `kind`, with `update`/`onHit`/`onKilled`
