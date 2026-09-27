@@ -323,7 +323,11 @@ Green=multiplication, Yellow=division.
     adding traced templates for the owner's style (one-stroke 4 with a bowl or
     flat bar, 3 with a middle cusp, 2 with a bottom loop, big-loop 6, wide 7).
     Some templates were traced from these same samples, so a fresh session is
-    the honest check. Still weak: 3 ↔ 5 (a round 5 reads as the cusp 3).
+    the honest check. Second session (`owner-phone-2.json`): **31/36 live**
+    (the honest number); a stem drawn separately at a digit's right edge now
+    joins it (`TOUCH_PX`), plus long-flag 1 and flat-loop 9 → 66/72 over both.
+    Cross-session test: using the player's OWN drawings from the other session
+    as templates reads 34–35/36 on unseen drawings (vs 31/36 built-in only).
 - **Answer feedback** (`FEEDBACK`, `RENDER3D.ANSWER_STARS`): the typed number
   is white while typing, **gold** (with a pop and a confirm blip) when it
   matches an alien, and **red** (shake) as soon as no alien's answer can start
@@ -473,7 +477,7 @@ curve is in `src/config/difficulty.ts` (`difficultyAt(elapsedMs, score)`).
        scratch-out clears, unlike ink shows "?"; the ink turns into the answer
        stars. **Next:** record real samples with the lab (`?lab=draw`), tune
        templates until `realSamples.test.ts` passes; maybe learn the player's
-       own strokes as extra templates.
+       own strokes as extra templates (measured: ~86% → ~95% on unseen drawings).
 9. [ ] Other operations (subtraction/multiplication/division) via color-coded balls
 10. [ ] Sprite animations + richer explosion/background VFX
 10b. [x] **3D playfield (Three.js)** — same top-down view, voxel models built
@@ -505,6 +509,11 @@ curve is in `src/config/difficulty.ts` (`difficultyAt(elapsedMs, score)`).
 
 Newest first. Format: `YYYY-MM-DD — decision — rationale`.
 
+- **2026-09-27 — A separately drawn stem joins its digit.** The second lab
+  session split a two-stroke 9 into "0" + a 1-like stem ("96" → "06"): a thin
+  stroke touching the digit's right edge now always joins it. Also measured
+  that the player's own samples beat more hand-traced templates (94–97% vs
+  86% on unseen drawings), which makes per-player templates the next step.
 - **2026-09-27 — Templates traced from real handwriting.** The owner's first
   lab session read 25/36; every 4 failed because it is written in one stroke
   (down-left, across, up, down the stem), a shape no template had, so $P chose

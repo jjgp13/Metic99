@@ -108,6 +108,12 @@ describe("InkReader", () => {
     expect(ones.read()).toEqual(expect.objectContaining({ digits: "11" }));
   });
 
+  it("keeps a stem drawn on its own at the digit's right edge (a 9)", () => {
+    const reader = new InkReader();
+    drawAll(reader, [arc(160, 530, 25, 22, 0, 360), line(186, 520, 188, 610)]);
+    expect(reader.ink).toHaveLength(1);
+  });
+
   it("reports unknown ink instead of guessing, and drops taps", () => {
     const reader = new InkReader();
     drawAll(reader, place([line(0, 50, 60, 52)], 100));

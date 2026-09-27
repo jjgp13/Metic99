@@ -133,6 +133,14 @@ export const DIGIT_SHAPES: ReadonlyArray<{ digit: string; name: string; strokes:
   },
   { digit: "6", name: "6-big-loop", strokes: [path([[44, 0], [14, 30], [0, 78], [12, 97], [42, 100], [72, 87], [73, 62], [42, 57], [8, 82]])] },
   { digit: "7", name: "7-wide", strokes: [path([[0, 2], [100, 0], [52, 100]])] },
+  // samples/owner-phone-2.json: a 1 whose flag is as long as half the stem, and
+  // a 9 whose loop is a flat triangle closing into the stem.
+  { digit: "1", name: "1-long-flag", strokes: [path([[0, 50], [40, 0], [20, 100]])] },
+  {
+    digit: "9",
+    name: "9-flat-loop",
+    strokes: [path([[48, 30], [19, 37], [0, 34], [3, 27], [26, 5], [41, 0], [42, 8], [34, 32], [27, 70], [35, 100]])],
+  },
 ];
 
 export const DIGIT_TEMPLATES: readonly Template[] = DIGIT_SHAPES.map((s) =>

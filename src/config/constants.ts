@@ -440,6 +440,10 @@ export const HANDWRITING = {
   // overlaps its digit fully. Thin strokes (a 1) count as MIN_STROKE_W wide.
   NEW_DIGIT_OVERLAP: 0.35,
   MIN_STROKE_W: 12,
+  // A thin stroke (narrower than MIN_STROKE_W) that reaches within TOUCH_PX
+  // of the digit's right edge is its stem drawn separately (a 9 or a 4), not
+  // a new 1.
+  TOUCH_PX: 6,
   MAX_DIGITS: 2,
   MIN_INK_PX: 10, // ink smaller than this (a tap) is ignored
   // Recognizer ($P): points per resampled cloud and the largest cloud distance

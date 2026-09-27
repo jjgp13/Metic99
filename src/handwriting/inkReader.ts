@@ -98,6 +98,10 @@ export default class InkReader {
   }
 
   private startsNewDigit(group: Stroke[], stroke: Stroke): boolean {
+    const g = bounds(group);
+    const s = bounds([stroke]);
+    // A stem drawn on its own down the digit's right edge (a 9's or a 4's).
+    if (s.maxX - s.minX < this.cfg.MIN_STROKE_W && s.minX <= g.maxX + this.cfg.TOUCH_PX) return false;
     const a = this.span(group);
     const b = this.span([stroke]);
     if (b.lo + b.hi <= a.lo + a.hi) return false; // not to the right
