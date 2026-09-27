@@ -63,6 +63,10 @@ const TAU = Math.PI * 2;
 export default class Alien {
   public x: number;
   public y: number;
+  /** Position at the start of the last sim step. The sim steps at a fixed rate,
+   * so the renderer draws between the last two steps (`viewX`/`viewY`). */
+  public prevX: number;
+  public prevY: number;
   /** False once killed; the renderer drops its view and the scene prunes it. */
   public active = true;
 
@@ -109,6 +113,8 @@ export default class Alien {
     this.lethal = config.kind !== "drifter";
     this.x = config.x;
     this.y = config.y;
+    this.prevX = config.x;
+    this.prevY = config.y;
     this.result = config.result;
     this.digits = config.digits;
     this.bodyKey = config.bodyKey;
@@ -139,6 +145,21 @@ export default class Alien {
     if (config.kind === "drifter") this.dir = config.x < GAME.WIDTH / 2 ? 1 : -1;
     else this.dir = config.rng.chance(0.5) ? 1 : -1;
     this.gait = config.rng.next() * TAU;
+  }
+
+  /** Remember where the alien was before this sim step moves it. */
+  public savePrev(): void {
+    this.prevX = this.x;
+    this.prevY = this.y;
+  }
+
+  /** Where to draw it, `alpha` (0..1) of the way from the last step to this one. */
+  public viewX(alpha: number): number {
+    return this.prevX + (this.x - this.prevX) * alpha;
+  }
+
+  public viewY(alpha: number): number {
+    return this.prevY + (this.y - this.prevY) * alpha;
   }
 
   /** How many numbers this alien carries (2 = easy sum, 3 = harder, …). */

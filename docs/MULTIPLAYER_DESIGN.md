@@ -160,8 +160,9 @@ the agreed shape.
   base aliens" (phase 2).
 - **Game clock** (done in M1): rule timings (solve time, fire cooldown) read
   the run's game time, which stops while paused, never the wall clock.
-- **Fixed timestep** (M2): the rules step at exactly 60 Hz; the scene runs
-  0–N steps per frame. Changing frame times would otherwise make runs differ
+- **Fixed timestep** (done in M2a): the rules step at exactly 60 Hz; the
+  scene runs 0–N steps per frame and the renderer interpolates between the
+  last two steps. Changing frame times would otherwise make runs differ
   between a 120 Hz phone and a laptop.
 - **Inputs, not state:** a field changes only through `{tick, input}`. Seed +
   input log = a replay (debugging now, server checks in phase 2).
@@ -212,7 +213,7 @@ but marked as such.
 | --- | --- | --- | --- |
 | M0 | Battle rules, bots and contracts written down (§6–§9) | — | done 2026-09-27 |
 | M1 | Game clock + seeded random numbers in solo play | Rng unit tests; same `?seed` → same aliens in the browser | done 2026-09-27 |
-| M2a | Extract `Field` (spawning, movement, readability) + fixed timestep | Solo unchanged; headless soak: no box overlaps | |
+| M2a | Extract `Field` (spawning, movement, readability) + fixed timestep | Solo unchanged; headless soak: no box overlaps | done 2026-09-27 |
 | M2b | Combat, energy, abilities, input into `Field`; events out | Same seed + inputs → same state hash | |
 | M3 | Bot v1 (solving) + dev autopilot `?bot=ace` on your own field | Survival per skill level; calibrate vs your solve times | |
 | M4 | Bot energy policy (SLOW/FREEZE) | Headless A/B: survival with vs without powers | |

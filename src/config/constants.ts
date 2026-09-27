@@ -20,6 +20,18 @@ export const PLAYER = {
   SCALE: 2, // ship model scale (16px source art)
 } as const;
 
+/**
+ * The game rules advance in fixed steps (docs/MULTIPLAYER_DESIGN.md §8): the
+ * same inputs then give the same run on a 60 Hz laptop and a 120 Hz phone. The
+ * renderer draws between the last two steps, so motion stays smooth.
+ */
+export const SIM = {
+  STEP_MS: 1000 / 60,
+  // After a stall (tab switch, slow device) run at most this many steps in one
+  // frame; the rest of the time is dropped so the game can't spiral behind.
+  MAX_STEPS_PER_FRAME: 8,
+} as const;
+
 export const BULLET = {
   SPEED: 700, // px/sec upward
   MUZZLE_OFFSET: 24, // px above the ship where bullets spawn

@@ -57,9 +57,9 @@ src/
     BootScene.ts      Preloads assets; defers animations (static frames for now)
     MenuScene.ts      Title screen: ship picker + PLAY / HOW TO PLAY / SCORES
     HowToPlayScene.ts Static rules screen reached from the menu
-    GameScene.ts      The core loop: spawn, input, targeting, combat, HUD.
-                      Owns plain game state (shipX, aliens[], bullets[]) and
-                      hands World3D a snapshot every frame.
+    GameScene.ts      Steps the Field at a fixed 60 Hz and owns the rest of the
+                      loop: input, targeting, ship, bullets, scoring, energy,
+                      HUD. Hands World3D a snapshot every frame.
     NameEntryScene.ts Arcade 5-char initials entry shown at game over
     LeaderboardScene.ts Global top-N board; dual-mode (post-run / menu browse)
   services/
@@ -79,6 +79,9 @@ src/
                       Kept pure so a future server sim can share it.
     rng.ts            Seeded random numbers (mulberry32 `Rng`, `derive` for
                       keyed streams, `SpawnStreams` keyed by spawn number).
+    Field.ts          One player's field, Phaser-free: aliens, game clock,
+                      seeded spawners, readability guard, AbilityHost. Driven
+                      by `step(dt, ctx)`; emits events (spawned, reachedPlayer).
   objects/
     Alien.ts          Pure alien state (x/y, digits, result, `kind`) + per-kind
                       movement patterns and readability box; no rendering.
@@ -192,6 +195,11 @@ Green=multiplication, Yellow=division.
 - **Renderer is a view:** `World3D.render(snapshot)` diffs the snapshot's
   aliens/bullets against its meshes (create/move/remove). Game code never
   imports Three.js, which keeps the path open to a shared sim for multiplayer.
+- **Fixed timestep + interpolation:** the rules run in fixed `SIM.STEP_MS`
+  (60 Hz) steps from an accumulator (at most `MAX_STEPS_PER_FRAME` per frame);
+  aliens, bullets and the ship keep their previous-step position and the
+  renderer draws `alpha` of the way between the two, so motion stays smooth
+  when a frame runs zero or two steps.
 - **Motion polish:** aliens sway (yaw) and bank into sideways moves, the ship
   banks toward its target, the strafer shakes before it dives,
   explosions burst into voxel debris in the alien's colors with a flash from one
@@ -476,8 +484,9 @@ curve is in `src/config/difficulty.ts` (`difficultyAt(elapsedMs, score)`).
        "send"), then the WebSocket match server (8 players to start).
        **Phase 0 (offline vs bots)** milestones M0–M9 are in
        `docs/MULTIPLAYER_DESIGN.md` §10: [x] M0 battle rules/bots/contracts
-       written down, [x] M1 seeded random numbers + game clock, [ ] M2 extract
-       a Phaser-free `Field` + fixed timestep, [ ] M3+ bots, match, send.
+       written down, [x] M1 seeded random numbers + game clock, [x] M2a
+       Phaser-free `Field` (aliens, spawning, readability) + fixed timestep,
+       [ ] M2b combat/energy/input into the sim, [ ] M3+ bots, match, send.
 
 ## Conventions
 
@@ -501,6 +510,16 @@ curve is in `src/config/difficulty.ts` (`difficultyAt(elapsedMs, score)`).
 ## Decision Log
 
 Newest first. Format: `YYYY-MM-DD — decision — rationale`.
+
+- **2026-09-27 — Phaser-free `Field` + fixed 60 Hz timestep (battle royale
+  M2a).** Aliens, spawners, the game clock and the readability guard moved
+  from GameScene into `src/sim/Field.ts`, driven by `step(dt, ctx)` and
+  reporting events; bots and a server can now run fields headless (Vitest
+  soaks 32 simulated minutes in < 1 s with zero box overlaps). The rules run in
+  fixed steps (a variable frame delta made runs differ by device; the ship's
+  per-frame lerp was also faster on 120 Hz screens) and the renderer
+  interpolates between steps instead of snapping. Ship/bullets/score/energy
+  follow in M2b.
 
 - **2026-09-27 — Seeded random numbers + game clock (battle royale M1).** Game
   rules draw from a seeded mulberry32 `Rng` instead of `Math.random()`, with
