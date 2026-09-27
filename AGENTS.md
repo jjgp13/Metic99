@@ -68,7 +68,8 @@ src/
                       submitScore, plus getTop/getRank reads
   handwriting/        Phaser-free digit recognition (unit-tested)
     recognizer.ts     $P point-cloud recognizer + scratch-out detector
-    digitTemplates.ts 0–9 templates (~25 variants) built from line/arc/curve
+    digitTemplates.ts 0–9 templates (~31 variants): line/arc/curve recipes plus
+                      paths traced from real phone samples
     inkReader.ts      Strokes → digit groups (sideways overlap) → pause → InkEvent
     testShapes.ts     Test-only digits in other styles + a seeded shaky hand
     samples.ts        Lab sample file format (flat int points per stroke)
@@ -318,6 +319,11 @@ Green=multiplication, Yellow=division.
     keeps progress in localStorage (UNDO / SKIP), and exports JSON (copy /
     share) to save as `src/handwriting/samples/<name>.json`, which
     `realSamples.test.ts` replays (≥ 90% must read right).
+  - First real session (`samples/owner-phone-1.json`): 25/36 → **33/36** after
+    adding traced templates for the owner's style (one-stroke 4 with a bowl or
+    flat bar, 3 with a middle cusp, 2 with a bottom loop, big-loop 6, wide 7).
+    Some templates were traced from these same samples, so a fresh session is
+    the honest check. Still weak: 3 ↔ 5 (a round 5 reads as the cusp 3).
 - **Answer feedback** (`FEEDBACK`, `RENDER3D.ANSWER_STARS`): the typed number
   is white while typing, **gold** (with a pop and a confirm blip) when it
   matches an alien, and **red** (shake) as soon as no alien's answer can start
@@ -499,6 +505,12 @@ curve is in `src/config/difficulty.ts` (`difficultyAt(elapsedMs, score)`).
 
 Newest first. Format: `YYYY-MM-DD — decision — rationale`.
 
+- **2026-09-27 — Templates traced from real handwriting.** The owner's first
+  lab session read 25/36; every 4 failed because it is written in one stroke
+  (down-left, across, up, down the stem), a shape no template had, so $P chose
+  9. Six traced templates (4 ×2, 3, 2, 6, 7) raised it to 33/36 without
+  hurting the synthetic tests. Adding templates is the cheap fix; if more
+  players' styles miss, the next step is per-player templates recorded in-game.
 - **2026-09-27 — Handwriting is tuned on real samples from a lab page.** On
   the owner's phone some digits misread (4 → 9) although synthetic tests
   passed, so the synthetic hand isn't a good enough measure. A hidden
