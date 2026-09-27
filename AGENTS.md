@@ -42,6 +42,8 @@ loop. See the Decision Log.
 - Node.js LTS required. `npm install` → `npm run dev` (port 5173) → `npm run build`.
   `npm run bots` plays every bot level headless and prints a report
   (`scripts/bot-report.ts`; `-- --lives 1 --seeds 20 --minutes 5`).
+  `npm run playtest -- runs.json` replays saved playtest runs and prints
+  them next to the bots (`scripts/playtest-report.ts`).
 
 ## Project layout
 
@@ -67,6 +69,9 @@ src/
   services/
     leaderboard.ts    Supabase global high scores: startMatch + match-gated
                       submitScore, plus getTop/getRank reads
+    playtestLog.ts    Playtest logger: in the claude.ai playtest Artifact,
+                      saves each finished run (seed + input log + extras)
+                      to the Artifact's `db`; a no-op anywhere else
   handwriting/        Phaser-free digit recognition (unit-tested)
     recognizer.ts     $P point-cloud recognizer + scratch-out detector
     digitTemplates.ts 0–9 templates (~25 variants) built from line/arc/curve
@@ -381,6 +386,15 @@ Green=multiplication, Yellow=division.
   the bot's) solve times by ball count to compare with `npm run bots`.
   The GAME OVER screen also shows the run's survival time and median solve
   time per ball count, so a phone playtest can be compared with the bots.
+- **Playtest logging** (`src/services/playtestLog.ts`): the owner playtests a
+  build published as a private claude.ai Artifact with the `db` capability
+  (`npm run build && npm run playtest:page`, then publish `dist/playtest.html`
+  with `dist/` files; `.glb` models can't be hosted there, so it uses the
+  voxel fallback). Each finished run is saved as one `runs` document: build
+  commit, device, seed + compact input log + steps (replayable exactly),
+  summary, solves, hits, input sources (keypad/keyboard/pad), pad reads vs
+  "?", pauses. GAME OVER shows "run saved for analysis". Claude reads the
+  runs (ArtifactData) and `npm run playtest -- runs.json` replays them.
 - **Keyboard:** raw key listeners use `onKeyDown` (`src/ui/keyboard.ts`).
   Phaser 3.90 re-delivers earlier keys when several arrive in one frame
   ("12" → "112", FREEZE toggled twice); the helper drops repeats.
@@ -540,6 +554,14 @@ curve is in `src/config/difficulty.ts` (`difficultyAt(elapsedMs, score)`).
 ## Decision Log
 
 Newest first. Format: `YYYY-MM-DD — decision — rationale`.
+
+- **2026-09-27 — Playtests log themselves to a claude.ai Artifact db.** The
+  owner just plays; each finished run is saved (seed + input log + what the
+  sim can't see) so Claude can replay and measure it later instead of
+  choosing metrics up front. Chosen over a server or analytics service: no
+  backend, private to the owner, and the replay makes the log tiny. Only
+  active inside the Artifact (no `window.claude` elsewhere). Builds carry
+  their git commit (`__BUILD_ID__`) so a run replays with the same rules.
 
 - **2026-09-27 — Bot v1: human-like solver on the real inputs (battle royale
   M3).** Bots see only the screen and act only through `field.apply()`, so

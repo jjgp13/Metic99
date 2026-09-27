@@ -12,6 +12,13 @@ import {
   type SlowMode,
 } from "../config/constants";
 import { isLeaderboardEnabled, startMatch } from "../services/leaderboard";
+import {
+  hitRecord,
+  initPlaytestLog,
+  logRun,
+  type InputSource,
+  type RunExtras,
+} from "../services/playtestLog";
 import type Alien from "../objects/Alien";
 import { ABILITY_KINDS, type AbilityKind } from "../objects/abilities";
 import World3D, { getWorld3D } from "../render3d/World3D";
@@ -62,6 +69,8 @@ export default class GameScene extends Phaser.Scene {
   private field!: Field;
   /** Dev only (`?bot=ace`): a bot plays this field through the same inputs. */
   private autopilot: Bot | null = null;
+  /** What the playtest log records beyond the field (services/playtestLog.ts). */
+  private runExtras!: RunExtras;
   /** Real time not yet simulated; the sim runs in whole SIM.STEP_MS steps. */
   private stepAccMs = 0;
   private typedText!: Phaser.GameObjects.Text;
@@ -129,6 +138,7 @@ export default class GameScene extends Phaser.Scene {
     // Open a server-gated match so this run's score can be submitted later.
     // Fire-and-forget: if it fails the player just gets an unsaved score.
     void startMatch();
+    initPlaytestLog();
   }
 
   private resetState(): void {
@@ -163,6 +173,15 @@ export default class GameScene extends Phaser.Scene {
       if (kinds?.length) forcedAbilities = kinds;
     }
     this.field = new Field({ seed, forcedAbilities });
+    this.runExtras = {
+      lives: this.field.lives,
+      forcedAbilities,
+      inputMode: inputMode(),
+      sources: { keypad: 0, keyboard: 0, pad: 0 },
+      ink: { reads: 0, unknown: 0, scratch: 0 },
+      pauses: 0,
+      hits: [],
+    };
     this.autopilot = null;
     if (import.meta.env.DEV) {
       const level = new URLSearchParams(window.location.search).get("bot") ?? "";
@@ -236,6 +255,7 @@ export default class GameScene extends Phaser.Scene {
         if (e.burst > 0) this.popBurst(e.burst, e.alien.x, e.alien.y);
         break;
       case "hit":
+        this.runExtras.hits.push(hitRecord(e.alien, this.field));
         this.explode(e.alien);
         this.sound.play("hurt", { volume: 0.5 });
         this.updateComboText();
@@ -383,6 +403,7 @@ export default class GameScene extends Phaser.Scene {
   private togglePause(): void {
     if (this.gameOver) return;
     this.paused = !this.paused;
+    if (this.paused) this.runExtras.pauses++;
 
     // The 3D view hides the aliens while paused (see update()).
     this.reticle.setVisible(!this.paused);
@@ -635,7 +656,7 @@ export default class GameScene extends Phaser.Scene {
 
       btn.on("pointerdown", () => {
         btn.setFillStyle(0x33406e);
-        this.handleInput(label);
+        this.handleInput(label, "keypad");
       });
       btn.on("pointerup", () => btn.setFillStyle(0x1b2340));
       btn.on("pointerout", () => btn.setFillStyle(0x1b2340));
@@ -670,7 +691,7 @@ export default class GameScene extends Phaser.Scene {
       this.applyInputMode(inputMode() === "draw" ? "keys" : "draw"),
     );
     this.modeLabel = mode.text;
-    const clear = button(62, 44, "C", () => this.handleInput("C"));
+    const clear = button(62, 44, "C", () => this.handleInput("C", "pad"));
     this.padClear = [clear.bg, clear.text];
   }
 
@@ -698,10 +719,12 @@ export default class GameScene extends Phaser.Scene {
   private onInk(e: InkEvent): void {
     if (this.gameOver || this.paused) return;
     if (e.type === "scratch") {
-      this.handleInput("C");
+      this.runExtras.ink.scratch++;
+      this.handleInput("C", "pad");
       return;
     }
     if (e.type === "unknown") {
+      this.runExtras.ink.unknown++;
       this.sound.play("blip", { volume: 0.4, rate: 0.5 });
       return;
     }
@@ -711,7 +734,8 @@ export default class GameScene extends Phaser.Scene {
     const inks = e.inks.map((g) => g.flat());
     this.world.answerInk(text, [...text].map((_, i) => inks[i - (text.length - inks.length)] ?? null));
     if (fresh) this.field.apply({ type: "clear" });
-    this.handleInput(e.digits);
+    this.runExtras.ink.reads++;
+    this.handleInput(e.digits, "pad");
   }
 
   private bindKeyboard(): void {
@@ -729,20 +753,21 @@ export default class GameScene extends Phaser.Scene {
         this.triggerPower("freeze");
         return;
       }
-      if (e.key >= "0" && e.key <= "9") this.handleInput(e.key);
-      else if (e.key === "Backspace") this.handleInput("<");
-      else if (e.key === "Escape") this.handleInput("C");
+      if (e.key >= "0" && e.key <= "9") this.handleInput(e.key, "keyboard");
+      else if (e.key === "Backspace") this.handleInput("<", "keyboard");
+      else if (e.key === "Escape") this.handleInput("C", "keyboard");
       else if (e.key === "Enter" && this.gameOver) this.proceedAfterGameOver();
     });
   }
 
   /** A key: a digit (or several, from the drawing pad), C or <. */
-  private handleInput(key: string): void {
+  private handleInput(key: string, source: InputSource): void {
     if (this.gameOver) {
       this.proceedAfterGameOver();
       return;
     }
     if (this.paused) return;
+    this.runExtras.sources[source]++;
     this.sound.play("blip", { volume: 0.3 });
     const input: FieldInput =
       key === "C" ? { type: "clear" } : key === "<" ? { type: "back" } : { type: "digits", digits: key };
@@ -946,6 +971,21 @@ export default class GameScene extends Phaser.Scene {
       })
       .setOrigin(0.5)
       .setDepth(11);
+
+    // Playtest build (a claude.ai Artifact): save the run for analysis.
+    this.runExtras.inputMode = inputMode();
+    void logRun(this.field, this.runExtras).then((status) => {
+      if (status === "off" || !this.scene.isActive()) return;
+      this.add
+        .text(
+          GAME.WIDTH / 2,
+          GAME.HEIGHT / 2 + 146,
+          status === "saved" ? "run saved for analysis ✓" : "couldn't save this run",
+          { fontFamily: "monospace", fontSize: "13px", color: status === "saved" ? "#5ef0ff" : "#ef476f" },
+        )
+        .setOrigin(0.5)
+        .setDepth(11);
+    });
 
     this.input.once("pointerdown", () => this.proceedAfterGameOver());
   }
