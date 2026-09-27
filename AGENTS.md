@@ -77,6 +77,8 @@ src/
     energy.ts         Phaser-free energy rules: energyForKill, EnergyMeter
                       (charge/spend/drain per spender), SlowTime (SLOW / FREEZE powers).
                       Kept pure so a future server sim can share it.
+    rng.ts            Seeded random numbers (mulberry32 `Rng`, `derive` for
+                      keyed streams, `SpawnStreams` keyed by spawn number).
   objects/
     Alien.ts          Pure alien state (x/y, digits, result, `kind`) + per-kind
                       movement patterns and readability box; no rendering.
@@ -341,6 +343,11 @@ Green=multiplication, Yellow=division.
 - HUD (score, lives, difficulty bar, typed display) draws above gameplay
   (`depth 5`) so entering aliens never obscure it.
 - High score persisted in `localStorage` (`metic-highscore`).
+- **Seeded runs + game clock** (`src/sim/rng.ts`): each run has a seed; the
+  rules draw every random number from seeded streams (field, lethal spawns,
+  drifters), so the same seed and inputs roll the same aliens. Rule timings
+  (solve time, fire cooldown) read the game clock `elapsedMs`, which stops
+  while paused. Dev: the seed is logged; `?seed=123` replays it.
 - **Pause** (`P` key or on-screen `II` button): freezes the field, difficulty
   timer, spawning and firing, and **hides all aliens + their number balls** (and
   the typed display) behind an overlay so the player can't solve sums on a break.
@@ -464,19 +471,29 @@ curve is in `src/config/difficulty.ts` (`difficultyAt(elapsedMs, score)`).
        and add repo secrets `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY`).
 13. [ ] **Battle-royale multiplayer (Tetris 99-style)** — see
        `docs/MULTIPLAYER_DESIGN.md`. Single player first: [x] energy bar + slow
-       time (two modes under playtest; lives constant for 1 vs 3), [ ] alien
-       movement patterns, [ ] monster abilities; then offline bots (and energy
-       "send"), then the WebSocket match server (8–16 players to start).
+       time (two modes under playtest; lives constant for 1 vs 3), [x] alien
+       movement patterns, [x] monster abilities; then offline bots (and energy
+       "send"), then the WebSocket match server (8 players to start).
+       **Phase 0 (offline vs bots)** milestones M0–M9 are in
+       `docs/MULTIPLAYER_DESIGN.md` §10: [x] M0 battle rules/bots/contracts
+       written down, [x] M1 seeded random numbers + game clock, [ ] M2 extract
+       a Phaser-free `Field` + fixed timestep, [ ] M3+ bots, match, send.
 
 ## Conventions
 
 - Keep all tunables in `config/constants.ts`; avoid magic numbers in scenes.
 - Comment only non-obvious intent (per repo style).
 - Verify changes: `npx tsc --noEmit`, `npm test` and `npm run build` must pass.
+- **Game rules never use `Math.random()` or the wall clock** (`this.time.now`):
+  draw from the run's seeded streams and read the game clock. Visual-only
+  randomness (stars, debris) may use `Math.random()`. New monsters and
+  abilities follow the content checklist in `docs/MULTIPLAYER_DESIGN.md` §9.
 - **Git workflow:** feature branches are **local only** (never push them). Merge
   into `master` locally and push only `master` (pushing it deploys GitHub Pages).
   Every local merge into `master` is followed, without asking, by deleting the
   merged branch (`git branch -d`) and pushing `master` (after tsc + build pass).
+  **Cloud sessions** (Claude Code on the web) instead push their assigned
+  `claude/*` branch; the owner merges it into `master`.
 - Commit trailer: `Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>`.
 
 ---
@@ -484,6 +501,22 @@ curve is in `src/config/difficulty.ts` (`difficultyAt(elapsedMs, score)`).
 ## Decision Log
 
 Newest first. Format: `YYYY-MM-DD — decision — rationale`.
+
+- **2026-09-27 — Seeded random numbers + game clock (battle royale M1).** Game
+  rules draw from a seeded mulberry32 `Rng` instead of `Math.random()`, with
+  spawner streams keyed by spawn number so an extra draw (a retry) doesn't
+  shift every later alien, and rule timings read the game clock instead of
+  `this.time.now`. Needed for replays, bots and a server that re-runs a
+  field. Side effect: solve times no longer count paused time (they used to).
+- **2026-09-27 — Battle rules, bots and contracts decided
+  (docs/MULTIPLAYER_DESIGN.md §6–§10).** Owner's picks: targeting = Tetris 99
+  strategies AND tapping an opponent; SEND = one tier button (25/50/100,
+  strongest affordable, hold for smaller); one life in battle (solo keeps 3);
+  8-player matches first. Bots are real players on their own field sim using
+  human inputs (rejected: timer-based fake bots). The design is not frozen:
+  content (monsters, tuning) changes any time; only the contracts (inputs,
+  attack shape, what others see, time model, KO rules) get locked before the
+  phase 1 server. Cloud sessions push their `claude/*` branch, not `master`.
 
 - **2026-09-27 — Handwriting input: $P recognizer, overlap-split digits read
   together after a pause.** Own $P point-cloud recognizer (no ML model, no

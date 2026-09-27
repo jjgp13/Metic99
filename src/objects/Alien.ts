@@ -1,4 +1,5 @@
 import { ENEMY, GAME, MODEL_BOXES, MONSTERS, type AlienKind } from "../config/constants";
+import type { Rng } from "../sim/rng";
 import type { Ability } from "./abilities";
 
 /**
@@ -25,8 +26,10 @@ export interface AlienConfig {
   ballTexture: string;
   fallSpeed: number;
   homeSpeed: number;
-  /** Scene time (ms) when spawned, used for the score's speed bonus. */
+  /** Game-clock time (ms) when spawned, used for the score's speed bonus. */
   spawnedAt: number;
+  /** Seeded stream for the alien's quirks (start direction, gait phase). */
+  rng: Rng;
   /** Strafer: patrol time before the dive. */
   patrolMs?: number;
   /** Strafer / drifter: body y of the band it patrols or crosses. */
@@ -134,8 +137,8 @@ export default class Alien {
 
     this.mode = config.kind === "strafer" ? "enter" : "move";
     if (config.kind === "drifter") this.dir = config.x < GAME.WIDTH / 2 ? 1 : -1;
-    else this.dir = Math.random() < 0.5 ? 1 : -1;
-    this.gait = Math.random() * TAU;
+    else this.dir = config.rng.chance(0.5) ? 1 : -1;
+    this.gait = config.rng.next() * TAU;
   }
 
   /** How many numbers this alien carries (2 = easy sum, 3 = harder, …). */
