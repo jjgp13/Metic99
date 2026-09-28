@@ -274,6 +274,14 @@ export const SPLITTER = {
   // plus ENEMY.SPAWN_EDGE. The pair shifts inward together to respect it.
   EDGE_PX: 52,
   GLIDE_MS: 420,
+  // Splitlings keep their parent's pace (ABILITY.SPEED.splitter) instead of
+  // bursting out as full-speed darters (playtest: 123 px/s vs the parent's 67).
+  CHILD_SPEED: 0.7,
+  // After landing they hold still this long, so both new sums can be read.
+  HATCH_MS: 700,
+  // The second splitling lands this much higher, so the pair doesn't reach
+  // the player at the same moment (playtest: 7 of 8 splitling hits were pairs).
+  STAGGER_PX: 40,
   // Splitlings never land closer to the player than this, so a point-blank
   // kill doesn't drop two fresh sums on top of the ship.
   MAX_CHILD_Y: 260,

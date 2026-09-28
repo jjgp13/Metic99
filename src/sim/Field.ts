@@ -402,6 +402,9 @@ export class Field {
   }
 
   private loseLife(alien: Alien): void {
+    // Two aliens can reach the player in the same step; only the first of them
+    // on the last life ends the run (the second used to end it again).
+    if (this.knockedOut) return;
     this.lives = Math.max(0, this.lives - 1);
     this.combo = 0; // a hit breaks the streak
     this.events.push({ type: "hit", alien, livesLeft: this.lives });

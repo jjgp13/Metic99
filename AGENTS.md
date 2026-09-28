@@ -41,7 +41,8 @@ loop. See the Decision Log.
 - **Vitest** — unit tests for Phaser-free logic (`src/**/*.test.ts`, `npm test`).
 - Node.js LTS required. `npm install` → `npm run dev` (port 5173) → `npm run build`.
   `npm run bots` plays every bot level headless and prints a report
-  (`scripts/bot-report.ts`; `-- --lives 1 --seeds 20 --minutes 5`).
+  (`scripts/bot-report.ts`; `-- --lives 1 --seeds 20 --minutes 5
+  --ability splitter`), including which monsters cause the hits.
   `npm run playtest -- runs.json` replays saved playtest runs and prints
   them next to the bots (`scripts/playtest-report.ts`).
 
@@ -428,6 +429,9 @@ Green=multiplication, Yellow=division.
     either side (never closer to the player than `SPLITTER.MAX_CHILD_Y`). A
     splitling whose start or landing box would break the readability rule is
     not spawned; they start halfway out so their balls never overlap.
+    Splitlings keep the parent's pace (`CHILD_SPEED` 0.7), hold still for
+    `HATCH_MS` after landing so both sums can be read, and the second lands
+    `STAGGER_PX` higher so the pair doesn't reach the player together.
   - **Solo ramp:** abilities unlock by difficulty (Shielded d≥0.25, Blinker
     0.4, Splitter 0.55). A spawn gets one with `abilityChance` (20%→40%), with
     at most 1 ability alien on screen (2 from d≥0.8). Ability aliens always
@@ -554,6 +558,17 @@ curve is in `src/config/difficulty.ts` (`difficultyAt(elapsedMs, score)`).
 ## Decision Log
 
 Newest first. Format: `YYYY-MM-DD — decision — rationale`.
+
+- **2026-09-28 — Splitlings keep their parent's pace, hatch, and stagger
+  (first phone playtest).** 4 logged runs (Android app, keypad): splitlings
+  caused 8 of 14 hits, fell at 123 px/s vs the parent's 67, and 7 of 8 hit in
+  same-step pairs (2 lives at once; on the last life it ended the run twice,
+  saving it twice — fixed: a knocked-out field ignores further hits). Now
+  children move at 70%, hold 0.7 s after landing and land 40 px apart in
+  height. Bot A/B with every spawn a splitter: survival rookie/pilot/ace
+  35/47/66 s → 60/84/95 s; in the normal mix splitlings fell from 49% to 19%
+  of ace hits. Owner's pace: 2-ball 3.3 s (≈ ace), 3-ball 6.8 s (slower than
+  every bot); FREEZE on/off every 10–15 s, SLOW almost unused.
 
 - **2026-09-27 — Playtests log themselves to a claude.ai Artifact db.** The
   owner just plays; each finished run is saved (seed + input log + what the

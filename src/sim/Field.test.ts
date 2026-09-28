@@ -143,4 +143,17 @@ describe("Field", () => {
     expect(f.takeEvents().filter((e) => e.type === "hit" || e.type === "knockedOut").length).toBe(2);
     expect(f.lives).toBe(0);
   });
+
+  it("ends the run once when two aliens reach the player in the same step", () => {
+    const f = new Field({ seed: 5, lives: 1 });
+    while (f.aliens.filter((a) => a.active).length < 1) f.step(STEP);
+    const [a] = f.aliens;
+    // Two hits in one step (e.g. a splitling pair): only the first counts.
+    const loseLife = (f as unknown as { loseLife(x: unknown): void }).loseLife.bind(f);
+    loseLife(a);
+    loseLife(a);
+    const events = f.takeEvents().filter((e) => e.type === "hit" || e.type === "knockedOut");
+    expect(events.map((e) => e.type)).toEqual(["hit", "knockedOut"]);
+    expect(f.lives).toBe(0);
+  });
 });

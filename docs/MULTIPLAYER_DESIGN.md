@@ -156,7 +156,14 @@ the agreed shape.
   SLOW/FREEZE timing is the survival skill, as intended. Skill shows as
   score (aces earn difficulty faster). Splitlings were half of ace deaths
   (two full-speed darters mid-field); slowing them to the splitter's 70%
-  bought aces ~10 s. Open question for the owner.
+  bought aces ~10 s.
+- **First phone playtest (2026-09-28, 4 runs, logged + replayed):** the
+  owner solves 2-ball sums like an ace (3.3 s) but 3-ball sums at 6.8 s,
+  slower than every bot level (pilot 5.4 s, ace 3.5 s): the per-ball cost
+  of the bot model is too low for the third number. The owner survives
+  98–171 s using FREEZE in a steady rhythm, rarely SLOW. Splitlings were
+  fixed (keep the parent's pace, hatch, stagger); bot 3-ball times are
+  still to recalibrate.
 
 ## 8. Shared sim (what makes it server-ready)
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { SIM } from "../config/constants";
+import { SIM, SPLITTER } from "../config/constants";
 import type Alien from "../objects/Alien";
 import { ABILITY_KINDS, type AbilityKind } from "../objects/abilities";
 import { Swarm } from "./Swarm";
@@ -131,5 +131,54 @@ describe("Swarm", () => {
     field.remove(alien);
     expect(field.alienFor(alien.result)).toBeUndefined();
     expect(alien.active).toBe(false);
+  });
+});
+
+describe("Splitter", () => {
+  const ctx = (speed = 1) => ({ score: 0, speed, held: null, locked: null });
+
+  /** A seed where killing the first splitter on screen hatches both children. */
+  function hatchPair() {
+    for (let seed = 1; seed < 50; seed++) {
+      const swarm = new Swarm({ seed, forcedAbilities: ["splitter"] });
+      let parent: Alien | undefined;
+      let parentFrom = 0;
+      for (let i = 0; i < 60 * 30 && !parent; i++) {
+        swarm.step(STEP, ctx());
+        swarm.takeEvents();
+        parent = swarm.aliens.find((a) => a.active && a.model === "alien_splitter" && a.y > 120);
+        if (!parent) continue;
+        // Measure the parent's own fall pace over one second first.
+        parentFrom = parent.y;
+        for (let j = 0; j < 60; j++) swarm.step(STEP, ctx());
+      }
+      if (!parent?.active) continue;
+      const parentPace = parent.y - parentFrom;
+      swarm.remove(parent);
+      parent.ability?.onKilled(parent, swarm);
+      const kids = swarm.takeEvents().flatMap((e) => (e.type === "spawned" ? [e.alien] : []));
+      if (kids.length === 2) return { swarm, kids, parentPace };
+    }
+    throw new Error("no seed hatched a pair");
+  }
+
+  it("hatches a staggered pair that holds still, then moves no faster than its parent", () => {
+    const { swarm, kids, parentPace } = hatchPair();
+    // Glide out: the pair lands at clearly different heights (so they reach
+    // the player one after the other).
+    for (let t = 0; t < SPLITTER.GLIDE_MS; t += STEP) swarm.step(STEP, ctx());
+    expect(kids[0].y - kids[1].y).toBeGreaterThanOrEqual(30);
+    // Hatch: both hold still for at least half a second, to read both sums.
+    const landed = kids.map((k) => k.y);
+    for (let t = 0; t < 500; t += STEP) swarm.step(STEP, ctx());
+    expect(kids.map((k) => k.y)).toEqual(landed);
+    // Then they fall, at their parent's pace at most (never a burst of speed).
+    for (let t = 500; t < SPLITTER.HATCH_MS + 400; t += STEP) swarm.step(STEP, ctx());
+    const from = kids.map((k) => k.y);
+    for (let i = 0; i < 60; i++) swarm.step(STEP, ctx());
+    kids.forEach((k, i) => {
+      expect(k.y).toBeGreaterThan(from[i]);
+      expect(k.y - from[i]).toBeLessThan(parentPace * 1.1);
+    });
   });
 });

@@ -181,8 +181,15 @@ export class Swarm implements AbilityHost {
     const diff = this.difficulty;
     const sum = this.rollSum(this.rng, DIFFICULTY.MIN_BALLS, DIFFICULTY.MIN_BALLS, diff.maxDigit);
     if (!sum) return false;
+    // Splitlings keep their parent's slower pace rather than bursting out at
+    // full darter speed.
+    const pace = {
+      ...diff,
+      fallSpeed: diff.fallSpeed * SPLITTER.CHILD_SPEED,
+      homeSpeed: diff.homeSpeed * SPLITTER.CHILD_SPEED,
+    };
     const make = (cx: number, cy: number) =>
-      this.makeAlien(this.rng, "darter", sum, cx, cy, diff, undefined, null, SPLITTER.CHILD_MODEL);
+      this.makeAlien(this.rng, "darter", sum, cx, cy, pace, undefined, null, SPLITTER.CHILD_MODEL);
     // Start halfway out, not at the parent's center: the two splitlings then
     // begin a full box apart, so their numbers never overlap mid-glide. Its box
     // must pass the readability rule where it starts and where it lands (the
@@ -192,6 +199,7 @@ export class Swarm implements AbilityHost {
     const clear = (a: Alien) => this.aliens.every((o) => !o.active || !a.overlaps(o));
     if (!clear(child) || !clear(landing)) return false;
     child.glideTo(x, y, SPLITTER.GLIDE_MS);
+    child.hold(SPLITTER.HATCH_MS); // after the glide: time to read both new sums
     this.addAlien(child);
     return true;
   }
