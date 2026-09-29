@@ -93,6 +93,10 @@ src/
   ui/
     DrawPad.ts        The drawing pad: pointer capture, glowing ink, "?" flash
     keyboard.ts       `onKeyDown`: each key press delivered once (Phaser bug)
+    battleViews.ts    `BattleView` seam for the battle UI (M8): views of the
+                      other players get `match.tiles()` + match events each
+                      frame and act only via `BattleActions.aimAt`; register
+                      new views in `createBattleViews` (desktop board, phone)
   sim/
     energy.ts         Phaser-free energy rules: energyForKill, EnergyMeter
                       (charge/spend/drain per spender), Power (the picked
@@ -571,7 +575,9 @@ Green=multiplication, Yellow=division.
   0–1, power and whether it's on, alien dots (0–1 x/y, `sent` marked),
   badge points/level, aim, current target, how many aim at them, attack
   bonus. The battle UI reads only this (it is also what the phase 1 server
-  will broadcast per player).
+  will broadcast per player), through `BattleView`s (`src/ui/battleViews.ts`):
+  GameScene calls each view once per frame with the tiles and new match
+  events; a view acts only via `aimAt(seat)`.
 - **Lives** are a playtest constant, `PLAYER.LIVES` (3 by default; 1 = the
   battle-royale knockout rule). With 1 life the hit recovery below never runs:
   the only hit ends the game, so the power is the sole safety tool.

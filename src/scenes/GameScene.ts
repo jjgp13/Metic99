@@ -36,6 +36,7 @@ import {
 } from "../sim/Field";
 import { Bot } from "../sim/Bot";
 import { Match, type MatchEvent } from "../sim/Match";
+import { createBattleViews, type BattleView } from "../ui/battleViews";
 import type { PowerUse } from "../sim/energy";
 import { randomSeed } from "../sim/rng";
 import { summarizeSolves } from "../sim/stats";
@@ -80,6 +81,10 @@ export default class GameScene extends Phaser.Scene {
   /** Battle mode: the match; the player plays `match.fields[0]`. Null in solo. */
   private match: Match | null = null;
   private battleText: Phaser.GameObjects.Text | null = null;
+  /** Battle: views of the other players (ui/battleViews.ts), and the match
+   * events they haven't seen yet. */
+  private battleViews: BattleView[] = [];
+  private viewEvents: MatchEvent[] = [];
   /** Dev only (`?bot=ace`): a bot plays this field through the same inputs. */
   private autopilot: Bot | null = null;
   /** What the playtest log records beyond the field (services/playtestLog.ts). */
@@ -143,7 +148,10 @@ export default class GameScene extends Phaser.Scene {
     // its own canvas under Phaser's; stop drawing it when we leave this scene.
     this.world = getWorld3D();
     this.world.begin(this.textures, this.game.canvas, selectedShip().model);
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.world.end());
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.world.end();
+      for (const view of this.battleViews) view.destroy();
+    });
 
     this.buildHud();
     this.buildKeypad();
@@ -151,6 +159,11 @@ export default class GameScene extends Phaser.Scene {
     this.applyInputMode(inputMode());
     this.buildEnergyHud();
     this.bindKeyboard();
+    if (this.match) {
+      this.battleViews = createBattleViews(this, this.match, {
+        aimAt: (seat) => this.aimAt(seat),
+      });
+    }
 
     // Open a server-gated match so this run's score can be submitted later.
     // Fire-and-forget: if it fails the player just gets an unsaved score.
@@ -202,6 +215,8 @@ export default class GameScene extends Phaser.Scene {
       this.field = new Field({ seed, forcedAbilities, power: selectedPower() });
     }
     this.battleText = null;
+    this.battleViews = [];
+    this.viewEvents = [];
     this.sendButton = null;
     this.sendHeldSince = null;
     this.powerButtons = [];
@@ -238,6 +253,19 @@ export default class GameScene extends Phaser.Scene {
       this.pad.update(delta);
     }
 
+    if (this.match && this.battleViews.length) {
+      const frame = {
+        tiles: this.match.tiles(),
+        events: this.viewEvents,
+        you: 0,
+        delta,
+        paused: this.paused,
+        gameOver: this.gameOver,
+      };
+      this.viewEvents = [];
+      for (const view of this.battleViews) view.update(frame);
+    }
+
     // Draw between the last two sim steps (interpolation) so motion is smooth
     // even when a frame runs zero or two steps.
     const alpha = this.stepAlpha;
@@ -269,7 +297,10 @@ export default class GameScene extends Phaser.Scene {
     if (this.match) this.match.step(dt);
     else this.field.step(dt);
     for (const e of this.field.takeEvents()) this.show(e);
-    for (const e of this.match?.takeEvents() ?? []) this.showMatch(e);
+    for (const e of this.match?.takeEvents() ?? []) {
+      this.showMatch(e);
+      this.viewEvents.push(e);
+    }
   }
 
   /** Battle: other players' KOs, attacks, the end of the match. */
@@ -308,6 +339,14 @@ export default class GameScene extends Phaser.Scene {
         (badges ? `  ★${badges}` : "") +
         (aimedAt ? `  ⚠${aimedAt}` : ""),
     );
+  }
+
+  /** Aim at one opponent by hand (a view's tile was tapped). */
+  private aimAt(seat: number): void {
+    if (!this.match || this.gameOver || this.paused || seat === 0) return;
+    this.field.apply({ type: "target", aim: { seat } });
+    this.sound.play("blip", { volume: 0.4, rate: 1.3 });
+    this.updateBattleText();
   }
 
   /** Next targeting strategy (random → KOs → attackers → badges). */
