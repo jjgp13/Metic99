@@ -57,9 +57,7 @@ export type MatchMessage =
   /** Players still in the match (sent at the start and after every KO). */
   | { type: "standing"; alive: number; total: number }
   /** Aliens another player sent (an attack): they join the incoming queue. */
-  | { type: "attack"; from: number; cost: number; aliens: SentAlien[] }
-  /** Energy the match awards (a KO this player was credited with). */
-  | { type: "reward"; energy: number };
+  | { type: "attack"; from: number; cost: number; aliens: SentAlien[] };
 
 /** An attack this field sent; the match picks who gets it. */
 export interface Outgoing {
@@ -95,8 +93,9 @@ export interface FieldSummary {
   danger: number;
   /** Energy of the attacks still waiting to land. */
   incoming: number;
-  /** Energy meter, 0–1. */
+  /** Power meter and attack gauge, 0–1. */
   energy: number;
+  attack: number;
   /** The player's power, and whether it is on (time) or armed (shield). */
   power: PowerKind;
   powerOn: boolean;
@@ -135,8 +134,10 @@ export type FieldEvent =
       /** Drifter bonus energy included in `energy`'s gain (0 otherwise). */
       burst: number;
       absorbed: boolean;
-      /** Kill energy that paid off incoming attacks instead (battle). */
+      /** Battle: kill value that paid off incoming attacks, and what the rest
+       * stored in the attack gauge. */
       cancelled: number;
+      attack: number;
     }
   /** This field sent an attack (the match delivers it). */
   | { type: "sent"; cost: number; aliens: SentAlien[] }
@@ -213,6 +214,9 @@ export class Field {
   readonly solves: Solve[] = [];
 
   readonly energy = new EnergyMeter();
+  /** Battle: the attack gauge. Kills fill it (after paying off incoming); only
+   * SEND spends it, so attacking never costs the power's fuel. */
+  readonly attack = new EnergyMeter(SEND.GAUGE_MAX);
   readonly power: Power;
   /** Hit recovery: the field is frozen while > 0 (a countdown, so pausing the
    * scene can't eat it), then runs at POST_HIT_FACTOR for the rest of the run. */
@@ -256,7 +260,7 @@ export class Field {
   /** The SEND tier a tap buys now: the strongest affordable, else null. */
   sendTier(): number | null {
     if (!this.standing) return null;
-    const tiers = SEND.TIERS.filter((t) => this.energy.canSpend(t.COST));
+    const tiers = SEND.TIERS.filter((t) => this.attack.canSpend(t.COST));
     return tiers.length ? tiers[tiers.length - 1].COST : null;
   }
 
@@ -348,9 +352,6 @@ export class Field {
       case "standing":
         this.standing = { alive: message.alive, total: message.total };
         break;
-      case "reward":
-        this.energy.charge(message.energy);
-        break;
       case "attack": {
         const cost = message.cost / message.aliens.length;
         const delay = SEND.DELAY_MS.easy + (SEND.DELAY_MS.hard - SEND.DELAY_MS.easy) * this.dMatch;
@@ -381,6 +382,7 @@ export class Field {
       danger: Math.min(1, Math.max(0, danger)),
       incoming: this.incoming.reduce((t, a) => t + a.left, 0),
       energy: this.energy.fraction,
+      attack: this.attack.fraction,
       power: this.power.kind,
       powerOn: this.power.running || this.power.shieldArmed,
       aliens,
@@ -477,7 +479,7 @@ export class Field {
   /** Spend energy on a SEND tier: its aliens go out through takeOutgoing(). */
   private send(cost: number): boolean {
     const tier = SEND.TIERS.find((t) => t.COST === cost);
-    if (!this.standing || !tier || !this.energy.spend(cost, "send")) return false;
+    if (!this.standing || !tier || !this.attack.spend(cost, "send")) return false;
     const aliens = tier.ALIENS.map((k): SentAlien => {
       if (k === "darter") return { kind: "darter", ability: null };
       const ability = this.sendRng.pick(ABILITY_KINDS);
@@ -605,11 +607,15 @@ export class Field {
     this.score += points;
     // The bonus drifter adds its burst on top of the normal kill energy.
     const burst = alien.lethal ? 0 : MONSTERS.drifter.ENERGY_BURST;
-    // Powers never pay for themselves: a kill while a time power runs neither
-    // charges nor cancels incoming attacks. Otherwise it pays off incoming first.
-    const gain = this.power.running ? 0 : energyForKill({ digits, solveMs, combo: this.combo }) + burst;
-    const left = this.cancelIncoming(gain);
-    const energy = left > 0 ? this.energy.charge(left) : 0;
+    // Powers never pay for themselves: a kill while a time power runs charges
+    // nothing (no energy, no cancel, no attack). Otherwise the kill charges the
+    // power meter in full, and in a battle its value (the drifter's burst is
+    // power energy only) pays off incoming attacks first; the rest fills the
+    // attack gauge, which only SEND spends.
+    const kill = this.power.running ? 0 : energyForKill({ digits, solveMs, combo: this.combo });
+    const energy = kill > 0 ? this.energy.charge(kill + burst) : 0;
+    const left = this.standing ? this.cancelIncoming(kill) : 0;
+    const attack = left > 0 ? this.attack.charge(left) : 0;
 
     if (this.lockedTarget === alien) {
       this.lockedTarget = null;
@@ -620,7 +626,8 @@ export class Field {
       // After remove() so the dead alien doesn't block its own splitlings' lanes.
       alien.ability?.onKilled(alien, this.swarm);
     }
-    this.events.push({ type: "solved", alien, digits, points, energy, burst, absorbed, cancelled: gain - left });
+    const cancelled = this.standing ? kill - left : 0;
+    this.events.push({ type: "solved", alien, digits, points, energy, burst, absorbed, cancelled, attack });
   }
 
   /**
@@ -693,6 +700,6 @@ export function replayField(
 
 /** Hand a logged entry back to the field the way it first arrived. */
 export function feed(field: Field, input: FieldInput | MatchMessage): void {
-  if (input.type === "standing" || input.type === "attack" || input.type === "reward") field.receive(input);
+  if (input.type === "standing" || input.type === "attack") field.receive(input);
   else field.apply(input);
 }

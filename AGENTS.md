@@ -405,8 +405,9 @@ Green=multiplication, Yellow=division.
   `BASE × ballBonus × digitBonus × speedBonus × comboBonus` (more balls, bigger
   average digit, faster solve, longer streak = more; ~8 for an easy early kill,
   30+ for a fast 3-ball streak kill). Overflow is lost. The meter only charges
-  and spends; each use is a separate spender (one per power, plus `"send"`
-  in a battle). Per-run earned/spent totals show on game over.
+  and spends; each use is a separate spender (one per power). Per-run
+  earned/spent totals show on game over. In a battle SEND spends a separate
+  **attack gauge** (below), never this meter.
 - **Powers** (`POWERS`, `Power` in `src/sim/energy.ts`): the ship is only a
   look; the player picks ONE power on the menu (`STORAGE.POWER`), fixed for
   the run. One POWER input (`{ type: "power" }`) uses it. The set is data: each
@@ -465,8 +466,8 @@ Green=multiplication, Yellow=division.
   2+ unanswered aliens past y 340 or one past 385; **SHIELD** is armed as
   soon as it's affordable. `npm run bots` compares every power plus a
   no-power baseline (`--power`, `--level`). **SEND (M6):** in a battle, a
-  bot taps SEND once energy reaches `SEND_AT` (rookie 100, pilot 75, ace 60,
-  a guess) while the board is calm (no time power on, nothing within
+  bot taps SEND once its attack gauge reaches `SEND_AT` (rookie 100, pilot
+  75, ace 60; the moment barely matters, see log) while the board is calm (no time power on, nothing within
   `FREEZE_AT_PX`), after REACTION. Bots in a match play FREEZE for now.
   Seeded per seat (`Bot.forSeat`). Dev: `?bot=ace` puts a
   bot on autopilot on your field; at game over the console prints your (or
@@ -547,17 +548,23 @@ Green=multiplication, Yellow=division.
   `MATCH.OPPONENTS`): the `send` input spends a tier's cost (25 = darter,
   50 = one ability alien, 100 = two; the sender's `SEND` stream picks which
   ability) and the match delivers the attack `{from, cost, aliens: [{kind,
-  ability}]}` to a random opponent (M7: targeting). The receiver queues each
+  ability}]}` to the sender's target (M7). The receiver queues each
   alien for `DELAY_MS` (3 s → 1.5 s with `dMatch`, `STAGGER_MS` apart); then
   it enters from the top with an orange ring (`sentBy`), skipping the unsolved
   cap and threat budget and not holding back the field's own spawns, but
-  obeying the on-screen cap and readability (no room → it waits). **A kill's
-  energy pays off incoming first** (soonest first; each alien's share of the
-  cost); only the rest charges the meter. Battle HUD: SEND replaces SLOW in
-  the left gutter (tap = strongest affordable tier, hold steps down, slide off
-  cancels; Space = send), incoming aliens are orange blocks eating the meter
-  from its right end (blinking in their last second), "N/8 LEFT", a one-line
-  feed (SENT / INCOMING / Pn OUT), and game over shows the placement.
+  obeying the on-screen cap and readability (no room → it waits).
+  **Two gauges (owner's pick, 2026-09-30):** a kill charges the power meter
+  in full, and its value (without the drifter burst) **pays off incoming
+  first** (soonest first; each alien's share of the weight); only the rest
+  fills the **attack gauge** (`field.attack`, max `SEND.GAUGE_MAX` 100,
+  overflow lost), and SEND spends only the gauge. So attacking never costs
+  the power's fuel. Kills while a time power runs charge neither (no energy,
+  no cancel, no attack). Battle HUD: SEND takes the left gutter and is the
+  gauge: it fills from the bottom in orange (marks at each tier) while
+  incoming attacks hang from its top as pink blocks (blinking in their last
+  second); tap = strongest affordable tier, hold steps down, slide off
+  cancels; Space = send. Plus "N/8 LEFT", a one-line feed (SENT / INCOMING
+  weight / Pn OUT), and game over shows the placement.
 - **Targeting, KO credit, badges** (M7, `MATCH`): the `target` input aims a
   player's attacks by a strategy (`TARGET_STRATEGIES`: random, kos = whoever
   is closest to falling (danger + incoming), attackers = whoever aims at you,
@@ -569,16 +576,15 @@ Green=multiplication, Yellow=division.
   2/4/8/16 points give +25% each; being aimed at by k > 1 players gives
   +25%·(k−1) defense (max +75%). An attack's weight = cost × `ATTACK_MULT` ×
   (1 + bonus): the receiver must cancel the weight, and each 25 above the
-  cost adds a darter. `KO_ENERGY` (a `reward` message) and `ATTACK_MULT` are
-  balance levers, off (0 / 1) for now. Bots aim by level (`TARGETING`:
+  cost adds a darter. `ATTACK_MULT` is a balance lever (1). Bots aim by level (`TARGETING`:
   rookie random, pilot attackers, ace kos). Stand-in battle HUD: the top-right
   line shows players left, your target and strategy, badges (★) and how many
   aim at you (⚠); tap it or press T to cycle the strategy.
 - **What others see = `match.tiles()`** (`PlayerTile`): per seat: who (level
   or human), alive, placement, score, kills, danger 0–1, incoming, energy
-  0–1, power and whether it's on, alien dots (0–1 x/y, `sent` marked),
+  0–1, attack gauge 0–1, power and whether it's on, alien dots (0–1 x/y, `sent` marked),
   badge points/level, aim, current target, how many aim at them, attack
-  bonus. The battle UI reads only this (it is also what the phase 1 server
+  bonus, attack gauge 0–1. The battle UI reads only this (it is also what the phase 1 server
   will broadcast per player), through `BattleView`s (`src/ui/battleViews.ts`):
   GameScene calls each view once per frame with the tiles and new match
   events; a view acts only via `aimAt(seat)`.
@@ -593,8 +599,9 @@ Green=multiplication, Yellow=division.
   `MIN_GAME_SCALE`) and makes room. Never on phones or portrait tablets. A
   full tile: mini field with alien dots (orange = sent), a red
   wash rising with danger (pulsing near the line), name + bot level,
-  badges ★ + attack bonus, power chip (filled while on/armed), energy bar,
-  incoming bar, "→ target · strategy"; after a KO it greys out with its
+  badges ★ + attack bonus, power chip (filled while on/armed), power
+  energy (cyan) beside the attack gauge (orange, ticks at 25/50), incoming
+  (pink, like the SEND button's), "→ target · strategy"; after a KO it greys out with its
   place and who took it out. **Your target** gets the gold lock-on brackets
   (◎ TARGET / PICKED); **players aiming at you** get an orange edge + ⚔ ON
   YOU (attack orange, not red: red is for subtraction balls). Click a tile
@@ -699,8 +706,9 @@ dMatch)`; it is 0 in solo play.
        fitted to the owner), [x] M5 match (N fields, KOs, placement,
        pressure + sudden death, `npm run match`), [x] M6 SEND + incoming
        queue + cancel (menu BATTLE beta), [x] M7 targeting, KO credit,
-       badges, `tiles()`, [ ] M8 battle UI: [x] desktop opponent board,
-       [ ] phone feedback, [ ] sending must pay (owner's call, see log).
+       badges, `tiles()`, [x] sending pays: separate attack gauge,
+       [ ] M8 battle UI: [x] desktop opponent board, [ ] phone feedback,
+       [ ] results + fast-forward.
 
 ## Conventions
 
@@ -733,9 +741,22 @@ Newest first. Format: `YYYY-MM-DD — decision — rationale`.
   Built on desktops and shown while the sides fit a column: full tiles,
   compact tiles in an Artifact panel (the first build needed 256 px per
   side and showed nothing there), and in a nearly square window the game
-  shrinks up to 25% to make room. Found on the way: Phaser `CENTER_BOTH` + the flexbox centered
-  the canvas twice (300 px right at 1920, 65 px low on phones), so Phaser's
+  shrinks up to 25% to make room. Found on the way: Phaser `CENTER_BOTH`
+  + the flexbox centered the canvas twice (300 px right at 1920, 65 px low on phones), so Phaser's
   centering is off now.
+- **2026-09-30 — Separate attack gauge: sending pays (owner picked A).**
+  Kills charge the power meter in full; their value pays off incoming first
+  and the rest fills an attack gauge that only SEND spends (like Tetris 99,
+  where attacks come free with clears). Mirror matches (250, half never
+  send): senders now win — aces 61/39, pilots 67/33 (were 40/60 with one
+  meter). Mixed lineup: 34 attacks per match (was 28), matches ~83 s. When
+  bots send (gauge 25 / 50 / 100) barely matters (ace wins 88 / 87 / 81%).
+  Kills during a time power still charge nothing, so FREEZE can't farm
+  attacks. The `reward` message and `KO_ENERGY` lever were removed.
+- **2026-09-30 — Owner's M7 battles (2, Android phone, keypad).** Won one
+  (114 s, 66 kills) with zero incoming attacks all match; lost one (55 s,
+  4th) under 10 attacks in 55 s, mostly from the two aces. Aim stayed on
+  random both times. Being targeted decides a lot; the battle UI must show it.
 
 - **2026-09-30 — Targeting, KO credit and badges (battle royale M7); the
   tile contract for the battle UI.** Tetris 99's four strategies plus a seat

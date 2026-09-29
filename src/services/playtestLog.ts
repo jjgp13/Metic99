@@ -105,7 +105,8 @@ export async function logRun(field: Field, extras: RunExtras): Promise<"saved" |
       energy: {
         earned: Math.round(field.energy.earned),
         spent: Math.round(field.energy.spent[field.power.kind]),
-        send: Math.round(field.energy.spent.send),
+        send: Math.round(field.attack.spent.send),
+        attack: Math.round(field.attack.earned),
         cancelled: Math.round(field.cancelledTotal),
       },
     },
@@ -144,8 +145,6 @@ export function compact(input: FieldInput | MatchMessage): string {
       return typeof input.aim === "string" ? `t${input.aim}` : `t@${input.aim.seat}`;
     case "standing":
       return `s${input.alive}/${input.total}`;
-    case "reward":
-      return `r${input.energy}`;
     case "attack": {
       const aliens = input.aliens.map((a) => (a.ability ? `${a.kind}/${a.ability}` : a.kind));
       return `a${input.from}:${input.cost}:${aliens.join(",")}`;
@@ -171,7 +170,6 @@ export function expand(code: string): FieldInput | MatchMessage {
       }),
     };
   }
-  if (code.startsWith("r")) return { type: "reward", energy: Number(code.slice(1)) };
   if (code.startsWith("s")) {
     const [alive, total] = code.slice(1).split("/").map(Number);
     return { type: "standing", alive, total };

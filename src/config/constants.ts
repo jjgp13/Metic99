@@ -72,11 +72,8 @@ export const MATCH = {
   // An attack's weight = cost × (1 + bonus): its aliens' cancel cost, plus one
   // extra darter per EXTRA_ALIEN_PER of weight above the cost.
   EXTRA_ALIEN_PER: 25,
-  // Levers so that sending pays (M7 experiments): an attack weighs
-  // ATTACK_MULT × its cost before bonuses, and a KO gives the credited
-  // player KO_ENERGY energy.
+  // An attack weighs ATTACK_MULT × its cost before bonuses (a balance lever).
   ATTACK_MULT: 1,
-  KO_ENERGY: 0,
 } as const;
 
 /** How a player aims their attacks (Tetris 99's four strategies). */
@@ -111,7 +108,8 @@ export const BATTLE_BOARD = {
   FEED_LINES: 5, // KO feed lines kept
   COLOR: {
     DOT: "#d8defa", // an alien on a tile
-    SENT: "#ff8c42", // a sent alien, attackers, incoming (GameScene's attack orange)
+    SENT: "#ff8c42", // a sent alien, the attack gauge, attackers (GameScene's attack orange)
+    INCOMING: "#ff5c8a", // attacks waiting to land (GameScene's incoming pink)
     TARGET: "#ffd166", // your target (the lock-on brackets' gold)
     DANGER: "239, 71, 111", // rgb of the danger wash rising from the tile's bottom
     ENERGY: "#5ef0ff",
@@ -126,13 +124,17 @@ export const BATTLE_BOARD = {
 export type SentKind = "darter" | "ability";
 
 /**
- * SEND (docs/MULTIPLAYER_DESIGN.md §6): energy spent on aliens for an
- * opponent's field. One button; a tap sends the strongest tier the energy
+ * SEND (docs/MULTIPLAYER_DESIGN.md §6): the attack gauge spent on aliens for
+ * an opponent's field. One button; a tap sends the strongest tier the energy
  * buys, holding it steps down to cheaper ones. The table is content: new
  * monsters add rows. A tier's cost is split evenly over its aliens (that is
  * how much of the receiver's kill energy cancels each one).
  */
 export const SEND = {
+  // SEND spends the attack gauge, not the power's energy (owner's pick,
+  // 2026-09-30: with one shared meter, sending never paid). Kills fill it
+  // with what's left after paying off incoming; overflow is lost.
+  GAUGE_MAX: 100,
   TIERS: [
     { COST: 25, ALIENS: ["darter"] },
     { COST: 50, ALIENS: ["ability"] },

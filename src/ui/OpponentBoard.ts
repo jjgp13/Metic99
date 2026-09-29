@@ -117,6 +117,7 @@ interface TileView {
   bonus: HTMLElement;
   power: HTMLElement;
   energy: HTMLElement;
+  attack: HTMLElement;
   incoming: HTMLElement;
   incomingText: HTMLElement;
   headIncoming: HTMLElement;
@@ -241,9 +242,15 @@ export class OpponentBoard implements BattleView {
     const power = div("mb-power");
     const powerRow = div("mb-row");
     powerRow.append(power, bonus);
+    // Power fuel (cyan) and attack gauge (orange, what SEND spends) side by side.
     const energy = div("mb-fill mb-energy");
     const energyBar = div("mb-bar");
     energyBar.append(energy);
+    const attack = div("mb-fill mb-attack");
+    const attackBar = div("mb-bar mb-attack-bar");
+    attackBar.append(attack);
+    const meters = div("mb-row");
+    meters.append(energyBar, attackBar);
     const incoming = div("mb-fill mb-incoming");
     const incomingBar = div("mb-bar");
     incomingBar.append(incoming);
@@ -253,7 +260,7 @@ export class OpponentBoard implements BattleView {
     const aim = div("mb-aim");
     const tags = div("mb-tags");
     const info = div("mb-info");
-    info.append(head, powerRow, energyBar, incomingRow, aim, tags);
+    info.append(head, powerRow, meters, incomingRow, aim, tags);
     el.append(fieldBox, info);
 
     // pointerdown + preventDefault: aim at once and keep focus off the tile,
@@ -265,7 +272,7 @@ export class OpponentBoard implements BattleView {
     const ctx = field.getContext("2d");
     if (!ctx) throw new Error("OpponentBoard: no 2D canvas");
     this.tiles.set(seat, {
-      seat, el, field, ctx, name, level, badgesOn, badgesOff, bonus, power, energy,
+      seat, el, field, ctx, name, level, badgesOn, badgesOff, bonus, power, energy, attack,
       incoming, incomingText, headIncoming, aim, tags, flash, place, flashLeftMs: 0, koBy: undefined, shown: {},
     });
     return el;
@@ -371,6 +378,7 @@ export class OpponentBoard implements BattleView {
       v.power.classList.toggle("mb-on", tile.powerOn);
     });
     set(v, "energy", `${Math.round(tile.energy * 100)}`, (s) => (v.energy.style.width = `${s}%`));
+    set(v, "attack", `${Math.round(tile.attack * 100)}`, (s) => (v.attack.style.width = `${s}%`));
     const inc = Math.round(tile.incoming);
     set(v, "incoming", String(inc), () => {
       v.incoming.style.width = `${Math.min(100, inc)}%`;
@@ -505,7 +513,7 @@ const CSS = `
   opacity: 0; transition: opacity 0.35s; white-space: nowrap; overflow: hidden; }
 .mb-flash.mb-show { opacity: 1; transition: none; }
 .mb-flash.mb-sending { background: ${B.COLOR.SENT}; color: #05060f; }
-.mb-flash.mb-receiving { background: #05060fdd; color: ${B.COLOR.SENT}; }
+.mb-flash.mb-receiving { background: #05060fdd; color: ${B.COLOR.INCOMING}; }
 .mb-info { flex: 1; min-width: 0; overflow: hidden; display: flex; flex-direction: column;
   justify-content: space-between; padding: 1px 2px 1px 0; }
 .mb-head { display: flex; align-items: baseline; gap: 6px; white-space: nowrap; }
@@ -523,8 +531,11 @@ const CSS = `
 .mb-bar { flex: none; height: 7px; border-radius: 4px; background: #1b2340; overflow: hidden; }
 .mb-fill { height: 100%; width: 0; }
 .mb-energy { background: ${B.COLOR.ENERGY}; }
-.mb-incoming { background: ${B.COLOR.SENT}; }
-.mb-incoming-text { font-size: 0.8em; color: ${B.COLOR.SENT}; min-width: 3.2em; text-align: right; }
+.mb-attack { background: ${B.COLOR.SENT}; }
+.mb-attack-bar { background: linear-gradient(90deg, transparent calc(25% - 1px), #05060f 25%,
+  transparent calc(25% + 1px), transparent calc(50% - 1px), #05060f 50%, transparent calc(50% + 1px)), #1b2340; }
+.mb-incoming { background: ${B.COLOR.INCOMING}; }
+.mb-incoming-text { font-size: 0.8em; color: ${B.COLOR.INCOMING}; min-width: 3.2em; text-align: right; }
 .mb-aim { font-size: 0.85em; color: #8893b5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mb-aim.mb-at-you { color: ${B.COLOR.SENT}; font-weight: bold; }
 .mb-tags { display: flex; gap: 4px; min-height: 1.3em; }
@@ -536,7 +547,7 @@ const CSS = `
 .mb-compact .mb-info { flex: none; padding: 0; }
 .mb-compact .mb-info > :not(.mb-head), .mb-compact .mb-level { display: none; }
 .mb-compact .mb-name { font-size: 1.15em; }
-.mb-compact .mb-head-incoming { display: inline; font-size: 0.85em; color: ${B.COLOR.SENT}; }
+.mb-compact .mb-head-incoming { display: inline; font-size: 0.85em; color: ${B.COLOR.INCOMING}; }
 .mb-compact .mb-flash { font-size: 0.75em; }
 .mb-compact .mb-feed { padding: 6px; }
 .mb-compact .mb-feed-list { font-size: 0.75em; }

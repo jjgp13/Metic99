@@ -60,7 +60,7 @@ export class Bot {
   sends = 0;
   /** False: never press POWER (the "no powers" baseline in `npm run bots`). */
   usesPower = true;
-  /** Energy at which it SENDs (its level's SEND_AT; Infinity = never). */
+  /** Attack gauge at which it SENDs (its level's SEND_AT; Infinity = never). */
   sendAt: number;
   /** Since when the power decision it is about to make has held (REACTION). */
   private powerSince: number | null = null;
@@ -212,9 +212,9 @@ export class Bot {
   }
 
   /**
-   * Battle: SEND (the strongest tier the energy buys) once energy reaches
-   * SEND_AT and the board is calm (not frozen, nothing close enough to want
-   * a freeze), so it keeps enough to save itself when it matters.
+   * Battle: SEND (the strongest tier the attack gauge buys) once the gauge
+   * reaches SEND_AT and the board is calm (no time power on, nothing close
+   * enough to want one): pressing a button takes attention, like for people.
    */
   private decideSend(field: Field): void {
     const tier = field.sendTier();
@@ -223,7 +223,7 @@ export class Bot {
       .reduce((d, a) => Math.min(d, PLAYER.Y - a.y), Infinity);
     const ready =
       tier !== null &&
-      field.energy.value >= this.sendAt &&
+      field.attack.value >= this.sendAt &&
       !field.power.running &&
       nearest > this.skill.FREEZE_AT_PX;
     if (!ready) {
