@@ -4,8 +4,13 @@ import type { BattleActions, BattleFrame, BattleView } from "./battleViews";
 
 /** Where the board goes, in CSS px of the page (see `layoutBoard`). */
 export interface BoardLayout {
+  /** Compact tiles: mini field + name only, for narrower sides. */
+  compact: boolean;
   tileW: number;
   tileH: number;
+  fieldW: number;
+  fieldH: number;
+  fontPx: number;
   /** Left edge of the left column / of the right column. */
   leftX: number;
   rightX: number;
@@ -17,11 +22,16 @@ export interface BoardLayout {
 const FIELD_ASPECT = GAME.WIDTH / PLAYER.Y;
 /** Danger below this draws no wash (aliens high up are normal). */
 const DANGER_FROM = 0.35;
+/** A tile's padding + border on each side (CSS below). */
+const TILE_INSET = 6;
+
+const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
 /**
  * Where the columns fit beside the game canvas (`canvas` = its page rect),
- * with `slots` tiles per column, or null when a side is too narrow or the
- * canvas too short: the board never covers the canvas.
+ * with `slots` tiles per column: full tiles when a side has MIN_SIDE_W,
+ * compact ones down to COMPACT_MIN_W, else null. The board never covers
+ * the canvas.
  */
 export function layoutBoard(
   canvas: { left: number; right: number; top: number; height: number },
@@ -29,22 +39,67 @@ export function layoutBoard(
   slots: number,
 ): BoardLayout | null {
   const side = Math.min(canvas.left, viewportW - canvas.right) - B.GAP - B.EDGE;
-  if (side < B.MIN_SIDE_W || canvas.height < B.MIN_H) return null;
-  const tileW = Math.floor(Math.min(B.MAX_TILE_W, side));
-  const tileH = Math.floor(Math.min(B.MAX_TILE_H, (canvas.height - (slots - 1) * B.GAP) / slots));
+  if (canvas.height < B.MIN_H) return null;
+  const slotH = (canvas.height - (slots - 1) * B.GAP) / slots;
+  let tileW: number;
+  let tileH: number;
+  let fieldW: number;
+  let fontPx: number;
+  const compact = !(side >= B.MIN_SIDE_W && canvas.height >= B.FULL_MIN_H);
+  if (!compact) {
+    tileW = Math.floor(Math.min(B.MAX_TILE_W, side));
+    tileH = Math.floor(Math.min(B.MAX_TILE_H, slotH));
+    // As tall as the tile allows, leaving the info column its share.
+    fieldW = Math.min((tileH - 2 * TILE_INSET) * FIELD_ASPECT, tileW * B.FIELD_SHARE);
+    fontPx = clamp(tileH * 0.085, 11, 15);
+  } else {
+    if (side < B.COMPACT_MIN_W) return null;
+    tileW = Math.min(B.COMPACT_MAX_W, side);
+    fontPx = clamp(tileW * 0.08, 10, 13);
+    // The name row above the mini field.
+    const chrome = 2 * TILE_INSET + fontPx * 1.6;
+    fieldW = tileW - 2 * TILE_INSET;
+    if (fieldW / FIELD_ASPECT + chrome > slotH) fieldW = (slotH - chrome) * FIELD_ASPECT;
+    if (fieldW < B.COMPACT_MIN_FIELD) return null;
+    tileW = Math.floor(fieldW + 2 * TILE_INSET);
+    tileH = Math.floor(fieldW / FIELD_ASPECT + chrome);
+  }
+  fieldW = Math.floor(fieldW);
   const columnH = slots * tileH + (slots - 1) * B.GAP;
   return {
+    compact,
     tileW,
     tileH,
+    fieldW,
+    fieldH: Math.floor(fieldW / FIELD_ASPECT),
+    fontPx: Math.round(fontPx),
     leftX: canvas.left - B.GAP - tileW,
     rightX: canvas.right + B.GAP,
     top: canvas.top + (canvas.height - columnH) / 2,
   };
 }
 
-/** True when the window has room for the board beside `canvas`. */
-export function boardFits(canvas: HTMLCanvasElement): boolean {
-  return layoutBoard(canvas.getBoundingClientRect(), document.documentElement.clientWidth, 4) !== null;
+/**
+ * In a landscape window too narrow for even compact columns, the width to
+ * give the game's box (#game) so that the canvas shrinks and makes room,
+ * like Tetris 99; null when no room is needed, the window is portrait (the
+ * phone view's job) or the game would shrink below MIN_GAME_SCALE.
+ */
+export function reserveWidth(viewportW: number, viewportH: number): number | null {
+  const natural = Math.min(viewportW, (viewportH * GAME.WIDTH) / GAME.HEIGHT);
+  const need = B.COMPACT_MIN_W + B.GAP + B.EDGE;
+  if ((viewportW - natural) / 2 >= need || viewportW < viewportH) return null;
+  const width = Math.floor(viewportW - 2 * need);
+  return width >= natural * B.MIN_GAME_SCALE ? width : null;
+}
+
+/** Whether to build the board: on any desktop (a mouse or trackpad), where
+ * it shows whenever the window has room, or wherever it fits right now. */
+export function boardWanted(canvas: HTMLCanvasElement): boolean {
+  if (window.matchMedia("(pointer: fine)").matches) return true;
+  const vw = document.documentElement.clientWidth;
+  const vh = document.documentElement.clientHeight;
+  return layoutBoard(canvas.getBoundingClientRect(), vw, 4) !== null || reserveWidth(vw, vh) !== null;
 }
 
 const seatName = (seat: number, you: number) => (seat === you ? "YOU" : `P${seat + 1}`);
@@ -64,6 +119,7 @@ interface TileView {
   energy: HTMLElement;
   incoming: HTMLElement;
   incomingText: HTMLElement;
+  headIncoming: HTMLElement;
   aim: HTMLElement;
   tags: HTMLElement;
   flash: HTMLElement;
@@ -106,10 +162,17 @@ export class OpponentBoard implements BattleView {
   private fieldH = 0;
   private clock = 0;
 
+  /** The game's box (#game), narrowed by `reserveWidth` while needed. */
+  private readonly gameBox: HTMLElement | null;
+  private reserved: number | null = null;
+
   constructor(
     private readonly canvas: HTMLCanvasElement,
     private readonly actions: BattleActions,
+    /** Refit the canvas at once after the game's box changes size. */
+    private readonly refit: () => void,
   ) {
+    this.gameBox = canvas.parentElement;
     this.style = document.createElement("style");
     this.style.textContent = CSS;
     document.head.append(this.style);
@@ -137,6 +200,7 @@ export class OpponentBoard implements BattleView {
   }
 
   destroy(): void {
+    this.reserve(null);
     this.root.remove();
     this.style.remove();
   }
@@ -170,8 +234,9 @@ export class OpponentBoard implements BattleView {
     const bonus = span("mb-bonus");
     const badges = div("mb-badges");
     badges.append(badgesOn, badgesOff);
+    const headIncoming = span("mb-head-incoming");
     const head = div("mb-head");
-    head.append(name, level, badges);
+    head.append(name, level, badges, headIncoming);
 
     const power = div("mb-power");
     const powerRow = div("mb-row");
@@ -201,15 +266,17 @@ export class OpponentBoard implements BattleView {
     if (!ctx) throw new Error("OpponentBoard: no 2D canvas");
     this.tiles.set(seat, {
       seat, el, field, ctx, name, level, badgesOn, badgesOff, bonus, power, energy,
-      incoming, incomingText, aim, tags, flash, place, flashLeftMs: 0, koBy: undefined, shown: {},
+      incoming, incomingText, headIncoming, aim, tags, flash, place, flashLeftMs: 0, koBy: undefined, shown: {},
     });
     return el;
   }
 
   /** Place the columns beside the canvas; false (hidden) when they don't fit. */
   private layout(): boolean {
-    const r = this.canvas.getBoundingClientRect();
     const vw = document.documentElement.clientWidth;
+    const vh = document.documentElement.clientHeight;
+    this.reserve(reserveWidth(vw, vh));
+    const r = this.canvas.getBoundingClientRect();
     const key = `${r.left},${r.top},${r.width},${r.height},${vw}`;
     if (key === this.layoutKey) return this.root.style.display !== "none";
     this.layoutKey = key;
@@ -223,22 +290,30 @@ export class OpponentBoard implements BattleView {
       col.style.top = `${l.top}px`;
       col.style.width = `${l.tileW}px`;
     }
+    this.root.classList.toggle("mb-compact", l.compact);
     this.root.style.setProperty("--tile-h", `${l.tileH}px`);
     this.root.style.setProperty("--gap", `${B.GAP}px`);
-    this.root.style.fontSize = `${Math.max(11, Math.min(15, l.tileH * 0.085))}px`;
-    // The mini field keeps the field's shape, as tall as the tile allows but
-    // leaving the info column its share of the width.
-    const fieldW = (this.fieldW = Math.round(Math.min((l.tileH - 12) * FIELD_ASPECT, l.tileW * B.FIELD_SHARE)));
-    const fieldH = (this.fieldH = Math.round(fieldW / FIELD_ASPECT));
+    this.root.style.fontSize = `${l.fontPx}px`;
+    this.fieldW = l.fieldW;
+    this.fieldH = l.fieldH;
     const dpr = window.devicePixelRatio || 1;
     for (const t of this.tiles.values()) {
-      t.field.style.width = `${fieldW}px`;
-      t.field.style.height = `${fieldH}px`;
-      t.field.width = Math.round(fieldW * dpr);
-      t.field.height = Math.round(fieldH * dpr);
+      t.field.style.width = `${l.fieldW}px`;
+      t.field.style.height = `${l.fieldH}px`;
+      t.field.width = Math.round(l.fieldW * dpr);
+      t.field.height = Math.round(l.fieldH * dpr);
       t.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     }
     return true;
+  }
+
+  /** Narrow the game's box to `width` (null: back to full width). */
+  private reserve(width: number | null): void {
+    if (width === this.reserved || !this.gameBox) return;
+    this.reserved = width;
+    this.gameBox.style.width = width === null ? "" : `${width}px`;
+    this.gameBox.style.margin = width === null ? "" : "0 auto";
+    this.refit();
   }
 
   private onEvent(e: MatchEvent, frame: BattleFrame): void {
@@ -300,6 +375,7 @@ export class OpponentBoard implements BattleView {
     set(v, "incoming", String(inc), () => {
       v.incoming.style.width = `${Math.min(100, inc)}%`;
       v.incomingText.textContent = inc > 0 ? `▼${inc}` : "";
+      v.headIncoming.textContent = inc > 0 ? `▼${inc}` : "";
     });
 
     const aim = typeof tile.aim === "string" ? B.AIM_LABEL[tile.aim] : "PICKED";
@@ -455,6 +531,15 @@ const CSS = `
 .mb-tag { font-size: 0.75em; font-weight: bold; padding: 0 4px; border-radius: 3px; line-height: 1.5; }
 .mb-tag-target { background: ${B.COLOR.TARGET}; color: #05060f; }
 .mb-tag-on-you { background: ${B.COLOR.SENT}; color: #05060f; }
+.mb-head-incoming { display: none; }
+.mb-compact .mb-tile { flex-direction: column-reverse; justify-content: flex-end; gap: 2px; }
+.mb-compact .mb-info { flex: none; padding: 0; }
+.mb-compact .mb-info > :not(.mb-head), .mb-compact .mb-level { display: none; }
+.mb-compact .mb-name { font-size: 1.15em; }
+.mb-compact .mb-head-incoming { display: inline; font-size: 0.85em; color: ${B.COLOR.SENT}; }
+.mb-compact .mb-flash { font-size: 0.75em; }
+.mb-compact .mb-feed { padding: 6px; }
+.mb-compact .mb-feed-list { font-size: 0.75em; }
 .mb-feed { padding: 8px 10px; display: flex; flex-direction: column; gap: 4px; border-style: dashed; }
 .mb-feed-left { font-size: 1.35em; font-weight: bold; color: #fff; }
 .mb-feed-list { flex: 1; white-space: pre; font-size: 0.85em; line-height: 1.35; color: #8893b5;

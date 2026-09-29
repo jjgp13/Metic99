@@ -85,13 +85,23 @@ export const TARGET_STRATEGIES: readonly TargetStrategy[] = ["random", "kos", "a
 
 /**
  * The desktop opponent board (src/ui/OpponentBoard.ts): the other players'
- * tiles in the empty space left and right of the portrait game canvas. It is
- * only built, and only shown, while both sides have room for a column.
- * Sizes in CSS px.
+ * tiles in the empty space left and right of the portrait game canvas, shown
+ * while both sides have room for a column. Sizes in CSS px.
  */
 export const BATTLE_BOARD = {
-  MIN_SIDE_W: 230, // room each side needs (after GAP + EDGE) to show a column
-  MIN_H: 520, // canvas height below which tiles would be too small to read
+  // Full tiles (mini field + info column) need this much room each side
+  // (after GAP + EDGE) and canvas height...
+  MIN_SIDE_W: 230,
+  FULL_MIN_H: 520,
+  // ...compact tiles (mini field + name row) this much, e.g. a claude.ai
+  // Artifact panel. Below MIN_H the tiles would be too small to read.
+  COMPACT_MIN_W: 120,
+  COMPACT_MAX_W: 190,
+  COMPACT_MIN_FIELD: 90, // narrowest mini field worth showing
+  MIN_H: 400,
+  // In a landscape window without room even for compact tiles, the game may
+  // shrink to this fraction of its width to make room for them.
+  MIN_GAME_SCALE: 0.75,
   MAX_TILE_W: 330,
   MAX_TILE_H: 176,
   FIELD_SHARE: 0.45, // the mini field's share of the tile width (at most)

@@ -98,7 +98,7 @@ src/
                       frame and act only via `BattleActions.aimAt`; register
                       new views in `createBattleViews` (desktop board, phone)
     OpponentBoard.ts  Desktop opponent board: DOM tiles beside the canvas
-                      (`BATTLE_BOARD`), built only when the window is wide
+                      (`BATTLE_BOARD`), built on desktops, shown while wide
   sim/
     energy.ts         Phaser-free energy rules: energyForKill, EnergyMeter
                       (charge/spend/drain per spender), Power (the picked
@@ -583,10 +583,15 @@ Green=multiplication, Yellow=division.
   GameScene calls each view once per frame with the tiles and new match
   events; a view acts only via `aimAt(seat)`.
 - **Desktop opponent board** (`src/ui/OpponentBoard.ts`, `BATTLE_BOARD`):
-  when both sides of the canvas have ≥ `MIN_SIDE_W` px (e.g. 1280×720,
-  1920×1080; never on phones or portrait tablets), the 7 opponents are
-  tiles in two columns beside the field (4 left, 3 right + a KO feed with
-  "N/8 LEFT"). A tile: mini field with alien dots (orange = sent), a red
+  built on any desktop (fine pointer) or wherever it fits, and shown while
+  the sides of the canvas have room: the 7 opponents are tiles in two
+  columns beside the field (4 left, 3 right + a KO feed with "N/8 LEFT").
+  Full tiles need `MIN_SIDE_W` per side (1280×720, 1920×1080); **compact**
+  tiles (mini field + name, badges, incoming) need `COMPACT_MIN_W`, e.g. a
+  claude.ai Artifact panel (~900 px); in a landscape window narrower still,
+  the game's box (#game) narrows so the canvas shrinks (to ≥
+  `MIN_GAME_SCALE`) and makes room. Never on phones or portrait tablets. A
+  full tile: mini field with alien dots (orange = sent), a red
   wash rising with danger (pulsing near the line), name + bot level,
   badges ★ + attack bonus, power chip (filled while on/armed), energy bar,
   incoming bar, "→ target · strategy"; after a KO it greys out with its
@@ -725,8 +730,10 @@ Newest first. Format: `YYYY-MM-DD — decision — rationale`.
   FIT on phones, touches all scenes) and a second canvas (own hit tests,
   text and DPI handling). DOM gives crisp text, free clicks and CSS layout,
   and the game canvas is untouched; the board reads only tiles + events.
-  Built only when both sides fit a column, hidden again if the window
-  shrinks. Found on the way: Phaser `CENTER_BOTH` + the flexbox centered
+  Built on desktops and shown while the sides fit a column: full tiles,
+  compact tiles in an Artifact panel (the first build needed 256 px per
+  side and showed nothing there), and in a nearly square window the game
+  shrinks up to 25% to make room. Found on the way: Phaser `CENTER_BOTH` + the flexbox centered
   the canvas twice (300 px right at 1920, 65 px low on phones), so Phaser's
   centering is off now.
 
