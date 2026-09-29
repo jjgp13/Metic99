@@ -2,13 +2,14 @@
  * Bot report: plays every bot level on several seeds, headless, and prints how
  * they did. Run with `npm run bots` (add `-- --lives 1` for the battle rule,
  * `-- --minutes 5` to cap runs, `-- --seeds 20` for more runs,
- * `-- --ability splitter` to make every allowed spawn that ability).
+ * `-- --ability splitter` to make every allowed spawn that ability,
+ * `-- --kind swooper` to make every 2-ball spawn that kind).
  *
  * This is "balancing by simulation": change a number in BOT or DIFFICULTY,
  * re-run, and compare, instead of playing dozens of games by hand. Compare the
  * solve times with your own (dev console at game over).
  */
-import { BOT, SIM, type BotLevel } from "../src/config/constants";
+import { BOT, SIM, type AlienKind, type BotLevel } from "../src/config/constants";
 import { Bot } from "../src/sim/Bot";
 import type { AbilityKind } from "../src/objects/abilities";
 import { Field } from "../src/sim/Field";
@@ -26,6 +27,8 @@ const MINUTES = arg("minutes", 10);
 const LIVES = arg("lives", 3);
 const abilityArg = process.argv.indexOf("--ability");
 const FORCED = abilityArg >= 0 ? (process.argv[abilityArg + 1].split(",") as AbilityKind[]) : null;
+const kindArg = process.argv.indexOf("--kind");
+const KINDS = kindArg >= 0 ? (process.argv[kindArg + 1].split(",") as AlienKind[]) : null;
 
 const rows = [];
 for (const level of Object.keys(BOT.LEVELS) as BotLevel[]) {
@@ -38,7 +41,7 @@ for (const level of Object.keys(BOT.LEVELS) as BotLevel[]) {
   const hitsBy = new Map<string, number>();
   let hits = 0;
   for (let seed = 1; seed <= SEEDS; seed++) {
-    const field = new Field({ seed, lives: LIVES, forcedAbilities: FORCED });
+    const field = new Field({ seed, lives: LIVES, forcedAbilities: FORCED, forcedKinds: KINDS });
     const bot = Bot.forSeat(level, seed);
     const maxSteps = Math.round((MINUTES * 60_000) / SIM.STEP_MS);
     while (!field.knockedOut && field.steps < maxSteps) {
@@ -80,6 +83,7 @@ for (const level of Object.keys(BOT.LEVELS) as BotLevel[]) {
 }
 console.log(
   `${SEEDS} seeds per level, ${LIVES} ${LIVES === 1 ? "life" : "lives"}, runs capped at ${MINUTES} min` +
-    (FORCED ? `, every allowed spawn: ${FORCED.join(", ")}` : ""),
+    (FORCED ? `, every allowed spawn: ${FORCED.join(", ")}` : "") +
+    (KINDS ? `, every 2-ball spawn: ${KINDS.join(", ")}` : ""),
 );
 console.table(rows);

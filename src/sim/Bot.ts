@@ -1,4 +1,4 @@
-import { BOT, type BotLevel } from "../config/constants";
+import { BOT, GAME, type BotLevel } from "../config/constants";
 import type Alien from "../objects/Alien";
 import type { Field } from "./Field";
 import { Rng } from "./rng";
@@ -130,6 +130,7 @@ export class Bot {
         a.active &&
         a !== field.lockedTarget &&
         a.y - a.top >= 0 && // its balls are on screen
+        a.x >= 0 && a.x <= GAME.WIDTH && // not still coming in from a side edge
         (a.ability?.cover ?? 0) <= BOT.MAX_READ_COVER,
     );
   }

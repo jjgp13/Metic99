@@ -57,13 +57,15 @@ go through the same guard. Details: AGENTS.md → Gameplay rules.
 
 ## 4. Monster ideas
 
-Movement (gives the player time to spot and solve a sum). **All four are in
-the single-player game** (2026-09-25):
+Movement (gives the player time to spot and solve a sum). **All five are in
+the single-player game** (2026-09-25; swooper 2026-09-28):
 - **Darter:** fast zig-zag dive (2 balls).
 - **Lumberer:** slow, stop-and-go stomp (3 balls).
 - **Drifter:** crosses sideways, non-lethal bonus; solving it gives energy.
 - **Strafer (Galaga-style):** patrols a band at the top for a few seconds,
   then dives.
+- **Swooper:** flies in from a side edge below the HUD, then glides down
+  (solo spawn; sendable later as a cheap 2-ball attack).
 
 Abilities (mainly for sent aliens). **Built (2026-09-25): Shielded, Blinker,
 Splitter** on a hook-based ability system (see AGENTS.md → Gameplay rules); in
