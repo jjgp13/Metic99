@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { FEEDBACK, SIM } from "../config/constants";
+import { FEEDBACK, POWER_KINDS, SIM } from "../config/constants";
 import { ABILITY_KINDS } from "../objects/abilities";
+import { Bot } from "./Bot";
 import { Field, replayField, type FieldEvent } from "./Field";
 
 const STEP = SIM.STEP_MS;
@@ -28,10 +29,10 @@ function play(field: Field, minutes: number): FieldEvent[] {
       thinking = null;
     }
     const danger = field.aliens.some((a) => a.active && a.lethal && a.y > 420 && a !== field.target);
-    if (danger && field.slowTime.mode === null && field.energy.value >= 40) {
-      field.apply({ type: "power", mode: "freeze" });
-    } else if (!danger && field.slowTime.mode !== null) {
-      field.apply({ type: "power", mode: "freeze" }); // pressing it again turns it off
+    if (danger && !field.power.running && field.energy.value >= 40) {
+      field.apply({ type: "power" });
+    } else if (!danger && field.power.running) {
+      field.apply({ type: "power" }); // pressing it again turns it off
     }
     field.step(STEP);
     events.push(...field.takeEvents());
@@ -52,7 +53,7 @@ function fingerprint(f: Field): string {
     combo: f.combo,
     kills: f.kills,
     energy: f.energy.value,
-    power: f.slowTime.mode,
+    power: [f.power.running, f.power.shieldArmed],
   });
 }
 
@@ -113,10 +114,80 @@ describe("Field", () => {
     expect(f.typed).toBe("");
   });
 
-  it("can't start a power without energy", () => {
-    const f = new Field({ seed: 4 });
-    expect(f.apply({ type: "power", mode: "slow" })).toBe(false);
-    expect(f.slowTime.mode).toBeNull();
+  it("can't use any power without energy", () => {
+    for (const power of POWER_KINDS) {
+      const f = new Field({ seed: 4, power });
+      expect(f.apply({ type: "power" })).toBe(false);
+      expect(f.power.running || f.power.shieldArmed).toBe(false);
+    }
+  });
+
+  it("replays exactly with each power, played by a bot", () => {
+    for (const power of POWER_KINDS) {
+      const original = new Field({ seed: 11, power });
+      const bot = Bot.forSeat("pilot", 11);
+      while (!original.knockedOut && original.steps < 60 * 60 * 3) {
+        bot.update(original, STEP);
+        original.step(STEP);
+      }
+      expect(original.energy.spent[power]).toBeGreaterThan(0);
+      const replay = replayField({ seed: 11, power }, original.inputLog, original.steps, STEP);
+      expect(fingerprint(replay)).toBe(fingerprint(original));
+    }
+  });
+
+  it("kills made while a time power runs charge no energy", () => {
+    for (const power of ["freeze", "slow"] as const) {
+      const f = new Field({ seed: 6, power });
+      const bot = Bot.forSeat("ace", 6);
+      let whileOn = 0;
+      let charged = 0;
+      while (!f.knockedOut && f.steps < 60 * 60 * 3) {
+        bot.update(f, STEP);
+        const on = f.power.running;
+        f.step(STEP);
+        for (const e of f.takeEvents()) {
+          if (e.type !== "solved" || !on) continue;
+          whileOn++;
+          charged += e.energy;
+        }
+      }
+      expect(whileOn).toBeGreaterThan(0);
+      expect(charged).toBe(0);
+    }
+  });
+
+  it("BLAST needs a full bar and destroys every alien for no score or energy", () => {
+    const f = new Field({ seed: 9, power: "blast" });
+    while (f.aliens.filter((a) => a.active).length < 2) f.step(STEP);
+    f.energy.charge(f.power.cost - 1);
+    expect(f.apply({ type: "power" })).toBe(false);
+    f.energy.charge(1);
+    const aliens = f.aliens.filter((a) => a.active);
+    const before = { score: f.score, combo: f.combo };
+    expect(f.apply({ type: "power" })).toBe(true);
+    expect(aliens.every((a) => !a.active)).toBe(true);
+    expect(f.energy.value).toBe(0);
+    expect({ score: f.score, combo: f.combo }).toEqual(before);
+    const blasted = f.takeEvents().find((e) => e.type === "blasted");
+    expect(blasted?.type === "blasted" && blasted.aliens).toEqual(aliens);
+  });
+
+  it("SHIELD blocks one hit, can't be bought twice, and then lives are lost again", () => {
+    const f = new Field({ seed: 5, power: "shield" });
+    f.energy.charge(100);
+    expect(f.apply({ type: "power" })).toBe(true);
+    expect(f.power.shieldArmed).toBe(true);
+    expect(f.apply({ type: "power" })).toBe(false); // one at a time
+    const events: FieldEvent[] = [];
+    while (!events.some((e) => e.type === "hit")) {
+      f.step(STEP);
+      events.push(...f.takeEvents());
+    }
+    const types = events.map((e) => e.type).filter((t) => t === "shielded" || t === "hit");
+    expect(types.slice(0, 2)).toEqual(["shielded", "hit"]);
+    expect(f.lives).toBe(2);
+    expect(f.power.shieldArmed).toBe(false);
   });
 
   it("loses lives to unsolved aliens, freezes after a hit, then stops when knocked out", () => {

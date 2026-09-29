@@ -24,14 +24,22 @@ reason.
 - **Energy only (no automatic attacks).** A kill first cancels incoming aliens;
   the rest fills the energy bar. The player chooses to spend it on:
   - **Send:** drop aliens on the current target (more energy = harder monster).
-  - **Slow / Freeze:** two powers on the player's own field, each with its
-    own button. SLOW (30% speed) is the economical one; FREEZE (full stop) is
-    the emergency one and drains twice as fast. Both drain energy while on
-    and pause while the hit-recovery freeze already stops the field. (The
-    first playtest found 60% slow too weak.)
+  - **Their power:** each player picks ONE power before the match (decided
+    2026-09-29): FREEZE (field stopped), SLOW (field at 45%, cheap), BLAST
+    (destroy every alien on your field) or SHIELD (the next alien that
+    reaches you is destroyed instead of a life). The ship is only a look.
+    **Powers never pay for themselves:** kills made while a time power runs
+    and aliens a power destroys charge no energy. Why one pick instead of a
+    power per ship: new ships stay free cosmetics, the power set stays small
+    enough to balance, and bots learn a power by its effect, not its name.
+    Replayed playtests showed why the rule is needed: kills made while
+    frozen paid back 40–50% of FREEZE's cost, so FREEZE was on ~27% of the
+    time and SLOW was almost never used.
   - Energy code (`src/sim/energy.ts`) is Phaser-free and the meter tracks
-    spending per use (`"slow"`, `"freeze"`, `"send"`), so sending only adds a new spender
-    plus the "cancel incoming first" step before `charge()`.
+    spending per use (one spender per power, plus `"send"`), so sending only
+    adds a new spender plus the "cancel incoming first" step before
+    `charge()`. Open for M6: kills made during a time power charge nothing,
+    so as written they would cancel nothing either.
 - **First matches: 8 players** (you + 7 bots), then 16, then 99. Bots fill
   empty seats online too.
 - **Knockout: one life in battle matches** (decided 2026-09-27), like topping
@@ -57,13 +65,15 @@ go through the same guard. Details: AGENTS.md → Gameplay rules.
 
 ## 4. Monster ideas
 
-Movement (gives the player time to spot and solve a sum). **All four are in
-the single-player game** (2026-09-25):
+Movement (gives the player time to spot and solve a sum). **All five are in
+the single-player game** (2026-09-25; swooper 2026-09-28):
 - **Darter:** fast zig-zag dive (2 balls).
 - **Lumberer:** slow, stop-and-go stomp (3 balls).
 - **Drifter:** crosses sideways, non-lethal bonus; solving it gives energy.
 - **Strafer (Galaga-style):** patrols a band at the top for a few seconds,
   then dives.
+- **Swooper:** flies in from a side edge below the HUD, then glides down
+  (solo spawn; sendable later as a cheap 2-ball attack).
 
 Abilities (mainly for sent aliens). **Built (2026-09-25): Shielded, Blinker,
 Splitter** on a hook-based ability system (see AGENTS.md → Gameplay rules); in
@@ -143,8 +153,8 @@ the agreed shape.
 ## 7. Bots (phase 0)
 
 - **A bot is a real player:** its own full field simulation (no rendering),
-  playing through the same inputs a human uses (answer, clear, SLOW, FREEZE,
-  SEND, target). It sees only what a human sees (digits, positions, how
+  playing through the same inputs a human uses (answer, clear, POWER, SEND,
+  target). It sees only what a human sees (digits, positions, how
   covered the balls are), so it can't cheat and new monsters mostly just work.
   Rejected: "fake" bots that kill on a timer (can't use powers, react to
   attacks or be surprised by a Blinker, and nothing carries over to a server).
@@ -156,15 +166,22 @@ the agreed shape.
   never locks onto another alien.
 - **Skill levels** are tables of those numbers (Rookie / Pilot / Ace),
   calibrated against the owner's own solve times.
-- **Energy policy:** simple rules. Built (M4) from the owner's 72 logged
-  freezes: FREEZE when ≥ 2 unanswered aliens are on screen and the nearest
-  is within reach (ace ~170 px ≈ the owner), or one is about to land; keep
-  answering; unfreeze once the board is clear. Each dangerous moment goes
-  unnoticed with a per-level chance (`MISS_DANGER`), because people get hit
-  with energy to spare. No SLOW for now. **SEND (built M6):** tap SEND
-  once energy reaches `SEND_AT` (rookie 100, pilot 75, ace 60) while the
-  board is calm, so enough stays for a freeze. Incoming aliens count as
+- **Energy policy:** simple rules per power EFFECT (built in M4). A time
+  power (FREEZE, SLOW) follows the owner's 72 logged freezes: on when ≥ 2
+  unanswered aliens are on screen and the nearest is within reach (ace
+  ~170 px ≈ the owner), or one is about to land; keep answering; off once
+  the board is clear. Each dangerous moment goes unnoticed with a per-level
+  chance (`MISS_DANGER`), because people get hit with energy to spare.
+  BLAST fires when several unanswered aliens are close or one is about to
+  land; SHIELD is armed as soon as it's affordable. **SEND (built M6):** tap
+  SEND once energy reaches `SEND_AT` (rookie 100, pilot 75, ace 60) while
+  the board is calm, so enough stays for a power. Incoming aliens count as
   danger once they land (bots read the screen, not the queue).
+- **What the power comparison showed (M4, 24 seeds, `npm run bots`):** every
+  power beats none. Rookies and pilots survive within ~±10% across the four
+  powers, with 3 lives and with 1. After merging with the fitted FREEZE rule
+  (8 seeds, 3 lives): ace FREEZE 230 s, SHIELD 219 s, BLAST 490 s — BLAST is
+  the open balance question for aces.
 - **What M6's simulations showed** (`npm run match`, 100 matches, 8 mixed
   bots): ~25 attacks per match; they shorten matches (94 → 73 s median) but
   land only ~9% of KOs directly (the rest is added load). Aces win 84%
@@ -240,7 +257,8 @@ change together, with a version bump). Lock them before phase 1.
 
 | Contract | Rule |
 | --- | --- |
-| Player inputs | answer (0–99), clear, SLOW, FREEZE, SEND (tier), target (strategy or player) |
+| Player inputs | answer (0–99), clear, POWER, SEND (tier), target (strategy or player) |
+| Loadout | one power (a `POWER_KINDS` key) picked before the match and fixed for it; the ship is a look and never affects the rules. Tiles show each player's power |
 | Attack | `{from, cost, aliens: [{kind, ability}]}` into the target's incoming queue (M6); attacks only ever arrive as aliens; the receiver rolls sums and columns |
 | What others see | the tile summary in §6 |
 | Time | fixed steps, seeded streams, game clock |
@@ -272,7 +290,7 @@ but marked as such.
 | M2a | Extract `Field` (spawning, movement, readability) + fixed timestep | Solo unchanged; headless soak: no box overlaps | done 2026-09-27 |
 | M2b | Combat, energy, abilities, input into `Field`; events out | Same seed + inputs → same state hash | done 2026-09-27 |
 | M3 | Bot v1 (solving) + dev autopilot `?bot=ace` on your own field | Survival per skill level; calibrate vs your solve times | done 2026-09-27 |
-| M4 | Bot energy policy (SLOW/FREEZE) | Headless A/B: survival with vs without powers | done 2026-09-29 |
+| M4 | Bot energy policy (per power effect; time powers fitted to the owner) | Headless A/B: survival with vs without powers, and between powers | done 2026-09-29 |
 | M5 | `Match` with N fields: KOs, placement, `dMatch`, sudden death, match end | 16 headless bots: the match always ends; `npm run match` | done 2026-09-29 |
 | M6 | SEND + incoming queue + cancel; SEND button + incoming meter | Cancel math; sent aliens pass the readability soak | done 2026-09-29 |
 | M7 | Targeting strategies, badges, defense bonus | Unit tests; bot tournaments | |

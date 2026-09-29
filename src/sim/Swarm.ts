@@ -53,6 +53,8 @@ export interface SwarmOptions {
   seed: number;
   /** Dev play-testing: every allowed spawn gets one of these abilities. */
   forcedAbilities?: AbilityKind[] | null;
+  /** Testing: every 2-ball spawn without an ability is one of these kinds. */
+  forcedKinds?: AlienKind[] | null;
 }
 
 /**
@@ -72,6 +74,7 @@ export class Swarm implements AbilityHost {
   /** result -> alien: results are unique, so a typed number maps to one alien. */
   private readonly byResult = new Map<number, Alien>();
   private readonly forcedAbilities: AbilityKind[] | null;
+  private readonly forcedKinds: AlienKind[] | null;
   /** Seeded draws the player's actions cause (rerolled sums, splitlings). */
   private readonly rng: Rng;
   private readonly spawnStreams: SpawnStreams;
@@ -86,6 +89,7 @@ export class Swarm implements AbilityHost {
   constructor(options: SwarmOptions) {
     this.seed = options.seed;
     this.forcedAbilities = options.forcedAbilities ?? null;
+    this.forcedKinds = options.forcedKinds ?? null;
     this.rng = Rng.derive(this.seed, STREAM.FIELD);
     this.spawnStreams = new SpawnStreams(this.seed, STREAM.SPAWN);
     this.drifterStreams = new SpawnStreams(this.seed, STREAM.DRIFTER);
@@ -318,7 +322,8 @@ export class Swarm implements AbilityHost {
   /**
    * Build (not add) an alien. With an ability it moves as ABILITY.KIND at the
    * ability's SPEED and wears the ability's model; a blinker (strafer) also
-   * patrols PATROL_MULT longer. `model` overrides the look (splitlings).
+   * patrols PATROL_MULT longer. `model` overrides the look (splitlings);
+   * `laneX` is where a swooper's flight in ends.
    */
   private makeAlien(
     rng: Rng,
@@ -330,6 +335,7 @@ export class Swarm implements AbilityHost {
     bandY?: number,
     ability?: AbilityKind | null,
     model?: string,
+    laneX?: number,
     sentBy?: number,
   ): Alien {
     const speed = ability ? ABILITY.SPEED[ability] : 1;
@@ -348,6 +354,7 @@ export class Swarm implements AbilityHost {
       rng,
       patrolMs: diff.straferPatrolMs * patrol,
       bandY,
+      laneX,
       model: ability ? ABILITY.MODEL[ability] : model,
       ability: ability ? createAbility(ability) : undefined,
       sentBy,
@@ -381,6 +388,7 @@ export class Swarm implements AbilityHost {
       : sum.digits.length >= ENEMY.HARD_BALL_THRESHOLD
         ? "lumberer"
         : this.pickTwoBallKind(rng);
+    if (kind === "swooper") return this.placeSwooper(rng, sum, diff);
     const bandY =
       kind === "strafer"
         ? rng.int(MONSTERS.strafer.BAND_Y.min, MONSTERS.strafer.BAND_Y.max)
@@ -426,13 +434,13 @@ export class Swarm implements AbilityHost {
     ability: AbilityKind | null,
     sentBy?: number,
   ): boolean {
-    const probe = this.makeAlien(rng, kind, sum, 0, 0, diff, bandY, ability, undefined, sentBy);
+    const probe = this.makeAlien(rng, kind, sum, 0, 0, diff, bandY, ability, undefined, undefined, sentBy);
     const y = -probe.bottom - 2;
     const lo = probe.sweepHalf + ENEMY.SPAWN_EDGE;
     const hi = GAME.WIDTH - lo;
     for (let attempt = 0; attempt < 12; attempt++) {
       const x = rng.int(lo, hi);
-      const alien = this.makeAlien(rng, kind, sum, x, y, diff, bandY, ability, undefined, sentBy);
+      const alien = this.makeAlien(rng, kind, sum, x, y, diff, bandY, ability, undefined, undefined, sentBy);
       if (this.hasRoomFor(alien)) {
         this.addAlien(alien);
         return true;
@@ -442,10 +450,55 @@ export class Swarm implements AbilityHost {
   }
 
   private pickTwoBallKind(rng: Rng): AlienKind {
-    const weights = ENEMY.TWO_BALL_KINDS;
-    let r = rng.next() * (weights.darter + weights.strafer);
-    r -= weights.darter;
-    return r < 0 ? "darter" : "strafer";
+    if (this.forcedKinds) return rng.pick(this.forcedKinds);
+    const weights = Object.entries(ENEMY.TWO_BALL_KINDS) as [AlienKind, number][];
+    let r = rng.next() * weights.reduce((t, [, w]) => t + w, 0);
+    for (const [kind, w] of weights) {
+      r -= w;
+      if (r < 0) return kind;
+    }
+    return weights[weights.length - 1][0];
+  }
+
+  /**
+   * Send a swooper in from a random side edge, through a band below the top
+   * HUD, to a random lane. Its whole flight path must be clear: no box in the
+   * way now, and nothing above the path (or crossing it sideways) whose sweep
+   * could come down into it, so the flight in isn't held up. False if no try
+   * found room (the spawner retries soon).
+   */
+  private placeSwooper(rng: Rng, sum: { digits: number[]; result: number }, diff: DifficultyParams): boolean {
+    const m = MONSTERS.swooper;
+    const probe = this.makeAlien(rng, "swooper", sum, 0, 0, diff);
+    const lo = probe.halfW + ENEMY.SPAWN_EDGE;
+    const hi = GAME.WIDTH - lo;
+    for (let attempt = 0; attempt < 12; attempt++) {
+      const fromLeft = rng.chance(0.5);
+      const x = fromLeft ? -probe.halfW : GAME.WIDTH + probe.halfW;
+      const y = rng.int(m.BAND_Y.min, m.BAND_Y.max);
+      const laneX = rng.int(lo, hi);
+      const alien = this.makeAlien(rng, "swooper", sum, x, y, diff, undefined, null, undefined, laneX);
+      if (this.pathClearFor(alien)) {
+        this.addAlien(alien);
+        this.spawnStreams.succeeded();
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /** A swooper's flight path (its sweep at its band) is clear of every alien
+   * that is in it or could still come down into it. */
+  private pathClearFor(alien: Alien): boolean {
+    const [lo, hi] = alien.sweep;
+    const pathBottom = alien.y + alien.bottom;
+    return this.aliens.every((o) => {
+      if (!o.active) return true;
+      if (alien.overlaps(o)) return false;
+      const [olo, ohi] = o.sweep;
+      if (hi + ENEMY.READ_GAP <= olo || ohi + ENEMY.READ_GAP <= lo) return true;
+      return o.y - o.top >= pathBottom + ENEMY.READ_GAP; // wholly below the path
+    });
   }
 
   private hasRoomFor(alien: Alien): boolean {

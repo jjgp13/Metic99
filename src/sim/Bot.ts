@@ -1,4 +1,4 @@
-import { BOT, PLAYER, type BotLevel } from "../config/constants";
+import { BOT, GAME, PLAYER, type BotLevel } from "../config/constants";
 import type Alien from "../objects/Alien";
 import type { Field } from "./Field";
 import { Rng } from "./rng";
@@ -31,9 +31,11 @@ interface Plan {
  * next alien while the ship lines up its shot, and it drops a sum it is
  * still thinking about when a clearly worse threat appears.
  *
- * Powers: FREEZE when two or more unanswered aliens are on screen and the
- * nearest is getting close (or one is about to land), keep answering while
- * frozen, and unfreeze once the board is clear — the owner's own pattern.
+ * Powers: it uses whatever power its field has, by the power's EFFECT (not
+ * its name), so a new power that reuses an effect needs no bot code. A time
+ * power (FREEZE, SLOW) goes on when two or more unanswered aliens are on
+ * screen and the nearest is getting close (or one is about to land), and off
+ * once the board is clear — the owner's own FREEZE pattern.
  * In a battle it also SENDs when its energy is high and the board is calm.
  *
  * Call `update()` once per sim step, before `field.step()`. Its randomness
@@ -52,14 +54,14 @@ export class Bot {
   answers = 0;
   slips = 0;
   switches = 0;
-  /** Times it switched FREEZE on, and attacks it sent (battle). */
+  /** Times it switched a time power on, and attacks it sent (battle). */
   freezes = 0;
   sends = 0;
-  /** Off for A/B tests (`npm run bots -- --no-powers`). */
-  usePowers = true;
+  /** False: never press POWER (the "no powers" baseline in `npm run bots`). */
+  usesPower = true;
   /** Since when the power decision it is about to make has held (REACTION). */
   private powerSince: number | null = null;
-  /** This dangerous moment went unnoticed (MISS_DANGER): no FREEZE until it passes. */
+  /** This dangerous moment went unnoticed (MISS_DANGER): no power until it passes. */
   private missed = false;
   /** Since when it has been ready to SEND (REACTION). */
   private sendSince: number | null = null;
@@ -83,7 +85,7 @@ export class Bot {
   update(field: Field, dt: number): void {
     this.clock += dt;
     if (field.knockedOut) return;
-    if (this.usePowers) this.decidePower(field);
+    if (this.usesPower) this.usePower(field);
     this.decideSend(field);
 
     // Waiting on an entered answer: a right one fires (and clears the typed
@@ -123,6 +125,31 @@ export class Bot {
   }
 
   /**
+   * Energy policy (docs/MULTIPLAYER_DESIGN.md §7), one rule per effect:
+   * - time: see `useTimePower` (fitted to the owner's FREEZE);
+   * - blast: with a full bar, when several unanswered aliens are close or one
+   *   is about to land;
+   * - shield: arm it as soon as it's affordable (buy it in the calm).
+   */
+  private usePower(field: Field): void {
+    const power = field.power;
+    if (power.def.EFFECT === "time") {
+      this.useTimePower(field);
+      return;
+    }
+    const p = BOT.POWER;
+    const open = field.aliens.filter(
+      (a) => a.active && a.lethal && a !== field.lockedTarget && a !== field.target,
+    );
+    const danger = open.reduce((y, a) => Math.max(y, a.y), -Infinity);
+    const press =
+      power.def.EFFECT === "shield" ||
+      open.filter((a) => a.y > p.BLAST_Y).length >= 2 ||
+      danger > p.BLAST_LAST_Y;
+    if (press && power.canTrigger(field.energy)) field.apply({ type: "power" });
+  }
+
+  /**
    * Mid-thought, a clearly worse threat appeared (e.g. splitlings popping out
    * low on the field): with chance FOCUS drop the current sum and go for it.
    * Each newcomer is weighed once, so the bot doesn't flip back and forth.
@@ -143,20 +170,20 @@ export class Bot {
   }
 
   /**
-   * FREEZE when the board gets dangerous; unfreeze once every alien on
-   * screen is answered. A decision is made only after it has held for
-   * REACTION, like a person noticing.
+   * A time power (FREEZE, SLOW) on when the board gets dangerous, off once
+   * every alien on screen is answered. A decision is made only after it has
+   * held for REACTION, like a person noticing.
    */
-  private decidePower(field: Field): void {
+  private useTimePower(field: Field): void {
     const open = this.readable(field).filter((a) => a.lethal);
     const nearest = open.reduce((d, a) => Math.min(d, PLAYER.Y - a.y), Infinity);
-    const frozen = field.slowTime.mode === "freeze";
+    const frozen = field.power.running;
     const want = frozen
       ? open.length > 0 // stay frozen until the board is clear
       : (open.length >= BOT.FREEZE_MIN_OPEN && nearest <= this.skill.FREEZE_AT_PX) ||
         nearest <= this.skill.PANIC_PX;
     // Nothing to change (or the hit-recovery freeze already holds the field).
-    if (want === frozen || field.freezeLeftMs > 0 || (!frozen && !field.slowTime.canTrigger(field.energy))) {
+    if (want === frozen || field.freezeLeftMs > 0 || (!frozen && !field.power.canTrigger(field.energy))) {
       this.powerSince = null;
       this.missed = false; // the moment passed
       return;
@@ -168,7 +195,7 @@ export class Bot {
     this.powerSince ??= this.clock;
     if (this.missed) return;
     if (this.clock - this.powerSince < this.skill.REACTION) return;
-    field.apply({ type: "power", mode: "freeze" }); // toggles it on or off
+    field.apply({ type: "power" }); // toggles it on or off
     if (!frozen) this.freezes++;
     this.powerSince = null;
   }
@@ -186,7 +213,7 @@ export class Bot {
     const ready =
       tier !== null &&
       field.energy.value >= this.skill.SEND_AT &&
-      field.slowTime.mode === null &&
+      !field.power.running &&
       nearest > this.skill.FREEZE_AT_PX;
     if (!ready) {
       this.sendSince = null;
@@ -208,6 +235,7 @@ export class Bot {
         a !== field.lockedTarget &&
         a !== answered &&
         a.y - a.top >= 0 && // its balls are on screen
+        a.x >= 0 && a.x <= GAME.WIDTH && // not still coming in from a side edge
         (a.ability?.cover ?? 0) <= BOT.MAX_READ_COVER,
     );
   }

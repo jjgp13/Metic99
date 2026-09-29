@@ -117,7 +117,7 @@ describe("Bot powers (FREEZE)", () => {
   const play = (seed: number, powers: boolean, onStep?: (f: Field) => void) => {
     const field = new Field({ seed });
     const bot = Bot.forSeat("ace", seed);
-    bot.usePowers = powers;
+    bot.usesPower = powers;
     run(field, bot, 10, () => onStep?.(field));
     return { field, bot };
   };
@@ -134,7 +134,7 @@ describe("Bot powers (FREEZE)", () => {
     let freezeSteps = 0;
     let frozenWithNothingOpen = 0;
     const { bot } = play(2, true, (f) => {
-      if (f.slowTime.mode !== "freeze") return;
+      if (!f.power.running) return;
       freezeSteps++;
       const open = f.aliens.filter((a) => a.active && a.lethal && a !== f.lockedTarget && a.y - a.top >= 0);
       if (open.length === 0) frozenWithNothingOpen++;
@@ -145,9 +145,9 @@ describe("Bot powers (FREEZE)", () => {
     expect(freezeSteps).toBeGreaterThan(0);
   });
 
-  it("never uses SLOW (and never SENDs outside a battle)", () => {
+  it("uses its field's power (FREEZE by default) and never SENDs outside a battle", () => {
     const { field } = play(3, true);
-    expect(field.energy.spent.slow).toBe(0);
+    expect(field.power.kind).toBe("freeze");
     expect(field.energy.spent.freeze).toBeGreaterThan(0);
     expect(field.energy.spent.send).toBe(0); // no battle, nothing to send
   });

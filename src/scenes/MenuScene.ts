@@ -1,12 +1,14 @@
 import Phaser from "phaser";
-import { GAME, RENDER3D, STORAGE } from "../config/constants";
+import { GAME, POWERS, POWER_KINDS, RENDER3D, STORAGE } from "../config/constants";
+import { selectPower, selectedPower } from "../config/powers";
 import { selectShip, selectedShip } from "../config/ships";
 import { onKeyDown } from "../ui/keyboard";
 
 /**
- * Title / main menu. The first scene the player sees: a ship picker, then PLAY,
- * BATTLE, HOW TO PLAY and SCORES. Buttons are large pointer targets (mobile-friendly);
- * ←/→ change ship and Enter plays.
+ * Title / main menu. The first scene the player sees: a ship picker (a look
+ * only), a power picker (the one power used in play), then PLAY or BATTLE
+ * (you + 7 bots), HOW TO PLAY and SCORES. Buttons are large pointer targets
+ * (mobile-friendly); ←/→ change ship, ↑/↓ change power and Enter plays.
  */
 export default class MenuScene extends Phaser.Scene {
   constructor() {
@@ -27,14 +29,14 @@ export default class MenuScene extends Phaser.Scene {
     }
 
     this.add
-      .text(cx, 150, "METIC", {
+      .text(cx, 130, "METIC", {
         fontFamily: "monospace",
         fontSize: "72px",
         color: "#ffd166",
       })
       .setOrigin(0.5);
     this.add
-      .text(cx, 210, "math invaders", {
+      .text(cx, 188, "math invaders", {
         fontFamily: "monospace",
         fontSize: "18px",
         color: "#4ea1ff",
@@ -44,7 +46,7 @@ export default class MenuScene extends Phaser.Scene {
     const best = Number(localStorage.getItem(STORAGE.HIGHSCORE) ?? 0);
     if (best > 0) {
       this.add
-        .text(cx, 250, `Best: ${best}`, {
+        .text(cx, 222, `Best: ${best}`, {
           fontFamily: "monospace",
           fontSize: "16px",
           color: "#8893b5",
@@ -52,18 +54,19 @@ export default class MenuScene extends Phaser.Scene {
         .setOrigin(0.5);
     }
 
-    this.makeShipPicker(cx, 330);
+    this.makeShipPicker(cx, 296);
+    this.makePowerPicker(cx, 432);
 
-    this.makeButton(cx, 432, "PLAY", () => this.scene.start("GameScene"));
+    this.makeButton(cx - 68, 522, "PLAY", () => this.scene.start("GameScene"), 124);
     // Battle royale vs bots (docs/MULTIPLAYER_DESIGN.md): you + 7 bots, one life.
-    this.makeButton(cx, 496, "BATTLE (beta)", () => this.scene.start("GameScene", { battle: true }));
-    this.makeButton(cx, 560, "HOW TO PLAY", () => this.scene.start("HowToPlayScene"));
-    this.makeButton(cx, 624, "SCORES", () =>
+    this.makeButton(cx + 68, 522, "BATTLE", () => this.scene.start("GameScene", { battle: true }), 124);
+    this.makeButton(cx, 582, "HOW TO PLAY", () => this.scene.start("HowToPlayScene"));
+    this.makeButton(cx, 642, "SCORES", () =>
       this.scene.start("LeaderboardScene", { browse: true }),
     );
 
     this.add
-      .text(cx, GAME.HEIGHT - 40, "a Phaser math-shooter", {
+      .text(cx, GAME.HEIGHT - 26, "a Phaser math-shooter", {
         fontFamily: "monospace",
         fontSize: "12px",
         color: "#8893b5",
@@ -115,8 +118,53 @@ export default class MenuScene extends Phaser.Scene {
     });
   }
 
-  private makeButton(x: number, y: number, label: string, onClick: () => void): void {
-    const w = 260;
+  /** ◀ POWER ▶ picker with a one-line description; saved for the next run. */
+  private makePowerPicker(x: number, y: number): void {
+    let index = POWER_KINDS.indexOf(selectedPower());
+    const hex = (c: number) => `#${c.toString(16).padStart(6, "0")}`;
+    this.add
+      .text(x, y - 30, "POWER", { fontFamily: "monospace", fontSize: "13px", color: "#8893b5" })
+      .setOrigin(0.5);
+    const name = this.add
+      .text(x, y, "", { fontFamily: "monospace", fontSize: "22px", color: "#ffffff" })
+      .setOrigin(0.5);
+    const blurb = this.add
+      .text(x, y + 24, "", { fontFamily: "monospace", fontSize: "13px", color: "#8893b5" })
+      .setOrigin(0.5);
+    const show = () => {
+      const def = POWERS[POWER_KINDS[index]];
+      name.setText(def.NAME).setColor(hex(def.COLOR));
+      blurb.setText(def.BLURB);
+    };
+    show();
+
+    const step = (dir: number) => {
+      index = (index + dir + POWER_KINDS.length) % POWER_KINDS.length;
+      selectPower(POWER_KINDS[index]);
+      show();
+      this.sound.play("blip", { volume: 0.4, rate: 1.2 });
+    };
+    for (const dir of [-1, 1]) {
+      const arrow = this.add
+        .text(x + dir * 110, y, dir < 0 ? "◀" : "▶", {
+          fontFamily: "monospace",
+          fontSize: "28px",
+          color: "#4ea1ff",
+        })
+        .setOrigin(0.5)
+        .setPadding(14)
+        .setInteractive({ useHandCursor: true });
+      arrow.on("pointerover", () => arrow.setColor("#ffd166"));
+      arrow.on("pointerout", () => arrow.setColor("#4ea1ff"));
+      arrow.on("pointerdown", () => step(dir));
+    }
+    onKeyDown(this, (e) => {
+      if (e.key === "ArrowUp") step(-1);
+      else if (e.key === "ArrowDown") step(1);
+    });
+  }
+
+  private makeButton(x: number, y: number, label: string, onClick: () => void, w = 260): void {
     const h = 52;
     const bg = this.add
       .rectangle(x, y, w, h, 0x1b2340)

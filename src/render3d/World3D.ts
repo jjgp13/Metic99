@@ -22,6 +22,8 @@ export interface WorldSnapshot {
   alpha: number;
   /** Pause hides the field so sums can't be solved on a break. */
   aliensHidden: boolean;
+  /** The SHIELD power is armed: draw a bubble around the ship. */
+  shipShield: boolean;
   /** The answer the background stars spell out, or null. */
   answer: AnswerView | null;
 }
@@ -105,18 +107,23 @@ export default class World3D {
   /** Model parts named `anim_flame*`; flickered every frame. */
   private shipFlames: THREE.Object3D[] = [];
   private bank = 0;
+  /** The ship's bubble while the SHIELD power is armed. */
+  private shipShield: THREE.Group | null = null;
   private readonly alienViews = new Map<Alien, AlienView>();
   /** Shared attack-ring geometry/material, built on first use. */
   private attackRingParts: { geo: THREE.TorusGeometry; mat: THREE.MeshBasicMaterial } | null = null;
-  /** Shared shield geometry/materials, built on first use. */
-  private shieldParts: {
-    dome: THREE.IcosahedronGeometry;
-    edges: THREE.EdgesGeometry;
-    ring: THREE.TorusGeometry;
-    domeMat: THREE.MeshBasicMaterial;
-    edgeMat: THREE.LineBasicMaterial;
-    ringMat: THREE.MeshBasicMaterial;
-  } | null = null;
+  /** Shared shield geometry/materials per color, built on first use. */
+  private readonly shieldParts = new Map<
+    number,
+    {
+      dome: THREE.IcosahedronGeometry;
+      edges: THREE.EdgesGeometry;
+      ring: THREE.TorusGeometry;
+      domeMat: THREE.MeshBasicMaterial;
+      edgeMat: THREE.LineBasicMaterial;
+      ringMat: THREE.MeshBasicMaterial;
+    }
+  >();
   private readonly bulletViews = new Map<Bullet, THREE.Mesh>();
 
   private readonly stars: THREE.Points;
@@ -226,6 +233,7 @@ export default class World3D {
     });
     this.ship = new THREE.Group().add(this.shipBody);
     this.scene.add(this.ship);
+    this.shipShield = null;
     this.bank = 0;
     this.answerStars.reset();
 
@@ -392,6 +400,19 @@ export default class World3D {
     this.shipFlames.forEach((f, i) => {
       f.scale.setScalar(0.85 + 0.2 * Math.sin(time * 0.045 + i * 1.7) + 0.08 * Math.random());
     });
+
+    if (s.shipShield && !this.shipShield) {
+      this.shipShield = this.createShield(RENDER3D.SHIP_SHIELD_COLOR);
+      this.ship.add(this.shipShield);
+    } else if (!s.shipShield && this.shipShield) {
+      this.ship.remove(this.shipShield);
+      this.shipShield = null;
+      this.burst(s.shipX, PLAYER.Y, [RENDER3D.SHIP_SHIELD_COLOR, 0xfff1c2], RENDER3D.SHIELD_SHARDS);
+    }
+    if (this.shipShield) {
+      const r = RENDER3D.SHIP_SHIELD_RADIUS / RENDER3D.SHIELD_RADIUS;
+      this.shipShield.scale.setScalar(r * (1 + 0.04 * Math.sin(time * 0.006)));
+    }
   }
 
   private syncAliens(s: WorldSnapshot, time: number, dt: number): void {
@@ -451,7 +472,7 @@ export default class World3D {
 
     const shieldUp = isShieldUp(a);
     if (shieldUp && !v.shield) {
-      v.shield = this.createShield();
+      v.shield = this.createShield(RENDER3D.SHIELD_COLOR);
       v.root.add(v.shield);
     } else if (!shieldUp && v.shield) {
       v.root.remove(v.shield);
@@ -465,31 +486,33 @@ export default class World3D {
   /**
    * Shield bubble: a faint faceted dome around the body plus a bold ring that
    * reads at phone size. Its radius stays inside the ball row, so it never
-   * covers a number. Magenta, never a ball (operation) color.
+   * covers a number. Magenta for aliens (gold for the ship's SHIELD power),
+   * never a ball (operation) color.
    */
-  private createShield(): THREE.Group {
+  private createShield(color: number): THREE.Group {
     const r = RENDER3D.SHIELD_RADIUS;
-    if (!this.shieldParts) {
+    let p = this.shieldParts.get(color);
+    if (!p) {
       const dome = new THREE.IcosahedronGeometry(r, 1);
-      this.shieldParts = {
+      p = {
         dome,
         edges: new THREE.EdgesGeometry(dome),
         ring: new THREE.TorusGeometry(r, 1.7, 6, 28),
         domeMat: new THREE.MeshBasicMaterial({
-          color: RENDER3D.SHIELD_COLOR,
+          color,
           transparent: true,
           opacity: 0.16,
           depthWrite: false,
         }),
         edgeMat: new THREE.LineBasicMaterial({
-          color: RENDER3D.SHIELD_COLOR,
+          color,
           transparent: true,
           opacity: 0.55,
         }),
-        ringMat: new THREE.MeshBasicMaterial({ color: RENDER3D.SHIELD_COLOR }),
+        ringMat: new THREE.MeshBasicMaterial({ color }),
       };
+      this.shieldParts.set(color, p);
     }
-    const p = this.shieldParts;
     return new THREE.Group().add(
       new THREE.Mesh(p.dome, p.domeMat),
       new THREE.LineSegments(p.edges, p.edgeMat),
@@ -689,6 +712,7 @@ export default class World3D {
     this.debris = [];
     if (this.ship) this.scene.remove(this.ship);
     this.ship = null;
+    this.shipShield = null;
     this.shipBody = null;
     this.shipFlames = [];
     this.flashLeft = 0;

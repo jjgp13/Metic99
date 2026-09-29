@@ -11,8 +11,7 @@ describe("playtest log", () => {
       { type: "digits", digits: "12" },
       { type: "back" },
       { type: "clear" },
-      { type: "power", mode: "slow" },
-      { type: "power", mode: "freeze" },
+      { type: "power" },
       { type: "standing", alive: 5, total: 8 },
       { type: "send", cost: 50 },
       {
@@ -29,7 +28,7 @@ describe("playtest log", () => {
   });
 
   it("replays a logged run exactly from its compact input log", () => {
-    const field = new Field({ seed: 21 });
+    const field = new Field({ seed: 21, power: "slow" });
     const bot = Bot.forSeat("pilot", 21);
     while (!field.knockedOut && field.steps < 60 * 90) {
       bot.update(field, SIM.STEP_MS);
@@ -37,7 +36,8 @@ describe("playtest log", () => {
     }
     const stored = field.inputLog.map(({ step, input }) => [step, compact(input)] as const);
     const log = stored.map(([step, code]) => ({ step, input: expand(code) }));
-    const replay = replayField({ seed: 21 }, log, field.steps, SIM.STEP_MS);
+    expect(field.energy.spent.slow).toBeGreaterThan(0);
+    const replay = replayField({ seed: 21, power: "slow" }, log, field.steps, SIM.STEP_MS);
     expect(replay.score).toBe(field.score);
     expect(replay.kills).toBe(field.kills);
     expect(replay.lives).toBe(field.lives);

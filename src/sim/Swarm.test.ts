@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { SIM, SPLITTER } from "../config/constants";
+import { GAME, MONSTERS, SIM, SPLITTER } from "../config/constants";
 import type Alien from "../objects/Alien";
 import { ABILITY_KINDS, type AbilityKind } from "../objects/abilities";
 import { Swarm } from "./Swarm";
@@ -85,7 +85,23 @@ describe("Swarm", () => {
       const stats = play(new Swarm({ seed }), 8);
       expect(stats.overlapSteps, `seed ${seed}`).toBe(0);
       expect(stats.kills).toBeGreaterThan(100);
-      expect([...stats.kinds].sort()).toEqual(["darter", "drifter", "lumberer", "strafer"]);
+      expect([...stats.kinds].sort()).toEqual([
+        "darter",
+        "drifter",
+        "lumberer",
+        "strafer",
+        "swooper",
+      ]);
+    }
+  });
+
+  it("keeps swoopers readable too (every 2-ball spawn a swooper)", () => {
+    for (const seed of [7, 8, 9]) {
+      const field = new Swarm({ seed, forcedKinds: ["swooper"] });
+      const stats = play(field, 8);
+      expect(stats.overlapSteps, `seed ${seed}`).toBe(0);
+      expect(stats.kills).toBeGreaterThan(100);
+      expect(stats.kinds.has("swooper")).toBe(true);
     }
   });
 
@@ -131,6 +147,34 @@ describe("Swarm", () => {
     field.remove(alien);
     expect(field.alienFor(alien.result)).toBeUndefined();
     expect(alien.active).toBe(false);
+  });
+});
+
+describe("Swooper", () => {
+  const ctx = { score: 0, dMatch: 0, speed: 1, held: null, locked: null };
+
+  it("flies in from a side edge below the HUD, then turns down in its lane", () => {
+    const m = MONSTERS.swooper;
+    const swarm = new Swarm({ seed: 11, forcedKinds: ["swooper"] });
+    swarm.step(SIM.STEP_MS, ctx);
+    const [alien] = swarm.takeEvents().flatMap((e) => (e.type === "spawned" ? [e.alien] : []));
+    expect(alien.kind).toBe("swooper");
+    expect(alien.x < 0 || alien.x > GAME.WIDTH).toBe(true); // off a side edge
+    expect(alien.y).toBeGreaterThanOrEqual(m.BAND_Y.min);
+    expect(alien.y - alien.top).toBeGreaterThan(50); // ball row clears the top HUD
+    const bandY = alien.y;
+
+    let steps = 0;
+    while (alien.mode === "enter" && steps++ < 600) swarm.step(SIM.STEP_MS, ctx);
+    expect(alien.mode).toBe("move");
+    expect(alien.y).toBe(bandY); // level flight in
+    expect(alien.x - alien.halfW).toBeGreaterThanOrEqual(0);
+    expect(alien.x + alien.halfW).toBeLessThanOrEqual(GAME.WIDTH);
+
+    const x = alien.x;
+    for (let i = 0; i < 60; i++) swarm.step(SIM.STEP_MS, ctx);
+    expect(alien.x).toBe(x); // straight down
+    expect(alien.y).toBeGreaterThan(bandY);
   });
 });
 
