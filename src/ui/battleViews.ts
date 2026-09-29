@@ -1,5 +1,6 @@
 import type Phaser from "phaser";
 import type { Match, MatchEvent, PlayerTile } from "../sim/Match";
+import { OpponentBoard, boardFits } from "./OpponentBoard";
 
 /**
  * A way of showing the other players in a battle (docs/MULTIPLAYER_DESIGN.md
@@ -38,9 +39,12 @@ export interface BattleActions {
  * board when the window is wide enough and a compact strip on phones.
  */
 export function createBattleViews(
-  _scene: Phaser.Scene,
+  scene: Phaser.Scene,
   _match: Match,
-  _actions: BattleActions,
+  actions: BattleActions,
 ): BattleView[] {
-  return [];
+  const views: BattleView[] = [];
+  // Desktop: the other players' tiles beside the canvas, when there is room.
+  if (boardFits(scene.game.canvas)) views.push(new OpponentBoard(scene.game.canvas, actions));
+  return views;
 }

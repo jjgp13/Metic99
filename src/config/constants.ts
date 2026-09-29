@@ -83,6 +83,34 @@ export const MATCH = {
 export type TargetStrategy = "random" | "kos" | "attackers" | "badges";
 export const TARGET_STRATEGIES: readonly TargetStrategy[] = ["random", "kos", "attackers", "badges"];
 
+/**
+ * The desktop opponent board (src/ui/OpponentBoard.ts): the other players'
+ * tiles in the empty space left and right of the portrait game canvas. It is
+ * only built, and only shown, while both sides have room for a column.
+ * Sizes in CSS px.
+ */
+export const BATTLE_BOARD = {
+  MIN_SIDE_W: 230, // room each side needs (after GAP + EDGE) to show a column
+  MIN_H: 520, // canvas height below which tiles would be too small to read
+  MAX_TILE_W: 330,
+  MAX_TILE_H: 176,
+  FIELD_SHARE: 0.45, // the mini field's share of the tile width (at most)
+  GAP: 14, // between the canvas and the columns, and between tiles
+  EDGE: 12, // kept free at the window's edge
+  FLASH_MS: 1100, // an attack's label on the sender/receiver tile
+  FEED_LINES: 5, // KO feed lines kept
+  COLOR: {
+    DOT: "#d8defa", // an alien on a tile
+    SENT: "#ff8c42", // a sent alien, attackers, incoming (GameScene's attack orange)
+    TARGET: "#ffd166", // your target (the lock-on brackets' gold)
+    DANGER: "239, 71, 111", // rgb of the danger wash rising from the tile's bottom
+    ENERGY: "#5ef0ff",
+    BADGE: "#c9b8ff",
+  },
+  // Short names of the targeting strategies on a tile.
+  AIM_LABEL: { random: "RANDOM", kos: "KOs", attackers: "ATTACKERS", badges: "BADGES" },
+} as const;
+
 /** What a sent alien is: a plain darter, or an alien with one of the abilities
  * (picked by the sender from all of them, unlocked or not). */
 export type SentKind = "darter" | "ability";
