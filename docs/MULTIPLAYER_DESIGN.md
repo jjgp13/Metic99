@@ -161,10 +161,13 @@ the agreed shape.
   on; fast-forward runs it headless to the end; watch shows another live
   player's field (whoever KO'd you first). At the end: the winner, again
   or menu.
-- **What you see of the others:** a thin strip of small tiles above the field
-  (danger color, alien dots, your target marked, attackers edged red), an
-  incoming meter by the energy bar and a KO feed. Full fields are never drawn.
-  A tile shows exactly what the future server broadcasts per player.
+- **What you see of the others:** small tiles (danger color, alien dots, your
+  target marked, attackers edged in attack orange, since red is for
+  subtraction balls), an incoming meter by the energy bar and a KO feed. On a
+  wide screen the tiles stand in two columns beside the field (Tetris 99,
+  built: `OpponentBoard`); phones get their own compact view. Full fields
+  are never drawn. A tile shows exactly what the future server broadcasts
+  per player.
 
 ## 7. Bots (phase 0)
 
@@ -310,7 +313,7 @@ but marked as such.
 | M5 | `Match` with N fields: KOs, placement, `dMatch`, sudden death, match end | 16 headless bots: the match always ends; `npm run match` | done 2026-09-29 |
 | M6 | SEND + incoming queue + cancel; SEND button + incoming meter | Cancel math; sent aliens pass the readability soak | done 2026-09-29 |
 | M7 | Targeting strategies, badges, defense bonus | Unit tests; bot tournaments | done 2026-09-30 |
-| M8 | Battle UI: opponent strip, KO feed, results, fast-forward; menu entry. Results + fast-forward + watch done 2026-09-30. Split into two chats: desktop opponent board (Tetris 99-style tiles beside the field) and phone feedback; both read only `match.tiles()` and match events | Play it on desktop and phone | |
+| M8 | Battle UI: opponent strip, KO feed, results, fast-forward; menu entry. Split into two chats: desktop opponent board (Tetris 99-style tiles beside the field) and phone feedback; both read only `match.tiles()` and match events | Play it on desktop and phone | desktop board done 2026-09-30 (`src/ui/OpponentBoard.ts`); results + fast-forward + watch done 2026-09-30 (`src/ui/BattleResults.ts`); phone open |
 | M9 | Playtest and tune; then phase 1 (move `Match` to a Node server) | | |
 
 Sources: [TetrisWiki: Tetris 99](https://tetris.wiki/Tetris_99),

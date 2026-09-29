@@ -30,7 +30,10 @@ const config: Phaser.Types.Core.GameConfig = {
   roundPixels: true,
   scale: {
     mode: Phaser.Scale.FIT, // letterbox to fit the screen, keep aspect ratio
-    autoCenter: Phaser.Scale.CENTER_BOTH,
+    // #game (index.html) already centers the canvas with flexbox, inside the
+    // safe-area padding. Phaser's own centering added margins on top of that,
+    // which pushed the canvas off center (right on wide screens, down on phones).
+    autoCenter: Phaser.Scale.NO_CENTER,
   },
   // Two touches: a thumb can hit SLOW / FREEZE while the other finger draws.
   input: { activePointers: 2 },

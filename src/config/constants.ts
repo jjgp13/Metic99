@@ -83,6 +83,45 @@ export const MATCH = {
 export type TargetStrategy = "random" | "kos" | "attackers" | "badges";
 export const TARGET_STRATEGIES: readonly TargetStrategy[] = ["random", "kos", "attackers", "badges"];
 
+/**
+ * The desktop opponent board (src/ui/OpponentBoard.ts): the other players'
+ * tiles in the empty space left and right of the portrait game canvas, shown
+ * while both sides have room for a column. Sizes in CSS px.
+ */
+export const BATTLE_BOARD = {
+  // Full tiles (mini field + info column) need this much room each side
+  // (after GAP + EDGE) and canvas height...
+  MIN_SIDE_W: 230,
+  FULL_MIN_H: 520,
+  // ...compact tiles (mini field + name row) this much, e.g. a claude.ai
+  // Artifact panel. Below MIN_H the tiles would be too small to read.
+  COMPACT_MIN_W: 120,
+  COMPACT_MAX_W: 190,
+  COMPACT_MIN_FIELD: 90, // narrowest mini field worth showing
+  MIN_H: 400,
+  // In a landscape window without room even for compact tiles, the game may
+  // shrink to this fraction of its width to make room for them.
+  MIN_GAME_SCALE: 0.75,
+  MAX_TILE_W: 330,
+  MAX_TILE_H: 176,
+  FIELD_SHARE: 0.45, // the mini field's share of the tile width (at most)
+  GAP: 14, // between the canvas and the columns, and between tiles
+  EDGE: 12, // kept free at the window's edge
+  FLASH_MS: 1100, // an attack's label on the sender/receiver tile
+  FEED_LINES: 5, // KO feed lines kept
+  COLOR: {
+    DOT: "#d8defa", // an alien on a tile
+    SENT: "#ff8c42", // a sent alien, the attack gauge, attackers (GameScene's attack orange)
+    INCOMING: "#ff5c8a", // attacks waiting to land (GameScene's incoming pink)
+    TARGET: "#ffd166", // your target (the lock-on brackets' gold)
+    DANGER: "239, 71, 111", // rgb of the danger wash rising from the tile's bottom
+    ENERGY: "#5ef0ff",
+    BADGE: "#c9b8ff",
+  },
+  // Short names of the targeting strategies on a tile.
+  AIM_LABEL: { random: "RANDOM", kos: "KOs", attackers: "ATTACKERS", badges: "BADGES" },
+} as const;
+
 /** What a sent alien is: a plain darter, or an alien with one of the abilities
  * (picked by the sender from all of them, unlocked or not). */
 export type SentKind = "darter" | "ability";

@@ -198,7 +198,7 @@ export class WatchBar {
   private readonly label: Phaser.GameObjects.Text;
 
   constructor(scene: Phaser.Scene, actions: WatchActions) {
-    const top = PLAYER.Y + 26;
+    const top = PLAYER.Y + 18; // above the answer row (DRAW / C buttons)
     const h = GAME.HEIGHT - top;
     const cx = GAME.WIDTH / 2;
     const backdrop = scene.add

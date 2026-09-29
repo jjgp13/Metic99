@@ -99,6 +99,8 @@ src/
                       other players get `match.tiles()` + match events each
                       frame and act only via `BattleActions.aimAt`; register
                       new views in `createBattleViews` (desktop board, phone)
+    OpponentBoard.ts  Desktop opponent board: DOM tiles beside the canvas
+                      (`BATTLE_BOARD`), built on desktops, shown while wide
   sim/
     energy.ts         Phaser-free energy rules: energyForKill, EnergyMeter
                       (charge/spend/drain per spender), Power (the picked
@@ -194,7 +196,9 @@ docs/MULTIPLAYER_DESIGN.md  Battle-royale design: energy, attacks, backend plan
 - **Hosting: GitHub Pages** via `.github/workflows/deploy.yml` (build on push to
   `main`, deploy `dist`). Supabase env injected from repo **secrets**. Vite
   `base: "./"` keeps asset paths relative so the project subpath works.
-- **Mobile:** Phaser `Scale.FIT`+`CENTER_BOTH` (portrait), pointer-based keypad,
+- **Mobile:** Phaser `Scale.FIT` (portrait) centered by `#game`'s flexbox
+  (Phaser's own `autoCenter` is off: both together pushed the canvas off
+  center), pointer-based keypad,
   and `index.html` hardening (`viewport-fit=cover` + safe-area insets,
   `touch-action:none`, `overscroll-behavior:none`, no text selection).
 
@@ -597,6 +601,25 @@ Green=multiplication, Yellow=division.
   will broadcast per player), through `BattleView`s (`src/ui/battleViews.ts`):
   GameScene calls each view once per frame with the tiles and new match
   events; a view acts only via `aimAt(seat)`.
+- **Desktop opponent board** (`src/ui/OpponentBoard.ts`, `BATTLE_BOARD`):
+  built on any desktop (fine pointer) or wherever it fits, and shown while
+  the sides of the canvas have room: the 7 opponents are tiles in two
+  columns beside the field (4 left, 3 right + a KO feed with "N/8 LEFT").
+  Full tiles need `MIN_SIDE_W` per side (1280×720, 1920×1080); **compact**
+  tiles (mini field + name, badges, incoming) need `COMPACT_MIN_W`, e.g. a
+  claude.ai Artifact panel (~900 px); in a landscape window narrower still,
+  the game's box (#game) narrows so the canvas shrinks (to ≥
+  `MIN_GAME_SCALE`) and makes room. Never on phones or portrait tablets. A
+  full tile: mini field with alien dots (orange = sent), a red
+  wash rising with danger (pulsing near the line), name + bot level,
+  badges ★ + attack bonus, power chip (filled while on/armed), power
+  energy (cyan) beside the attack gauge (orange, ticks at 25/50), incoming
+  (pink, like the SEND button's), "→ target · strategy"; after a KO it greys out with its
+  place and who took it out. **Your target** gets the gold lock-on brackets
+  (◎ TARGET / PICKED); **players aiming at you** get an orange edge + ⚔ ON
+  YOU (attack orange, not red: red is for subtraction balls). Click a tile
+  = `aimAt(seat)`. It is a DOM overlay placed from the canvas rect every
+  frame and hidden when a side gets too narrow, so it never covers the field.
 - **Lives** are a playtest constant, `PLAYER.LIVES` (3 by default; 1 = the
   battle-royale knockout rule). With 1 life the hit recovery below never runs:
   the only hit ends the game, so the power is the sole safety tool.
@@ -697,8 +720,8 @@ dMatch)`; it is 0 in solo play.
        pressure + sudden death, `npm run match`), [x] M6 SEND + incoming
        queue + cancel (menu BATTLE beta), [x] M7 targeting, KO credit,
        badges, `tiles()`, [x] sending pays: separate attack gauge,
-       [ ] M8 battle UI: [x] results + fast-forward + watch, [ ] desktop
-       opponent board, [ ] phone feedback (UI chats).
+       [ ] M8 battle UI: [x] desktop opponent board, [x] results +
+       fast-forward + watch, [ ] phone feedback.
 
 ## Conventions
 
@@ -730,6 +753,17 @@ Newest first. Format: `YYYY-MM-DD — decision — rationale`.
   already takes any field's snapshot, so spectating is free). Tiles gained
   `kos` and `koBy`.
 
+- **2026-09-30 — Desktop opponent board = a DOM overlay beside the canvas
+  (M8).** Rejected a wider Phaser layout (moves every HUD position, breaks
+  FIT on phones, touches all scenes) and a second canvas (own hit tests,
+  text and DPI handling). DOM gives crisp text, free clicks and CSS layout,
+  and the game canvas is untouched; the board reads only tiles + events.
+  Built on desktops and shown while the sides fit a column: full tiles,
+  compact tiles in an Artifact panel (the first build needed 256 px per
+  side and showed nothing there), and in a nearly square window the game
+  shrinks up to 25% to make room. Found on the way: Phaser `CENTER_BOTH`
+  + the flexbox centered the canvas twice (300 px right at 1920, 65 px low on phones), so Phaser's
+  centering is off now.
 - **2026-09-30 — Separate attack gauge: sending pays (owner picked A).**
   Kills charge the power meter in full; their value pays off incoming first
   and the rest fills an attack gauge that only SEND spends (like Tetris 99,
