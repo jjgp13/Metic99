@@ -81,6 +81,8 @@ export default class GameScene extends Phaser.Scene {
   private reticleTarget: Alien | null = null;
   private reticleAge = 0;
   private scoreText!: Phaser.GameObjects.Text;
+  /** HUD pieces and pops over the field; each fades while an alien is under it. */
+  private ducked: Phaser.GameObjects.Container[] = [];
   private lifeIcons: Phaser.GameObjects.Image[] = [];
   private comboText!: Phaser.GameObjects.Text;
   private gameOver = false;
@@ -147,6 +149,7 @@ export default class GameScene extends Phaser.Scene {
     this.reticleTarget = null;
     this.reticleAge = 0;
     this.lifeIcons = [];
+    this.ducked = [];
     this.gameOver = false;
     this.proceeding = false;
     this.newHighScore = false;
@@ -276,6 +279,7 @@ export default class GameScene extends Phaser.Scene {
     // Aliens come and go, so an answer can turn right or wrong without a key.
     this.refreshAnswer();
     this.drawReticle(delta);
+    this.duckHud(delta);
 
     this.updateEnergyHud();
   }
@@ -293,8 +297,8 @@ export default class GameScene extends Phaser.Scene {
         stroke: "#05060f",
         strokeThickness: 4,
       })
-      .setOrigin(0.5)
-      .setDepth(5);
+      .setOrigin(0.5);
+    this.duckable(banner);
     this.tweens.add({
       targets: banner,
       alpha: 0,
@@ -341,8 +345,8 @@ export default class GameScene extends Phaser.Scene {
         stroke: "#05060f",
         strokeThickness: 4,
       })
-      .setOrigin(0.5)
-      .setDepth(5);
+      .setOrigin(0.5);
+    this.duckable(text);
     const half = text.width / 2 + 4;
     text.setX(Phaser.Math.Clamp(alien.x, half, GAME.WIDTH - half)).setScale(1.4);
     this.tweens.add({ targets: text, scale: 1, duration: E.POP_MS, ease: "Back.easeOut" });
@@ -364,8 +368,8 @@ export default class GameScene extends Phaser.Scene {
         fontSize: "15px",
         color: "#ff6be6",
       })
-      .setOrigin(0.5)
-      .setDepth(5);
+      .setOrigin(0.5);
+    this.duckable(pop);
     this.tweens.add({
       targets: pop,
       y: y - 30,
@@ -389,6 +393,7 @@ export default class GameScene extends Phaser.Scene {
     const pop = this.add
       .text(x, y, `+${points}`, { fontFamily: "monospace", fontSize: "16px", color: "#ffd166" })
       .setOrigin(0.5);
+    this.duckable(pop);
     this.tweens.add({
       targets: pop,
       y: y - 40,
@@ -433,33 +438,58 @@ export default class GameScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * Put a HUD piece or pop into its own container, which duckHud fades while
+   * an alien is under it. The container's alpha multiplies the piece's own
+   * (a lost life's dimmed icon, a pop fading out), so both still work.
+   */
+  private duckable<T extends Phaser.GameObjects.GameObject>(obj: T): T {
+    this.ducked.push(this.add.container(0, 0, [obj]).setDepth(5));
+    return obj;
+  }
+
+  /** Fade HUD pieces and pops that overlap any alien's box (ball row + body). */
+  private duckHud(delta: number): void {
+    const alpha = this.stepAlpha;
+    const boxes = this.field.aliens
+      .filter((a) => a.active)
+      .map((a) => {
+        const x = a.viewX(alpha);
+        const y = a.viewY(alpha);
+        return new Phaser.Geom.Rectangle(x - a.halfW, y - a.top, a.halfW * 2, a.top + a.bottom);
+      });
+    const k = Math.min(1, delta / FEEDBACK.DUCK.MS);
+    this.ducked = this.ducked.filter((c) => {
+      if (c.list.length === 0) {
+        c.destroy(); // its pop finished
+        return false;
+      }
+      const bounds = c.getBounds();
+      const under = boxes.some((b) => Phaser.Geom.Intersects.RectangleToRectangle(bounds, b));
+      c.setAlpha(c.alpha + ((under ? FEEDBACK.DUCK.ALPHA : 1) - c.alpha) * k);
+      return true;
+    });
+  }
+
   private buildHud(): void {
-    // HUD sits above gameplay so aliens entering from the top never obscure it.
+    // The top HUD is drawn over the field, so each piece fades while an alien
+    // is under it (see duckHud): the sums always stay readable.
     const HUD_DEPTH = 5;
-    this.scoreText = this.add
-      .text(12, 12, "0000000", {
+    this.scoreText = this.duckable(
+      this.add.text(12, 12, "0000000", {
         fontFamily: "monospace",
         fontSize: "20px",
         color: "#ffffff",
-      })
-      .setDepth(HUD_DEPTH);
+      }),
+    );
 
     // Difficulty ramp indicator: a thin bar that fills as the game speeds up.
-    this.add
-      .rectangle(12, 44, GAME.WIDTH - 24, 4, 0x1b2340)
-      .setOrigin(0, 0.5)
-      .setDepth(HUD_DEPTH);
-    this.diffBar = this.add
-      .rectangle(12, 44, 0, 4, 0x4ea1ff)
-      .setOrigin(0, 0.5)
-      .setDepth(HUD_DEPTH);
+    this.duckable(this.add.rectangle(12, 44, GAME.WIDTH - 24, 4, 0x1b2340).setOrigin(0, 0.5));
+    this.diffBar = this.duckable(this.add.rectangle(12, 44, 0, 4, 0x4ea1ff).setOrigin(0, 0.5));
 
     for (let i = 0; i < this.field.lives; i++) {
-      const icon = this.add
-        .image(GAME.WIDTH - 18 - i * 26, 22, "life")
-        .setScale(1.4)
-        .setDepth(HUD_DEPTH);
-      this.lifeIcons.push(icon);
+      const icon = this.add.image(GAME.WIDTH - 18 - i * 26, 22, "life").setScale(1.4);
+      this.lifeIcons.push(this.duckable(icon));
     }
 
     this.typedText = this.add
@@ -476,35 +506,36 @@ export default class GameScene extends Phaser.Scene {
     this.reticle = this.add.graphics().setDepth(4);
 
     // Combo / streak multiplier indicator.
-    this.comboText = this.add
-      .text(12, 56, "", {
+    this.comboText = this.duckable(
+      this.add.text(12, 56, "", {
         fontFamily: "monospace",
         fontSize: "14px",
         color: "#ffd166",
-      })
-      .setDepth(HUD_DEPTH);
+      }),
+    );
 
     if (this.autopilot) {
-      this.add
-        .text(GAME.WIDTH - 12, 62, `AUTOPILOT: ${this.autopilot.level.toUpperCase()}`, {
-          fontFamily: "monospace",
-          fontSize: "12px",
-          color: "#5ef0ff",
-        })
-        .setOrigin(1, 0.5)
-        .setDepth(HUD_DEPTH);
+      this.duckable(
+        this.add
+          .text(GAME.WIDTH - 12, 62, `AUTOPILOT: ${this.autopilot.level.toUpperCase()}`, {
+            fontFamily: "monospace",
+            fontSize: "12px",
+            color: "#5ef0ff",
+          })
+          .setOrigin(1, 0.5),
+      );
     }
 
     // Pause button (also bound to the P key).
-    const pauseBtn = this.add
-      .text(GAME.WIDTH / 2, 22, "II", {
-        fontFamily: "monospace",
-        fontSize: "20px",
-        color: "#4ea1ff",
-      })
-      .setOrigin(0.5)
-      .setDepth(HUD_DEPTH)
-      .setInteractive({ useHandCursor: true });
+    const pauseBtn = this.duckable(
+      this.add
+        .text(GAME.WIDTH / 2, 22, "II", {
+          fontFamily: "monospace",
+          fontSize: "20px",
+          color: "#4ea1ff",
+        })
+        .setOrigin(0.5),
+    ).setInteractive({ useHandCursor: true });
     pauseBtn.on("pointerdown", () => this.togglePause());
   }
 

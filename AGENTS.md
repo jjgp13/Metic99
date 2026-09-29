@@ -365,7 +365,11 @@ Green=multiplication, Yellow=division.
   mark at the 10-energy start cost. Nothing covers the field or keys in
   portrait.
 - HUD (score, lives, difficulty bar, typed display) draws above gameplay
-  (`depth 5`) so entering aliens never obscure it.
+  (`depth 5`), so entering aliens never obscure it. **The numbers win over
+  the HUD:** every top-HUD piece, ability banner and score/equation/energy
+  pop sits in its own container that fades to `FEEDBACK.DUCK.ALPHA` while
+  any alien's box is under it (`GameScene.duckHud`); its own alpha (a lost
+  life, a pop's fade) multiplies on top.
 - High score persisted in `localStorage` (`metic-highscore`).
 - **Seeded runs + game clock** (`src/sim/rng.ts`): each run has a seed; the
   rules draw every random number from seeded streams (field, lethal spawns,
@@ -389,9 +393,10 @@ Green=multiplication, Yellow=division.
   time per ball count, so a phone playtest can be compared with the bots.
 - **Playtest logging** (`src/services/playtestLog.ts`): the owner playtests a
   build published as a private claude.ai Artifact with the `db` capability
-  (`npm run build && npm run playtest:page`, then publish `dist/playtest.html`
-  with `dist/` files; `.glb` models can't be hosted there, so it uses the
-  voxel fallback). Each finished run is saved as one `runs` document: build
+  (`npm run playtest:build`, then publish `dist/playtest.html` with the
+  `dist/` files except `.glb`/`.map`). The Artifact host can't serve `.glb`,
+  so that build (`--mode playtest`, `.env.playtest`) loads each model as
+  `assets/models/<name>.json` = `{ glb: base64 }`. Each finished run is saved as one `runs` document: build
   commit, device, seed + compact input log + steps (replayable exactly),
   summary, solves, hits, input sources (keypad/keyboard/pad), pad reads vs
   "?", pauses. GAME OVER shows "run saved for analysis". Claude reads the
@@ -558,6 +563,14 @@ curve is in `src/config/difficulty.ts` (`difficultyAt(elapsedMs, score)`).
 ## Decision Log
 
 Newest first. Format: `YYYY-MM-DD — decision — rationale`.
+
+- **2026-09-29 — Numbers win over the HUD; playtest build ships its models.**
+  Second playtest (3 runs, desktop app + keyboard, 241–358 s, 64k–97k pts):
+  alien numbers sat under the top HUD for ~half of every run and 36–56% of
+  FREEZE time. HUD pieces and pops now fade while an alien is under them
+  (chosen over moving the HUD, which has no free space in portrait). The
+  playtest page showed voxel fallbacks (no .glb hosting), so all ships looked
+  the same; its build now loads models from base64 JSON.
 
 - **2026-09-28 — Splitlings keep their parent's pace, hatch, and stagger
   (first phone playtest).** 4 logged runs (Android app, keypad): splitlings

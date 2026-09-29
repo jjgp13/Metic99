@@ -492,6 +492,10 @@ export const FEEDBACK = {
     SNAP_MS: 160,
   },
   EQUATION: { FONT_PX: 18, POP_MS: 150, HOLD_MS: 450, FADE_MS: 850, RISE_PX: 34 },
+  // HUD and pops drawn over the field fade to ALPHA while an alien's box
+  // (ball row + body) is under them, so they never hide a sum (owner's
+  // playtest: numbers sat under the top HUD half of every run). MS = fade time.
+  DUCK: { ALPHA: 0.12, MS: 90 },
 } as const;
 
 /**
