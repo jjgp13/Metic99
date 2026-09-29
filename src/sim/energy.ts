@@ -33,7 +33,7 @@ export function energyForKill(k: KillInfo): number {
   return ENERGY.BASE * ballBonus * digitBonus * speedBonus * comboBonus;
 }
 
-/** Where energy can go. "send" (attack an opponent) arrives with multiplayer. */
+/** Where energy can go: the power, or "send" (the battle's attack gauge). */
 export type EnergySpender = PowerKind | "send";
 
 export class EnergyMeter {

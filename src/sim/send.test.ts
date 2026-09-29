@@ -22,13 +22,16 @@ describe("SEND", () => {
   it("spends the chosen tier and hands its aliens to the match", () => {
     const f = battleField(1);
     expect(f.sendTier()).toBeNull();
-    f.energy.charge(60);
-    expect(f.sendTier()).toBe(50); // the strongest the energy buys
+    f.energy.charge(100); // the power's meter doesn't pay for attacks
+    expect(f.sendTier()).toBeNull();
+    f.attack.charge(60);
+    expect(f.sendTier()).toBe(50); // the strongest the gauge buys
     expect(f.apply({ type: "send", cost: 100 })).toBe(false); // can't afford it
     expect(f.apply({ type: "send", cost: 30 })).toBe(false); // no such tier
     expect(f.apply({ type: "send", cost: 50 })).toBe(true);
-    expect(f.energy.value).toBe(10);
-    expect(f.energy.spent.send).toBe(50);
+    expect(f.attack.value).toBe(10);
+    expect(f.attack.spent.send).toBe(50);
+    expect(f.energy.value).toBe(100);
     const [attack, ...rest] = f.takeOutgoing();
     expect(rest).toEqual([]);
     expect(attack.cost).toBe(50);
@@ -39,10 +42,10 @@ describe("SEND", () => {
 
   it("does nothing outside a battle", () => {
     const f = new Field({ seed: 1 });
-    f.energy.charge(100);
+    f.attack.charge(100);
     expect(f.sendTier()).toBeNull();
     expect(f.apply({ type: "send", cost: 25 })).toBe(false);
-    expect(f.energy.value).toBe(100);
+    expect(f.attack.value).toBe(100);
   });
 });
 
@@ -69,7 +72,7 @@ describe("incoming attacks", () => {
     expect(f.aliens.filter((a) => a.active && a.lethal).length).toBeGreaterThanOrEqual(2);
   });
 
-  it("are paid off by kill energy first, soonest first; the rest charges the meter", () => {
+  it("are paid off by kill value first, soonest first; the rest fills the attack gauge", () => {
     const f = battleField(3);
     // A 100 attack of two aliens: each costs 50 to cancel.
     f.receive({ type: "attack", from: 1, cost: 100, aliens: [SHIELDED, DARTER] });
@@ -84,7 +87,7 @@ describe("incoming attacks", () => {
     expect(cancel(f, 12)).toBe(12); // nothing incoming: all of it charges
   });
 
-  it("a real kill cancels instead of charging (solved event)", () => {
+  it("a real kill cancels instead of filling the attack gauge (solved event)", () => {
     const f = battleField(4);
     f.receive({ type: "attack", from: 1, cost: 100, aliens: [DARTER, DARTER] });
     const events: FieldEvent[] = [];
@@ -97,8 +100,11 @@ describe("incoming attacks", () => {
     }
     const solved = events.find((e) => e.type === "solved");
     expect(solved?.type === "solved" && solved.cancelled).toBeGreaterThan(0);
-    expect(solved?.type === "solved" && solved.energy).toBe(0); // a kill < 100 energy
-    expect(f.energy.value).toBe(0);
+    // The power's meter charges in full; the attack gauge gets nothing (a kill < 100).
+    expect(solved?.type === "solved" && solved.energy).toBeGreaterThan(0);
+    expect(solved?.type === "solved" && solved.attack).toBe(0);
+    expect(f.energy.value).toBeGreaterThan(0);
+    expect(f.attack.value).toBe(0);
     expect(f.summary().incoming).toBeLessThan(100);
   });
 

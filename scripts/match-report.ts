@@ -5,7 +5,7 @@
  * Experiments: `-- --aim kos` makes every bot aim by that strategy,
  * `-- --no-send ace` stops that level from ever sending, `-- --no-send-seats
  * 0,2,4,6` those seats (a mirror match: same level, half send, half don't),
- * `-- --send-at 100` makes every bot send only at that much energy.
+ * `-- --send-at 100` makes every bot send only at that much attack gauge.
  *
  * The default lineup mixes levels, so the table shows how often each level
  * wins and where it usually places, and how long matches last.
@@ -41,7 +41,7 @@ if (AIM) for (const l of Object.values(levels)) l.TARGETING = AIM;
 const NO_SEND = argOf("no-send") as BotLevel | null;
 if (NO_SEND) levels[NO_SEND].SEND_AT = Infinity;
 const NO_SEND_SEATS = (argOf("no-send-seats") ?? "").split(",").filter(Boolean).map(Number);
-// `--send-at 100`: every bot sends only at this much energy.
+// `--send-at 100`: every bot sends only at this much attack gauge.
 const SEND_AT = argOf("send-at");
 if (SEND_AT) for (const l of Object.values(levels)) l.SEND_AT = Number(SEND_AT);
 
@@ -106,7 +106,7 @@ for (let seed = 1; seed <= MATCHES; seed++) {
     };
     row.kos += kosBy[seat];
     row.badges.push(Match.badgeLevel(match.badgePoints[seat]));
-    row.sent += match.fields[seat].energy.spent.send;
+    row.sent += match.fields[seat].attack.spent.send;
     row.cancelled += match.fields[seat].cancelledTotal;
     row.places.push(match.placements[seat]);
     if (match.placements[seat] === 1) row.wins++;
@@ -136,7 +136,7 @@ console.table(
     "place (mean)": (r.places.reduce((a, b) => a + b, 0) / r.places.length).toFixed(2),
     "survived (median)": `${Math.round(median(r.survived))} s`,
     "score (median)": Math.round(median(r.scores)),
-    "energy sent/run": Math.round(r.sent / r.places.length),
+    "attack sent/run": Math.round(r.sent / r.places.length),
     "cancelled/run": Math.round(r.cancelled / r.places.length),
     "KOs/run": (r.kos / r.places.length).toFixed(2),
     "badge lvl (mean)": (r.badges.reduce((a, b) => a + b, 0) / r.badges.length).toFixed(2),

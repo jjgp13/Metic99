@@ -196,12 +196,7 @@ export class Match {
       this.koOrder.push(seat);
       const by = this.koCredit(seat, out);
       const badges = by === null ? 0 : this.badgePoints[seat] + 1;
-      if (by !== null) {
-        this.badgePoints[by] += badges;
-        if (MATCH.KO_ENERGY > 0 && this.placements[by] === 0) {
-          this.fields[by].receive({ type: "reward", energy: MATCH.KO_ENERGY });
-        }
-      }
+      if (by !== null) this.badgePoints[by] += badges;
       this.events.push({ type: "ko", seat, placement, by, badges, step: this.steps });
     });
 
