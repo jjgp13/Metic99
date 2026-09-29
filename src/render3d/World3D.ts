@@ -16,6 +16,10 @@ export interface WorldSnapshot {
   shipTargetX: number | null;
   aliens: readonly Alien[];
   bullets: readonly Bullet[];
+  /** How far (0..1) this frame is between the last two sim steps: aliens and
+   * bullets are drawn that far from their previous position to their current
+   * one, so fixed-rate steps still look smooth. */
+  alpha: number;
   /** Pause hides the field so sums can't be solved on a break. */
   aliensHidden: boolean;
   /** The answer the background stars spell out, or null. */
@@ -399,19 +403,20 @@ export default class World3D {
       // The strafer telegraphs its dive with a short shake.
       const shake =
         a.mode === "windup" ? THREE.MathUtils.randFloatSpread(2) * RENDER3D.ANIM.WINDUP_SHAKE : 0;
-      v.root.position.set(toWorldX(a.x + shake), toWorldY(a.y), 0);
+      const x = a.viewX(s.alpha);
+      v.root.position.set(toWorldX(x + shake), toWorldY(a.viewY(s.alpha)), 0);
       v.root.visible = !s.aliensHidden;
 
       // Bank into sideways moves (zig-zag, patrol, crossing) on top of the sway.
       if (dt > 0) {
         const target = THREE.MathUtils.clamp(
-          ((a.x - v.lastX) / dt) * RENDER3D.ALIEN_BANK_PER_PXS,
+          ((x - v.lastX) / dt) * RENDER3D.ALIEN_BANK_PER_PXS,
           -RENDER3D.ALIEN_BANK_MAX,
           RENDER3D.ALIEN_BANK_MAX,
         );
         v.bank += (target - v.bank) * Math.min(1, dt * RENDER3D.SHIP_BANK_RESPONSE);
       }
-      v.lastX = a.x;
+      v.lastX = x;
       v.body.rotation.y =
         v.bank + Math.sin(time * RENDER3D.ALIEN_SWAY_SPEED + v.phase) * RENDER3D.ALIEN_SWAY * (1 - Math.abs(v.bank));
       this.animateParts(a, v, time);
@@ -617,7 +622,7 @@ export default class World3D {
         this.scene.add(m);
         this.bulletViews.set(b, m);
       }
-      m.position.set(toWorldX(b.x), toWorldY(b.y), 0);
+      m.position.set(toWorldX(b.x), toWorldY(b.prevY + (b.y - b.prevY) * s.alpha), 0);
     }
     for (const [b, m] of this.bulletViews) {
       if (seen.has(b)) continue;

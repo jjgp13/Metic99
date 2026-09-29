@@ -213,7 +213,8 @@ including preview reviews.
 
 Example recipes exist (2026-09-24) for `alien_darter`, `alien_lumberer`,
 `alien_drifter`, and two alternative ship styles `ship_dart` (sleek delta) and
-`ship_pod` (chunky round); `alien_strafer` followed (2026-09-25). **All are in
+`ship_pod` (chunky round); `alien_strafer` followed (2026-09-25) and
+`alien_swooper` (2026-09-28). **All are in
 the game:** the player picks a ship on the menu, and each monster kind has its
 own model and movement (AGENTS.md → Gameplay rules). More variations of both
 will follow in this style.
@@ -231,6 +232,7 @@ triggers: `alien_shielded` (grey armored beetle with a glowing shield emitter),
 | `alien_lumberer` | 3-number alien, slow | Big round body, heavy limbs, plated back |
 | `alien_drifter` | Bonus, non-lethal; crosses sideways | Jellyfish/UFO, glowing rim, tentacle skirt |
 | `alien_strafer` | 2-number, patrols the top then dives (Galaga-style) | Magenta wasp, wide flapping wings (silver fore, purple hind), cyan eyes |
+| `alien_swooper` | 2-number, flies in from a side edge, then glides down | Teal manta ray, flat flapping wings, orange head fins and tail |
 | `alien_shielded` | Ability: needs two answers | Grey armored beetle, magenta emitter; shield bubble drawn in code |
 | `alien_blinker` | Ability: balls blink shut | Magenta one-eyed head with lashes; `anim_lid` closes with the balls |
 | `alien_splitter` / `alien_splitling` | Ability: pops into two 2-ball aliens | Two pink lobes on a glowing seam / one lobe |

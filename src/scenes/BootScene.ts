@@ -2,6 +2,15 @@ import Phaser from "phaser";
 import { GAME, RENDER3D } from "../config/constants";
 import { getWorld3D } from "../render3d/World3D";
 
+/** Models packed as `{ glb: base64 }` JSON (the playtest Artifact build). */
+const MODELS_AS_JSON = import.meta.env.VITE_MODEL_PACK === "json";
+
+function fromBase64(b64: string | undefined): ArrayBuffer | undefined {
+  if (!b64) return undefined;
+  const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+  return bytes.buffer;
+}
+
 /**
  * BootScene preloads every asset, builds the shared animations, then hands off
  * to GameScene. Phaser's loader is asynchronous; `preload()` queues files and
@@ -67,8 +76,11 @@ export default class BootScene extends Phaser.Scene {
     this.load.image("star", `${base}/sprites/star.png`);
 
     // --- 3D models (Blender .glb, parsed into Three.js in create()) ---------
+    // The playtest Artifact can't host .glb files, so its build
+    // (`--mode playtest`) loads each model as base64 inside a .json file.
     for (const name of RENDER3D.MODELS) {
-      this.load.binary(`model:${name}`, `${base}/models/${name}.glb`);
+      if (MODELS_AS_JSON) this.load.json(`model:${name}`, `${base}/models/${name}.json`);
+      else this.load.binary(`model:${name}`, `${base}/models/${name}.glb`);
     }
     // Top-down ship renders for the menu's ship picker (built with the models).
     for (const ship of RENDER3D.SHIPS) {
@@ -90,7 +102,13 @@ export default class BootScene extends Phaser.Scene {
     // Parse the 3D models before the menu so a run never starts half-loaded.
     // Missing models just fall back to sprite voxels (see World3D.loadModels).
     const files = RENDER3D.MODELS.map(
-      (name) => [name, this.cache.binary.get(`model:${name}`) as ArrayBuffer | undefined] as const,
+      (name) =>
+        [
+          name,
+          MODELS_AS_JSON
+            ? fromBase64((this.cache.json.get(`model:${name}`) as { glb?: string } | undefined)?.glb)
+            : (this.cache.binary.get(`model:${name}`) as ArrayBuffer | undefined),
+        ] as const,
     );
     void getWorld3D()
       .loadModels(files)

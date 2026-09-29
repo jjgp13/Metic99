@@ -1,9 +1,11 @@
 import { ENEMY, GAME, MODEL_BOXES, MONSTERS, type AlienKind } from "../config/constants";
+import type { Rng } from "../sim/rng";
 import type { Ability } from "./abilities";
 
 /**
  * Where an alien is in its movement pattern. Most kinds only "move"; the
- * strafer flies in, patrols, winds up (a telegraph the renderer shows) and dives.
+ * strafer flies in, patrols, winds up (a telegraph the renderer shows) and dives;
+ * the swooper flies in sideways ("enter") and then moves down.
  */
 export type AlienMode = "move" | "enter" | "patrol" | "windup" | "dive";
 
@@ -25,12 +27,16 @@ export interface AlienConfig {
   ballTexture: string;
   fallSpeed: number;
   homeSpeed: number;
-  /** Scene time (ms) when spawned, used for the score's speed bonus. */
+  /** Game-clock time (ms) when spawned, used for the score's speed bonus. */
   spawnedAt: number;
+  /** Seeded stream for the alien's quirks (start direction, gait phase). */
+  rng: Rng;
   /** Strafer: patrol time before the dive. */
   patrolMs?: number;
   /** Strafer / drifter: body y of the band it patrols or crosses. */
   bandY?: number;
+  /** Swooper: the x where its sideways flight in ends and it turns down. */
+  laneX?: number;
   /** Model to wear instead of the kind's (ability aliens); its box comes from
    * MODEL_BOXES while the movement still follows `kind`. */
   model?: string;
@@ -60,6 +66,10 @@ const TAU = Math.PI * 2;
 export default class Alien {
   public x: number;
   public y: number;
+  /** Position at the start of the last sim step. The sim steps at a fixed rate,
+   * so the renderer draws between the last two steps (`viewX`/`viewY`). */
+  public prevX: number;
+  public prevY: number;
   /** False once killed; the renderer drops its view and the scene prunes it. */
   public active = true;
 
@@ -106,6 +116,8 @@ export default class Alien {
     this.lethal = config.kind !== "drifter";
     this.x = config.x;
     this.y = config.y;
+    this.prevX = config.x;
+    this.prevY = config.y;
     this.result = config.result;
     this.digits = config.digits;
     this.bodyKey = config.bodyKey;
@@ -115,7 +127,7 @@ export default class Alien {
     this.ability = config.ability ?? null;
     this.fallSpeed = config.fallSpeed;
     this.homeSpeed = config.homeSpeed;
-    this.laneX = config.x;
+    this.laneX = config.laneX ?? config.x;
     this.bandY = config.bandY ?? 0;
     this.modeLeftMs = config.patrolMs ?? 0;
 
@@ -132,10 +144,26 @@ export default class Alien {
           : 0;
     this.sweepHalf = this.halfW + lateral;
 
-    this.mode = config.kind === "strafer" ? "enter" : "move";
+    this.mode = config.kind === "strafer" || config.kind === "swooper" ? "enter" : "move";
     if (config.kind === "drifter") this.dir = config.x < GAME.WIDTH / 2 ? 1 : -1;
-    else this.dir = Math.random() < 0.5 ? 1 : -1;
-    this.gait = Math.random() * TAU;
+    else if (config.kind === "swooper") this.dir = this.laneX >= config.x ? 1 : -1;
+    else this.dir = config.rng.chance(0.5) ? 1 : -1;
+    this.gait = config.rng.next() * TAU;
+  }
+
+  /** Remember where the alien was before this sim step moves it. */
+  public savePrev(): void {
+    this.prevX = this.x;
+    this.prevY = this.y;
+  }
+
+  /** Where to draw it, `alpha` (0..1) of the way from the last step to this one. */
+  public viewX(alpha: number): number {
+    return this.prevX + (this.x - this.prevX) * alpha;
+  }
+
+  public viewY(alpha: number): number {
+    return this.prevY + (this.y - this.prevY) * alpha;
   }
 
   /** How many numbers this alien carries (2 = easy sum, 3 = harder, …). */
@@ -145,10 +173,13 @@ export default class Alien {
 
   /**
    * Horizontal span this alien may occupy soon: its whole zig-zag or patrol
-   * while it moves sideways, just its box once it moves straight. The spawner
-   * keeps new aliens out of these spans.
+   * while it moves sideways (a swooper: the rest of its flight in), just its
+   * box once it moves straight. The spawner keeps new aliens out of these spans.
    */
   public get sweep(): readonly [number, number] {
+    if (this.kind === "swooper" && this.mode === "enter") {
+      return [Math.min(this.x, this.laneX) - this.halfW, Math.max(this.x, this.laneX) + this.halfW];
+    }
     const lateral = this.kind === "darter" || (this.kind === "strafer" && this.mode !== "dive");
     return lateral
       ? [this.laneX - this.sweepHalf, this.laneX + this.sweepHalf]
@@ -238,6 +269,9 @@ export default class Alien {
       case "strafer":
         this.advanceStrafer(delta, dt);
         break;
+      case "swooper":
+        this.advanceSwooper(dt);
+        break;
       case "drifter": {
         // Incremental bob, so a move held back by the readability rule never
         // makes it jump when it resumes.
@@ -253,12 +287,21 @@ export default class Alien {
 
   /**
    * Called when a sideways move was refused by the readability rule: patrols
-   * and zig-zags turn around (the drifter just waits for the way to clear).
+   * and zig-zags turn around, a swooper already fully on screen turns down
+   * where it is (the drifter, or a swooper still at the edge, waits).
    */
   public blockedX(): void {
     if (this.kind === "darter" || (this.kind === "strafer" && this.mode === "patrol")) {
       this.dir = this.dir > 0 ? -1 : 1;
+    } else if (this.kind === "swooper" && this.mode === "enter" && this.onScreenX) {
+      this.laneX = this.x;
+      this.mode = "move";
     }
+  }
+
+  /** Its whole box is inside the field sideways. */
+  private get onScreenX(): boolean {
+    return this.x - this.halfW >= 0 && this.x + this.halfW <= GAME.WIDTH;
   }
 
   public kill(): void {
@@ -274,6 +317,24 @@ export default class Alien {
     if ((this.x - this.laneX) * this.dir >= reach) {
       this.x = this.laneX + this.dir * reach;
       this.dir = this.dir > 0 ? -1 : 1;
+    }
+  }
+
+  /** Fly in sideways, braking into the lane, then glide straight down. */
+  private advanceSwooper(dt: number): void {
+    const m = MONSTERS.swooper;
+    if (this.mode === "move") {
+      this.y += this.descentSpeed() * m.SPEED * dt;
+      return;
+    }
+    const left = Math.abs(this.laneX - this.x);
+    const speed = m.ENTER_SPEED * Math.min(1, Math.max(m.MIN_ENTER, left / m.BRAKE_PX));
+    const step = speed * dt;
+    if (step >= left) {
+      this.x = this.laneX;
+      this.mode = "move";
+    } else {
+      this.x += this.dir * step;
     }
   }
 

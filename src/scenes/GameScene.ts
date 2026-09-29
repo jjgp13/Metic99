@@ -1,41 +1,43 @@
 import Phaser from "phaser";
 import {
   ABILITY,
-  BULLET,
-  DIFFICULTY,
-  ENEMY,
   FEEDBACK,
   GAME,
   KEYPAD_AREA,
-  MONSTERS,
   PLAYER,
   RANKS,
-  RECOVERY,
   SCORE,
-  SPLITTER,
+  SIM,
   STORAGE,
-  type AlienKind,
   type InputMode,
   type SlowMode,
 } from "../config/constants";
-import { difficultyAt, type DifficultyParams } from "../config/difficulty";
 import { isLeaderboardEnabled, startMatch } from "../services/leaderboard";
-import Alien from "../objects/Alien";
 import {
-  ABILITY_KINDS,
-  createAbility,
-  unlockedAbilities,
-  type AbilityHost,
-  type AbilityKind,
-} from "../objects/abilities";
-import type { Bullet } from "../objects/Bullet";
+  hitRecord,
+  initPlaytestLog,
+  logRun,
+  type InputSource,
+  type RunExtras,
+} from "../services/playtestLog";
+import type Alien from "../objects/Alien";
+import { ABILITY_KINDS, type AbilityKind } from "../objects/abilities";
 import World3D, { getWorld3D } from "../render3d/World3D";
-import type { AnswerState, AnswerView } from "../render3d/AnswerStars";
 import { selectedShip } from "../config/ships";
-import { EnergyMeter, SlowTime, energyForKill } from "../sim/energy";
+import {
+  ANSWER_MAX_DIGITS,
+  Field,
+  type AnswerView,
+  type FieldEvent,
+  type FieldInput,
+} from "../sim/Field";
+import { Bot } from "../sim/Bot";
+import { randomSeed } from "../sim/rng";
+import { summarizeSolves } from "../sim/stats";
 import { inputMode, setInputMode } from "../config/inputMode";
 import type { InkEvent } from "../handwriting/inkReader";
 import DrawPad from "../ui/DrawPad";
+import { onKeyDown } from "../ui/keyboard";
 
 // Energy HUD sits in the gutters beside the keypad so it never covers the field
 // or the keys: the meter on the left, the SLOW button on the right.
@@ -51,75 +53,48 @@ const POWER_ON_FILL: Record<SlowMode, number> = { slow: 0x1f6f7a, freeze: 0x3a5a
 // The answer display's row, between the ship and the keypad: the input-mode
 // switch sits on its right, the drawing pad's C button on its left.
 const ANSWER_Y = PLAYER.Y + 36;
-const ANSWER_MAX_DIGITS = 2;
 
 /**
  * GameScene owns the actual gameplay. A Phaser Scene has a lifecycle:
  *   create()  -> build the world once
  *   update(t, dt) -> called every frame (dt = ms since last frame)
  *
- * Game objects (ship x, aliens, bullets) are plain state in 2D logical
- * coordinates. Phaser draws only the HUD and keypad; the playfield is drawn in
- * 3D by World3D, which reads a snapshot of this state at the end of each frame.
+ * The rules live in `Field` (sim/Field.ts, no Phaser): this scene turns the
+ * keypad, keyboard and drawing pad into field inputs, steps the field at a
+ * fixed rate, and shows what happened (sounds, HUD, pops) from its events.
+ * Phaser draws only the HUD and keypad; the playfield is drawn in 3D by
+ * World3D, which reads a snapshot of the field at the end of each frame.
  */
-export default class GameScene extends Phaser.Scene implements AbilityHost {
+export default class GameScene extends Phaser.Scene {
   private world!: World3D;
-  private shipX: number = GAME.WIDTH / 2;
-  private bullets: Bullet[] = [];
-  private aliens: Alien[] = [];
-
-  /** result -> alien, so a typed number maps directly to its target. */
-  private enemiesInField = new Map<number, Alien>();
-  private target: Alien | null = null;
-  /** Once we fire on a target it stays locked (and fleeing) until destroyed,
-   * independent of the typed string, so a committed kill never turns back. */
-  private lockedTarget: Alien | null = null;
-  /** The in-flight bullet aimed at lockedTarget; prevents firing a second
-   * bullet while one is already on its way (re-fires only if it misses). */
-  private lockedBullet: Bullet | null = null;
-
-  private typed = "";
+  private field!: Field;
+  /** Dev only (`?bot=ace`): a bot plays this field through the same inputs. */
+  private autopilot: Bot | null = null;
+  /** What the playtest log records beyond the field (services/playtestLog.ts). */
+  private runExtras!: RunExtras;
+  /** Real time not yet simulated; the sim runs in whole SIM.STEP_MS steps. */
+  private stepAccMs = 0;
   private typedText!: Phaser.GameObjects.Text;
   /** What the answer display shows (typed number or the locked answer). */
   private answer: AnswerView | null = null;
-  /** Counts down while the typed answer is wrong; at 0 it clears itself. */
-  private wrongLeftMs = 0;
   /** Lock-on brackets around the current target. */
   private reticle!: Phaser.GameObjects.Graphics;
   private reticleTarget: Alien | null = null;
   private reticleAge = 0;
   private scoreText!: Phaser.GameObjects.Text;
-  private score = 0;
-  private lives: number = PLAYER.LIVES;
+  /** HUD pieces and pops over the field; each fades while an alien is under it. */
+  private ducked: Phaser.GameObjects.Container[] = [];
   private lifeIcons: Phaser.GameObjects.Image[] = [];
-
-  // Skill scoring: streak of kills without a hit + per-run mastery tracking.
-  private combo = 0;
   private comboText!: Phaser.GameObjects.Text;
-  private killsThisRun = 0;
-  private bestComboThisRun = 0;
-  private fastestSolveMs = Infinity;
-  private lastFire = 0;
   private gameOver = false;
   /** Guards the single transition out of the game-over screen. */
   private proceeding = false;
   /** Whether this run beat the stored personal best (drives name-entry copy). */
   private newHighScore = false;
 
-  private elapsedMs = 0;
-  private spawnCountdown = 0;
-  private drifterCountdown: number = MONSTERS.drifter.FIRST_MS;
   private diffBar!: Phaser.GameObjects.Rectangle;
 
-  // Hit-recovery: the field freezes while `freezeLeftMs` > 0, then (once the
-  // player has been hit at least once) runs at POST_HIT_FACTOR for the rest of
-  // the run. A countdown (not a timestamp) so pausing doesn't eat the freeze.
-  private freezeLeftMs = 0;
-  private postHitSlow = false;
-
-  // Energy: kills charge it, SLOW spends it (sending comes with multiplayer).
-  private energy = new EnergyMeter();
-  private slowTime = new SlowTime();
+  // Energy HUD: the meter under the keypad, SLOW / FREEZE in the gutters.
   private energyFill!: Phaser.GameObjects.Rectangle;
   private energyText!: Phaser.GameObjects.Text;
   private powerButtons = {} as Record<
@@ -142,9 +117,6 @@ export default class GameScene extends Phaser.Scene implements AbilityHost {
   private pad!: DrawPad;
   private modeLabel!: Phaser.GameObjects.Text;
   private padClear: Phaser.GameObjects.GameObject[] = [];
-  /** Dev only: `?ability=blinker,shielded` makes every allowed spawn one of
-   * these (ignoring unlocks and chance) for play-testing. */
-  private forcedAbilities: AbilityKind[] | null = null;
 
   constructor() {
     super("GameScene");
@@ -166,58 +138,58 @@ export default class GameScene extends Phaser.Scene implements AbilityHost {
     this.buildEnergyHud();
     this.bindKeyboard();
 
-    // --- Enemy spawner: interval & speeds scale with difficulty (see update).
-    this.spawnCountdown = 0; // spawn immediately on the first frame
-    this.spawnAlien(difficultyAt(0, 0));
-
     // Open a server-gated match so this run's score can be submitted later.
     // Fire-and-forget: if it fails the player just gets an unsaved score.
     void startMatch();
+    initPlaytestLog();
   }
 
   private resetState(): void {
-    this.shipX = GAME.WIDTH / 2;
-    this.bullets = [];
-    this.aliens = [];
-    this.enemiesInField.clear();
-    this.target = null;
-    this.lockedTarget = null;
-    this.lockedBullet = null;
-    this.typed = "";
+    this.stepAccMs = 0;
     this.answer = null;
-    this.wrongLeftMs = 0;
     this.reticleTarget = null;
     this.reticleAge = 0;
-    this.score = 0;
-    this.lives = PLAYER.LIVES;
     this.lifeIcons = [];
-    this.combo = 0;
-    this.killsThisRun = 0;
-    this.bestComboThisRun = 0;
-    this.fastestSolveMs = Infinity;
-    this.lastFire = 0;
-    this.elapsedMs = 0;
-    this.spawnCountdown = 0;
-    this.drifterCountdown = MONSTERS.drifter.FIRST_MS;
+    this.ducked = [];
     this.gameOver = false;
     this.proceeding = false;
     this.newHighScore = false;
-    this.freezeLeftMs = 0;
-    this.postHitSlow = false;
-    this.energy = new EnergyMeter();
-    this.slowTime = new SlowTime();
     this.paused = false;
     this.pauseOverlay = [];
     this.seenAbilities.clear();
-    this.forcedAbilities = null;
     this.keypadParts = [];
     this.padClear = [];
+
+    // The run's seed: the same seed and inputs roll the same aliens.
+    // Dev: `?seed=123` replays a seed; `?ability=blinker,shielded` makes every
+    // allowed spawn one of these (ignoring unlocks and chance) for play-testing.
+    let seed = randomSeed();
+    let forcedAbilities: AbilityKind[] | null = null;
     if (import.meta.env.DEV) {
-      const forced = new URLSearchParams(window.location.search).get("ability");
-      const kinds = forced
+      const params = new URLSearchParams(window.location.search);
+      const seedParam = params.get("seed");
+      if (seedParam && /^\d+$/.test(seedParam)) seed = Number(seedParam) >>> 0;
+      console.info(`[metic] run seed ${seed} (replay with ?seed=${seed})`);
+      const kinds = params
+        .get("ability")
         ?.split(",")
         .filter((k): k is AbilityKind => (ABILITY_KINDS as string[]).includes(k));
-      if (kinds?.length) this.forcedAbilities = kinds;
+      if (kinds?.length) forcedAbilities = kinds;
+    }
+    this.field = new Field({ seed, forcedAbilities });
+    this.runExtras = {
+      lives: this.field.lives,
+      forcedAbilities,
+      inputMode: inputMode(),
+      sources: { keypad: 0, keyboard: 0, pad: 0 },
+      ink: { reads: 0, unknown: 0, scratch: 0 },
+      pauses: 0,
+      hits: [],
+    };
+    this.autopilot = null;
+    if (import.meta.env.DEV) {
+      const level = new URLSearchParams(window.location.search).get("bot") ?? "";
+      if (Bot.isLevel(level)) this.autopilot = Bot.forSeat(level, seed);
     }
   }
 
@@ -225,16 +197,29 @@ export default class GameScene extends Phaser.Scene implements AbilityHost {
     // Game over / pause freeze the simulation, but the 3D view keeps rendering
     // (stars drift, the final explosion finishes, pause hides the aliens).
     if (!this.gameOver && !this.paused) {
-      this.tick(time, delta);
+      // Fixed timestep: bank real time and run the rules in whole steps, so a
+      // run plays the same at any frame rate (docs/MULTIPLAYER_DESIGN.md §8).
+      const maxAcc = SIM.STEP_MS * SIM.MAX_STEPS_PER_FRAME;
+      this.stepAccMs = Math.min(this.stepAccMs + delta, maxAcc);
+      while (this.stepAccMs >= SIM.STEP_MS && !this.gameOver) {
+        this.step(SIM.STEP_MS);
+        this.stepAccMs -= SIM.STEP_MS;
+      }
+      this.updateHud(delta);
       this.pad.update(delta);
     }
 
+    // Draw between the last two sim steps (interpolation) so motion is smooth
+    // even when a frame runs zero or two steps.
+    const alpha = this.stepAlpha;
+    const f = this.field;
     this.world.render(
       {
-        shipX: this.shipX,
-        shipTargetX: this.target?.active ? this.target.x : null,
-        aliens: this.aliens,
-        bullets: this.bullets,
+        shipX: f.prevShipX + (f.shipX - f.prevShipX) * alpha,
+        shipTargetX: f.target?.active ? f.target.viewX(alpha) : null,
+        aliens: f.aliens,
+        bullets: f.bullets,
+        alpha,
         aliensHidden: this.paused,
         answer: this.paused || this.gameOver ? null : this.answer,
       },
@@ -243,356 +228,63 @@ export default class GameScene extends Phaser.Scene implements AbilityHost {
     );
   }
 
-  private tick(time: number, delta: number): void {
-    this.elapsedMs += delta;
-    const diff = difficultyAt(this.elapsedMs, this.score);
+  /** How far (0..1) real time is between the last sim step and the next. */
+  private get stepAlpha(): number {
+    return this.stepAccMs / SIM.STEP_MS;
+  }
 
-    // After a hit the field FREEZES for a few seconds (factor 0), then resumes at
-    // POST_HIT_FACTOR for the rest of the run. The difficulty timer keeps running
-    // underneath, so absolute speed still climbs over time. Slow time multiplies
-    // on top; it holds (no drain) while the hit freeze already stops the field.
-    const hitFrozen = this.freezeLeftMs > 0;
-    if (hitFrozen) this.freezeLeftMs -= delta;
-    const slowFactor = this.slowTime.update(delta, this.energy, hitFrozen);
-    const slow = hitFrozen
-      ? 0
-      : slowFactor * (this.postHitSlow ? RECOVERY.POST_HIT_FACTOR : 1);
-    const fieldDelta = delta * slow;
+  /** One fixed sim step, then show what happened in it. */
+  private step(dt: number): void {
+    this.autopilot?.update(this.field, dt);
+    this.field.step(dt);
+    for (const e of this.field.takeEvents()) this.show(e);
+  }
 
-    this.diffBar.setSize(diff.d * (GAME.WIDTH - 24), 4); // show ramp progress
-
-    // Spawn pacing's PRIMARY gate is the number of UNSOLVED aliens (ones the
-    // player still has to do mental math for): start at 1 and open up only as
-    // the player earns points. The weighted threat budget is a secondary net so
-    // the screen never floods and a hit stays recoverable. Recheck soon instead
-    // of waiting a full interval so deferred spawns don't pile up and burst.
-    this.spawnCountdown -= fieldDelta;
-    if (this.spawnCountdown <= 0) {
-      const spawned =
-        this.unsolvedOnScreen() < diff.maxUnsolved &&
-        this.currentThreat() < diff.threatBudget &&
-        this.spawnAlien(diff);
-      this.spawnCountdown = spawned ? diff.spawnInterval : ENEMY.SPAWN_RETRY_MS;
+  /** Turn a field event into sound, pops and HUD changes. */
+  private show(e: FieldEvent): void {
+    switch (e.type) {
+      case "spawned":
+        if (e.alien.ability) this.introduceAbility(e.alien.ability.kind);
+        break;
+      case "fired":
+        this.sound.play("shoot", { volume: 0.4 });
+        break;
+      case "solved":
+        if (e.absorbed) this.sound.play("explode", { volume: 0.3, rate: 1.6 });
+        else this.explode(e.alien);
+        this.updateComboText();
+        this.showScore(e.points, e.alien.x, e.alien.y);
+        this.showEnergyGain(e.energy);
+        this.popEquation(e.digits, e.alien);
+        if (e.burst > 0) this.popBurst(e.burst, e.alien.x, e.alien.y);
+        break;
+      case "hit":
+        this.runExtras.hits.push(hitRecord(e.alien, this.field));
+        this.explode(e.alien);
+        this.sound.play("hurt", { volume: 0.5 });
+        this.updateComboText();
+        this.lifeIcons[e.livesLeft]?.setAlpha(0.15);
+        this.cameras.main.shake(150, 0.01);
+        this.world.shake(150, 0.01);
+        break;
+      case "knockedOut":
+        this.endGame();
+        break;
     }
+  }
 
-    // The bonus drifter runs on its own clock and ignores the caps above: it is
-    // optional, so it never takes a slot from the sums the player must solve.
-    this.drifterCountdown -= fieldDelta;
-    if (this.drifterCountdown <= 0) {
-      const { min, max } = MONSTERS.drifter.INTERVAL_MS;
-      this.drifterCountdown = this.spawnDrifter(diff)
-        ? Phaser.Math.Between(min, max)
-        : ENEMY.SPAWN_RETRY_MS;
-    }
-
-    // Resolve the current target. A locked target (already fired upon) stays
-    // committed until it is destroyed; otherwise the typed number picks one.
-    if (this.lockedTarget && this.lockedTarget.active) {
-      this.target = this.lockedTarget;
-    } else {
-      this.lockedTarget = null;
-      const typedVal = this.typed === "" ? -1 : parseInt(this.typed, 10);
-      this.target = this.enemiesInField.get(typedVal) ?? null;
-    }
-
-    // Ability clocks run on real time, not field time: a blinker must not stay
-    // shut through the post-hit freeze meant for reading the board.
-    for (const alien of this.aliens) if (alien.active) alien.ability?.update(delta);
-
-    // Advance every alien; detect ones that reached the player line. The active
-    // target STOPS while it is locked on: once the player has typed its answer it
-    // holds position while the ship lines up the shot, so a correct answer is
-    // never punished by the ship's travel time (and it can't cost a life).
-    for (const alien of this.aliens) {
-      if (alien === this.target || !alien.active) continue; // hold still while targeted
-      this.advanceReadable(alien, fieldDelta);
-      if (alien.lethal && alien.y >= PLAYER.Y - 6) this.onAlienReachedPlayer(alien);
-      else if (alien.escaped) this.onAlienEscaped(alien);
-    }
-
-    // Slide the ship toward the target and fire when lined up. Don't fire again
-    // while a bullet is already in flight toward this locked target — only
-    // re-fire if that shot missed (its bullet was recycled off-screen).
-    if (this.target && this.target.active) {
-      this.shipX = Phaser.Math.Linear(this.shipX, this.target.x, PLAYER.MOVE_LERP);
-      const shotInFlight =
-        this.lockedTarget === this.target &&
-        this.lockedBullet !== null &&
-        this.lockedBullet.active;
-      if (
-        !shotInFlight &&
-        Math.abs(this.shipX - this.target.x) < PLAYER.SHOOT_RANGE &&
-        time - this.lastFire > PLAYER.FIRE_COOLDOWN
-      ) {
-        this.fire(time, this.target);
-      }
-    }
-
-    this.moveBullets(delta);
-
-    // Drop killed aliens and spent bullets; the 3D view removes their meshes.
-    this.aliens = this.aliens.filter((a) => a.active);
-    this.bullets = this.bullets.filter((b) => b.active);
+  /** Once per frame: HUD and answer feedback, which only show the rules' state. */
+  private updateHud(delta: number): void {
+    this.diffBar.setSize(this.field.difficulty.d * (GAME.WIDTH - 24), 4); // show ramp progress
 
     // Aliens come and go, so an answer can turn right or wrong without a key.
     this.refreshAnswer();
-    if (this.answer?.state === "wrong") {
-      this.wrongLeftMs -= delta;
-      if (this.wrongLeftMs <= 0) this.setTyped("");
-    }
     this.drawReticle(delta);
+    this.duckHud(delta);
 
     this.updateEnergyHud();
   }
 
-  /**
-   * Readability rule (docs/MULTIPLAYER_DESIGN.md §3): an alien never moves INTO
-   * another alien's box (ball row + body). A blocked move is retried one axis
-   * at a time; the refused axis holds still, and a refused sideways move turns
-   * zig-zags and patrols around. Aliens already too close (shouldn't happen)
-   * are ignored so they can move apart.
-   */
-  private advanceReadable(alien: Alien, delta: number): void {
-    const px = alien.x;
-    const py = alien.y;
-    alien.advance(delta);
-    const others = this.aliens.filter(
-      (o) => o !== alien && o.active && !alien.overlapsAt(px, py, o),
-    );
-    const blocked = () => others.some((o) => alien.overlaps(o));
-    if (!blocked()) return;
-
-    const nx = alien.x;
-    alien.x = px; // keep only the vertical move
-    if (!blocked()) {
-      if (nx !== px) alien.blockedX();
-      return;
-    }
-    alien.x = nx; // keep only the sideways move
-    alien.y = py;
-    if (!blocked()) return;
-    alien.x = px;
-    if (nx !== px) alien.blockedX();
-  }
-
-  /**
-   * Fly bullets upward and resolve hits. The hit test is swept over the distance
-   * travelled this frame, so a fast bullet can't tunnel through an alien on a
-   * slow frame. A bullet only hits the alien whose answer fired it and flies
-   * through every other one: results are unique on the field, so only the
-   * alien that was solved can die (or lose its shield).
-   */
-  private moveBullets(delta: number): void {
-    for (const b of this.bullets) {
-      if (!b.active) continue;
-      const prevY = b.y;
-      b.y -= BULLET.SPEED * (delta / 1000);
-      const a = b.target;
-      const hit =
-        a !== null &&
-        a.active &&
-        Math.abs(b.x - a.x) < BULLET.HIT_HALF_W &&
-        a.y >= b.y - BULLET.HIT_HALF_H &&
-        a.y <= prevY + BULLET.HIT_HALF_H;
-      if (hit) this.onBulletHit(b, a);
-      else if (b.y < -20) b.active = false; // flew off the top
-    }
-  }
-
-  // ---------------------------------------------------------------------------
-  // Spawning
-  // ---------------------------------------------------------------------------
-  /**
-   * Aliens the player still has to solve: live, lethal (the bonus drifter is
-   * optional) and not the already-answered locked target — a committed kill is
-   * no longer a mental burden, so it shouldn't suppress new spawns.
-   */
-  private unsolved(): Alien[] {
-    return this.aliens.filter((a) => a.active && a.lethal && a !== this.lockedTarget);
-  }
-
-  /** Weighted cognitive load of the unsolved aliens (secondary spawn gate). An
-   * ability adds to its alien's weight. */
-  private currentThreat(): number {
-    return this.unsolved().reduce(
-      (t, a) => t + (ENEMY.THREAT_BY_BALLS[a.ballCount] ?? 1) + (a.ability ? ABILITY.THREAT : 0),
-      0,
-    );
-  }
-
-  /** Count of unsolved aliens. Drives the primary spawn gate. */
-  private unsolvedOnScreen(): number {
-    return this.unsolved().length;
-  }
-
-  /** Count of unsolved "hard" (multi-number) aliens. */
-  private hardAliensOnScreen(): number {
-    return this.unsolved().filter((a) => a.ballCount >= ENEMY.HARD_BALL_THRESHOLD).length;
-  }
-
-  /** Count of unsolved ability aliens. */
-  private abilityAliensOnScreen(): number {
-    return this.unsolved().filter((a) => a.ability).length;
-  }
-
-  /** Roll whether the next spawn gets an ability (and which), or null. */
-  private pickAbility(diff: DifficultyParams): AbilityKind | null {
-    if (this.abilityAliensOnScreen() >= diff.maxAbilityOnScreen) return null;
-    const pool = this.forcedAbilities ?? unlockedAbilities(diff.d);
-    if (!pool.length) return null;
-    if (!this.forcedAbilities && Math.random() >= diff.abilityChance) return null;
-    return Phaser.Utils.Array.GetRandom(pool);
-  }
-
-  /**
-   * Digits for a new sum (a random count in [minBalls, maxBalls]) whose result
-   * isn't already on the field, so each typed number maps to exactly one alien.
-   * Null when the field is saturated.
-   */
-  private rollSum(
-    minBalls: number,
-    maxBalls: number,
-    maxDigit: number,
-  ): { digits: number[]; result: number } | null {
-    for (let attempt = 0; attempt < 12; attempt++) {
-      const count = Phaser.Math.Between(minBalls, maxBalls);
-      const digits = Array.from({ length: count }, () => Phaser.Math.Between(1, maxDigit));
-      const result = digits.reduce((s, d) => s + d, 0);
-      if (!this.enemiesInField.has(result)) return { digits, result };
-    }
-    return null;
-  }
-
-  /**
-   * Build (not add) an alien. With an ability it moves as ABILITY.KIND at the
-   * ability's SPEED and wears the ability's model; a blinker (strafer) also
-   * patrols PATROL_MULT longer. `model` overrides the look (splitlings).
-   */
-  private makeAlien(
-    kind: AlienKind,
-    sum: { digits: number[]; result: number },
-    x: number,
-    y: number,
-    diff: DifficultyParams,
-    bandY?: number,
-    ability?: AbilityKind | null,
-    model?: string,
-  ): Alien {
-    const speed = ability ? ABILITY.SPEED[ability] : 1;
-    const patrol = ability === "blinker" ? ABILITY.PATROL_MULT : 1;
-    return new Alien({
-      kind,
-      x,
-      y,
-      bodyKey: `alien${Phaser.Math.Between(1, 13)}`,
-      result: sum.result,
-      digits: sum.digits,
-      ballTexture: "blueBalls",
-      fallSpeed: diff.fallSpeed * speed,
-      homeSpeed: diff.homeSpeed * speed,
-      spawnedAt: this.time.now,
-      patrolMs: diff.straferPatrolMs * patrol,
-      bandY,
-      model: ability ? ABILITY.MODEL[ability] : model,
-      ability: ability ? createAbility(ability) : undefined,
-    });
-  }
-
-  /** Spawn one lethal alien from the top. Returns false if there was no room. */
-  private spawnAlien(diff: DifficultyParams): boolean {
-    if (this.gameOver) return false;
-
-    // Don't let the field over-populate — a crowded screen makes a single hit
-    // unrecoverable.
-    if (this.aliens.filter((a) => a.active && a.lethal).length >= diff.maxOnScreen) return false;
-
-    const ability = this.pickAbility(diff);
-
-    // Ball count (>= 2, so it is always a real sum) and digit size scale up, but
-    // cap concurrent "hard" (multi-number) enemies so the player never has to
-    // juggle two slow multi-number sums at once. Ability aliens carry a fixed,
-    // easy ball count: the ability is the challenge.
-    const maxBallsAllowed = ability
-      ? ABILITY.BALLS
-      : this.hardAliensOnScreen() >= diff.maxHardOnScreen
-        ? Math.max(DIFFICULTY.MIN_BALLS, ENEMY.HARD_BALL_THRESHOLD - 1)
-        : diff.maxBalls;
-    const minBalls = ability ? ABILITY.BALLS : DIFFICULTY.MIN_BALLS;
-    const sum = this.rollSum(minBalls, maxBallsAllowed, diff.maxDigit);
-    if (!sum) return false;
-
-    const kind: AlienKind = ability
-      ? ABILITY.KIND[ability]
-      : sum.digits.length >= ENEMY.HARD_BALL_THRESHOLD
-        ? "lumberer"
-        : this.pickTwoBallKind();
-    const bandY =
-      kind === "strafer"
-        ? Phaser.Math.Between(MONSTERS.strafer.BAND_Y.min, MONSTERS.strafer.BAND_Y.max)
-        : undefined;
-
-    // Enter just above the top edge, in a column whose whole sweep (zig-zag or
-    // patrol span) clears every alien still near the top and whose box clears
-    // everyone, so ball rows start apart; advanceReadable keeps them apart.
-    const probe = this.makeAlien(kind, sum, 0, 0, diff, bandY, ability);
-    const y = -probe.bottom - 2;
-    const lo = probe.sweepHalf + ENEMY.SPAWN_EDGE;
-    const hi = GAME.WIDTH - lo;
-    for (let attempt = 0; attempt < 12; attempt++) {
-      const x = Phaser.Math.Between(lo, hi);
-      const alien = this.makeAlien(kind, sum, x, y, diff, bandY, ability);
-      if (this.hasRoomFor(alien)) {
-        this.addAlien(alien);
-        if (ability) this.introduceAbility(ability);
-        return true;
-      }
-    }
-    return false; // no clear column right now; the spawner retries soon
-  }
-
-  private pickTwoBallKind(): AlienKind {
-    const weights = ENEMY.TWO_BALL_KINDS;
-    let r = Math.random() * (weights.darter + weights.strafer);
-    r -= weights.darter;
-    return r < 0 ? "darter" : "strafer";
-  }
-
-  private hasRoomFor(alien: Alien): boolean {
-    const [lo, hi] = alien.sweep;
-    return this.aliens.every((o) => {
-      if (!o.active) return true;
-      if (alien.overlaps(o)) return false;
-      if (o.y >= ENEMY.ENTRY_ZONE_Y) return true;
-      const [olo, ohi] = o.sweep;
-      return hi + ENEMY.READ_GAP <= olo || ohi + ENEMY.READ_GAP <= lo;
-    });
-  }
-
-  private addAlien(alien: Alien): void {
-    this.aliens.push(alien);
-    this.enemiesInField.set(alien.result, alien);
-  }
-
-  /** Send a bonus drifter across from a random side. False if not possible now. */
-  private spawnDrifter(diff: DifficultyParams): boolean {
-    if (this.gameOver || this.aliens.some((a) => a.active && a.kind === "drifter")) return false;
-    // Always a quick 2-number sum: it is a bonus, not a test.
-    const sum = this.rollSum(DIFFICULTY.MIN_BALLS, DIFFICULTY.MIN_BALLS, diff.maxDigit);
-    if (!sum) return false;
-    const m = MONSTERS.drifter;
-    for (let attempt = 0; attempt < 6; attempt++) {
-      const fromLeft = Math.random() < 0.5;
-      const probe = this.makeAlien("drifter", sum, 0, 0, diff);
-      const x = fromLeft ? -probe.halfW : GAME.WIDTH + probe.halfW - 1;
-      const bandY = Phaser.Math.Between(m.BAND_Y.min, m.BAND_Y.max);
-      const alien = this.makeAlien("drifter", sum, x, bandY, diff, bandY);
-      if (this.aliens.every((o) => !o.active || !alien.overlaps(o))) {
-        this.addAlien(alien);
-        return true;
-      }
-    }
-    return false;
-  }
 
   /** First sighting of an ability this run: a short banner names it and its rule. */
   private introduceAbility(kind: AbilityKind): void {
@@ -606,8 +298,8 @@ export default class GameScene extends Phaser.Scene implements AbilityHost {
         stroke: "#05060f",
         strokeThickness: 4,
       })
-      .setOrigin(0.5)
-      .setDepth(5);
+      .setOrigin(0.5);
+    this.duckable(banner);
     this.tweens.add({
       targets: banner,
       alpha: 0,
@@ -618,167 +310,23 @@ export default class GameScene extends Phaser.Scene implements AbilityHost {
   }
 
   // ---------------------------------------------------------------------------
-  // AbilityHost: what abilities may ask of the field (see objects/abilities.ts)
-  // ---------------------------------------------------------------------------
-  public rerollSum(alien: Alien): boolean {
-    const diff = difficultyAt(this.elapsedMs, this.score);
-    const sum = this.rollSum(alien.ballCount, alien.ballCount, diff.maxDigit);
-    if (!sum) return false;
-    this.enemiesInField.delete(alien.result);
-    alien.setSum(sum.digits, sum.result, this.time.now);
-    this.enemiesInField.set(sum.result, alien);
-    return true;
-  }
-
-  public spawnSplitling(parent: Alien, x: number, y: number): boolean {
-    const diff = difficultyAt(this.elapsedMs, this.score);
-    const sum = this.rollSum(DIFFICULTY.MIN_BALLS, DIFFICULTY.MIN_BALLS, diff.maxDigit);
-    if (!sum) return false;
-    const make = (cx: number, cy: number) =>
-      this.makeAlien("darter", sum, cx, cy, diff, undefined, null, SPLITTER.CHILD_MODEL);
-    // Start halfway out, not at the parent's center: the two splitlings then
-    // begin a full box apart, so their numbers never overlap mid-glide. Its box
-    // must pass the readability rule where it starts and where it lands (the
-    // dead parent no longer counts; the first splitling already does).
-    const child = make((parent.x + x) / 2, parent.y);
-    const landing = make(x, y);
-    const clear = (a: Alien) => this.aliens.every((o) => !o.active || !a.overlaps(o));
-    if (!clear(child) || !clear(landing)) return false;
-    child.glideTo(x, y, SPLITTER.GLIDE_MS);
-    this.addAlien(child);
-    return true;
-  }
-
-  // ---------------------------------------------------------------------------
   // Combat
   // ---------------------------------------------------------------------------
-  private fire(time: number, target: Alien | null): void {
-    this.lastFire = time;
-    const bullet: Bullet = {
-      x: this.shipX,
-      y: PLAYER.Y - BULLET.MUZZLE_OFFSET,
-      active: true,
-      target: target?.active ? target : null,
-    };
-    this.bullets.push(bullet);
-    this.sound.play("shoot", { volume: 0.4 });
-    // Clear the typed answer once we have committed to a shot, but keep the
-    // target LOCKED until a bullet actually destroys it. Lock first, so the
-    // display goes straight on showing the locked answer.
-    if (target && target.active) {
-      this.lockedTarget = target;
-      this.lockedBullet = bullet;
-    }
-    this.setTyped("");
 
-    // If the locked target sits at/below the muzzle, an upward bullet can't
-    // reach it, so resolve the hit point-blank to guarantee the kill.
-    if (target && target.active && target.y >= PLAYER.Y - BULLET.MUZZLE_OFFSET) {
-      this.onBulletHit(bullet, target);
-    }
-  }
 
-  private onBulletHit(bullet: Bullet, alien: Alien): void {
-    if (!alien.active) return;
-    bullet.active = false;
-    // Read the solved sum before an ability rerolls it.
-    const solved = { digits: alien.digits, solveMs: this.time.now - alien.spawnedAt };
-    if (alien.ability?.onHit(alien, this)) this.onHitAbsorbed(alien, solved);
-    else this.killAlien(alien);
-  }
 
-  /**
-   * An ability took the hit (e.g. a shield broke and rolled a new sum). The
-   * answer was still correct, so it scores, charges energy and extends the
-   * streak like a kill, but the alien lives on: release the lock so the player
-   * can target its new sum.
-   */
-  private onHitAbsorbed(
-    alien: Alien,
-    solved: { digits: readonly number[]; solveMs: number },
-  ): void {
-    this.combo += 1;
-    this.bestComboThisRun = Math.max(this.bestComboThisRun, this.combo);
-    this.updateComboText();
-    this.sound.play("explode", { volume: 0.3, rate: 1.6 });
-    this.addScore(this.computeScore(solved.digits.length, solved.solveMs), alien.x, alien.y);
-    this.addEnergy(energyForKill({ ...solved, combo: this.combo }));
-    this.popEquation(solved.digits, alien);
-    if (this.lockedTarget === alien) {
-      this.lockedTarget = null;
-      this.lockedBullet = null;
-    }
-  }
 
-  /** Award and clean up a destroyed alien. */
-  private killAlien(alien: Alien): void {
-    if (!alien.active) return;
-
-    const solveMs = this.time.now - alien.spawnedAt;
-
-    // Extend the streak first so this kill is scored with its own multiplier.
-    this.combo += 1;
-    this.killsThisRun += 1;
-    this.bestComboThisRun = Math.max(this.bestComboThisRun, this.combo);
-    this.fastestSolveMs = Math.min(this.fastestSolveMs, solveMs);
-    this.updateComboText();
-
-    const abilityMult = alien.ability ? ABILITY.SCORE_MULT[alien.ability.kind] : 1;
-    const points = Math.round(this.computeScore(alien.ballCount, solveMs) * abilityMult);
-
-    this.explode(alien);
-    this.addScore(points, alien.x, alien.y);
-    this.popEquation(alien.digits, alien);
-    // The bonus drifter adds its burst on top of the normal kill energy.
-    const burst = alien.lethal ? 0 : MONSTERS.drifter.ENERGY_BURST;
-    this.addEnergy(energyForKill({ digits: alien.digits, solveMs, combo: this.combo }) + burst);
-    if (burst > 0) this.popBurst(burst, alien.x, alien.y);
-
-    this.enemiesInField.delete(alien.result);
-    if (this.lockedTarget === alien) {
-      this.lockedTarget = null;
-      this.lockedBullet = null;
-    }
-    alien.kill();
-    // After kill() so the dead alien doesn't block its own splitlings' lanes.
-    alien.ability?.onKilled(alien, this);
-  }
-
-  /** points = BASE * ballCountBonus * speedBonus * difficultyMult * comboMult. */
-  private computeScore(ballCount: number, solveMs: number): number {
-    const ballBonus = SCORE.BALL_COUNT_BONUS[ballCount] ?? 1;
-
-    const span = SCORE.SLOW_MS - SCORE.FAST_MS;
-    const t = Phaser.Math.Clamp((solveMs - SCORE.FAST_MS) / span, 0, 1);
-    const speedBonus = SCORE.FAST_MULT + (SCORE.SLOW_MULT - SCORE.FAST_MULT) * t;
-
-    const difficultyMult = 1 + difficultyAt(this.elapsedMs, this.score).d;
-    const comboMult = Math.min(SCORE.COMBO_MAX, 1 + (this.combo - 1) * SCORE.COMBO_STEP);
-
-    return Math.round(SCORE.BASE * ballBonus * speedBonus * difficultyMult * comboMult);
-  }
 
   private updateComboText(): void {
-    if (this.combo >= 2) {
-      const mult = Math.min(SCORE.COMBO_MAX, 1 + (this.combo - 1) * SCORE.COMBO_STEP);
-      this.comboText.setText(`x${mult.toFixed(2)}  (${this.combo} streak)`);
+    const combo = this.field.combo;
+    if (combo >= 2) {
+      const mult = Math.min(SCORE.COMBO_MAX, 1 + (combo - 1) * SCORE.COMBO_STEP);
+      this.comboText.setText(`x${mult.toFixed(2)}  (${combo} streak)`);
     } else {
       this.comboText.setText("");
     }
   }
 
-  private onAlienReachedPlayer(alien: Alien): void {
-    this.enemiesInField.delete(alien.result);
-    this.explode(alien);
-    alien.kill();
-    this.loseLife();
-  }
-
-  /** A bonus alien crossed the field unsolved: it just leaves, no penalty. */
-  private onAlienEscaped(alien: Alien): void {
-    this.enemiesInField.delete(alien.result);
-    alien.kill();
-  }
 
   /**
    * Show the solved sum ("7 + 5 = 12") above the alien, and burst the answer's
@@ -798,8 +346,8 @@ export default class GameScene extends Phaser.Scene implements AbilityHost {
         stroke: "#05060f",
         strokeThickness: 4,
       })
-      .setOrigin(0.5)
-      .setDepth(5);
+      .setOrigin(0.5);
+    this.duckable(text);
     const half = text.width / 2 + 4;
     text.setX(Phaser.Math.Clamp(alien.x, half, GAME.WIDTH - half)).setScale(1.4);
     this.tweens.add({ targets: text, scale: 1, duration: E.POP_MS, ease: "Back.easeOut" });
@@ -821,8 +369,8 @@ export default class GameScene extends Phaser.Scene implements AbilityHost {
         fontSize: "15px",
         color: "#ff6be6",
       })
-      .setOrigin(0.5)
-      .setDepth(5);
+      .setOrigin(0.5);
+    this.duckable(pop);
     this.tweens.add({
       targets: pop,
       y: y - 30,
@@ -840,13 +388,13 @@ export default class GameScene extends Phaser.Scene implements AbilityHost {
   // ---------------------------------------------------------------------------
   // Score & lives HUD
   // ---------------------------------------------------------------------------
-  private addScore(points: number, x: number, y: number): void {
-    this.score += points;
-    this.scoreText.setText(this.score.toString().padStart(7, "0"));
+  private showScore(points: number, x: number, y: number): void {
+    this.scoreText.setText(this.field.score.toString().padStart(7, "0"));
 
     const pop = this.add
       .text(x, y, `+${points}`, { fontFamily: "monospace", fontSize: "16px", color: "#ffd166" })
       .setOrigin(0.5);
+    this.duckable(pop);
     this.tweens.add({
       targets: pop,
       y: y - 40,
@@ -856,29 +404,12 @@ export default class GameScene extends Phaser.Scene implements AbilityHost {
     });
   }
 
-  private loseLife(): void {
-    this.sound.play("hurt", { volume: 0.5 });
-    this.lives = Math.max(0, this.lives - 1);
-    this.combo = 0; // a hit breaks the streak
-    this.updateComboText();
-    const icon = this.lifeIcons[this.lives];
-    if (icon) icon.setAlpha(0.15);
-    this.cameras.main.shake(150, 0.01);
-    this.world.shake(150, 0.01);
-    if (this.lives <= 0) {
-      this.endGame();
-      return;
-    }
-    // Freeze the whole field for a few seconds so the player can recover, then
-    // run at a reduced speed for the rest of the run (difficulty keeps ramping).
-    this.freezeLeftMs = RECOVERY.FREEZE_MS;
-    this.postHitSlow = true;
-  }
 
   /** Freeze the field and hide aliens so the player can't solve while paused. */
   private togglePause(): void {
     if (this.gameOver) return;
     this.paused = !this.paused;
+    if (this.paused) this.runExtras.pauses++;
 
     // The 3D view hides the aliens while paused (see update()).
     this.reticle.setVisible(!this.paused);
@@ -908,33 +439,58 @@ export default class GameScene extends Phaser.Scene implements AbilityHost {
     }
   }
 
+  /**
+   * Put a HUD piece or pop into its own container, which duckHud fades while
+   * an alien is under it. The container's alpha multiplies the piece's own
+   * (a lost life's dimmed icon, a pop fading out), so both still work.
+   */
+  private duckable<T extends Phaser.GameObjects.GameObject>(obj: T): T {
+    this.ducked.push(this.add.container(0, 0, [obj]).setDepth(5));
+    return obj;
+  }
+
+  /** Fade HUD pieces and pops that overlap any alien's box (ball row + body). */
+  private duckHud(delta: number): void {
+    const alpha = this.stepAlpha;
+    const boxes = this.field.aliens
+      .filter((a) => a.active)
+      .map((a) => {
+        const x = a.viewX(alpha);
+        const y = a.viewY(alpha);
+        return new Phaser.Geom.Rectangle(x - a.halfW, y - a.top, a.halfW * 2, a.top + a.bottom);
+      });
+    const k = Math.min(1, delta / FEEDBACK.DUCK.MS);
+    this.ducked = this.ducked.filter((c) => {
+      if (c.list.length === 0) {
+        c.destroy(); // its pop finished
+        return false;
+      }
+      const bounds = c.getBounds();
+      const under = boxes.some((b) => Phaser.Geom.Intersects.RectangleToRectangle(bounds, b));
+      c.setAlpha(c.alpha + ((under ? FEEDBACK.DUCK.ALPHA : 1) - c.alpha) * k);
+      return true;
+    });
+  }
+
   private buildHud(): void {
-    // HUD sits above gameplay so aliens entering from the top never obscure it.
+    // The top HUD is drawn over the field, so each piece fades while an alien
+    // is under it (see duckHud): the sums always stay readable.
     const HUD_DEPTH = 5;
-    this.scoreText = this.add
-      .text(12, 12, "0000000", {
+    this.scoreText = this.duckable(
+      this.add.text(12, 12, "0000000", {
         fontFamily: "monospace",
         fontSize: "20px",
         color: "#ffffff",
-      })
-      .setDepth(HUD_DEPTH);
+      }),
+    );
 
     // Difficulty ramp indicator: a thin bar that fills as the game speeds up.
-    this.add
-      .rectangle(12, 44, GAME.WIDTH - 24, 4, 0x1b2340)
-      .setOrigin(0, 0.5)
-      .setDepth(HUD_DEPTH);
-    this.diffBar = this.add
-      .rectangle(12, 44, 0, 4, 0x4ea1ff)
-      .setOrigin(0, 0.5)
-      .setDepth(HUD_DEPTH);
+    this.duckable(this.add.rectangle(12, 44, GAME.WIDTH - 24, 4, 0x1b2340).setOrigin(0, 0.5));
+    this.diffBar = this.duckable(this.add.rectangle(12, 44, 0, 4, 0x4ea1ff).setOrigin(0, 0.5));
 
-    for (let i = 0; i < PLAYER.LIVES; i++) {
-      const icon = this.add
-        .image(GAME.WIDTH - 18 - i * 26, 22, "life")
-        .setScale(1.4)
-        .setDepth(HUD_DEPTH);
-      this.lifeIcons.push(icon);
+    for (let i = 0; i < this.field.lives; i++) {
+      const icon = this.add.image(GAME.WIDTH - 18 - i * 26, 22, "life").setScale(1.4);
+      this.lifeIcons.push(this.duckable(icon));
     }
 
     this.typedText = this.add
@@ -951,35 +507,47 @@ export default class GameScene extends Phaser.Scene implements AbilityHost {
     this.reticle = this.add.graphics().setDepth(4);
 
     // Combo / streak multiplier indicator.
-    this.comboText = this.add
-      .text(12, 56, "", {
+    this.comboText = this.duckable(
+      this.add.text(12, 56, "", {
         fontFamily: "monospace",
         fontSize: "14px",
         color: "#ffd166",
-      })
-      .setDepth(HUD_DEPTH);
+      }),
+    );
+
+    if (this.autopilot) {
+      this.duckable(
+        this.add
+          .text(GAME.WIDTH - 12, 62, `AUTOPILOT: ${this.autopilot.level.toUpperCase()}`, {
+            fontFamily: "monospace",
+            fontSize: "12px",
+            color: "#5ef0ff",
+          })
+          .setOrigin(1, 0.5),
+      );
+    }
 
     // Pause button (also bound to the P key).
-    const pauseBtn = this.add
-      .text(GAME.WIDTH / 2, 22, "II", {
-        fontFamily: "monospace",
-        fontSize: "20px",
-        color: "#4ea1ff",
-      })
-      .setOrigin(0.5)
-      .setDepth(HUD_DEPTH)
-      .setInteractive({ useHandCursor: true });
+    const pauseBtn = this.duckable(
+      this.add
+        .text(GAME.WIDTH / 2, 22, "II", {
+          fontFamily: "monospace",
+          fontSize: "20px",
+          color: "#4ea1ff",
+        })
+        .setOrigin(0.5),
+    ).setInteractive({ useHandCursor: true });
     pauseBtn.on("pointerdown", () => this.togglePause());
   }
 
   // ---------------------------------------------------------------------------
   // Energy & time powers (SLOW / FREEZE)
   // ---------------------------------------------------------------------------
-  private addEnergy(gain: number): void {
-    const stored = this.energy.charge(gain);
+  /** Pop the energy a kill stored next to the meter. */
+  private showEnergyGain(stored: number): void {
     if (stored < 0.5) return;
     const pop = this.add
-      .text(METER_X + METER_W * this.energy.fraction, METER_Y - 8, `+${Math.round(stored)}`, {
+      .text(METER_X + METER_W * this.field.energy.fraction, METER_Y - 8, `+${Math.round(stored)}`, {
         fontFamily: "monospace",
         fontSize: "14px",
         color: "#5ef0ff",
@@ -997,7 +565,7 @@ export default class GameScene extends Phaser.Scene implements AbilityHost {
 
   private triggerPower(mode: SlowMode): void {
     if (this.gameOver || this.paused) return;
-    if (this.slowTime.trigger(mode, this.energy)) {
+    if (this.field.apply({ type: "power", mode })) {
       this.sound.play("blip", { volume: 0.5, rate: mode === "freeze" ? 0.4 : 0.6 });
     }
     this.updateEnergyHud();
@@ -1054,7 +622,7 @@ export default class GameScene extends Phaser.Scene implements AbilityHost {
       .setDepth(HUD_DEPTH);
     // Marks the energy needed to switch a power on.
     this.add
-      .rectangle(METER_X + METER_W * (this.slowTime.threshold / this.energy.max), METER_Y, 2, 18, 0xffd166)
+      .rectangle(METER_X + METER_W * (this.field.slowTime.threshold / this.field.energy.max), METER_Y, 2, 18, 0xffd166)
       .setDepth(HUD_DEPTH);
     this.energyText = this.add
       .text(GAME.WIDTH - 30, METER_Y, "0", { fontFamily: "monospace", fontSize: "12px", color: "#ffffff" })
@@ -1073,12 +641,12 @@ export default class GameScene extends Phaser.Scene implements AbilityHost {
   }
 
   private updateEnergyHud(): void {
-    const e = this.energy;
+    const e = this.field.energy;
     this.energyFill.setSize(METER_W * e.fraction, 8);
     this.energyText.setText(String(Math.floor(e.value)));
 
-    const running = this.slowTime.mode;
-    const usable = this.slowTime.canTrigger(e);
+    const running = this.field.slowTime.mode;
+    const usable = this.field.slowTime.canTrigger(e);
     for (const mode of ["slow", "freeze"] as const) {
       const { bg, text } = this.powerButtons[mode];
       const on = running === mode;
@@ -1120,7 +688,7 @@ export default class GameScene extends Phaser.Scene implements AbilityHost {
 
       btn.on("pointerdown", () => {
         btn.setFillStyle(0x33406e);
-        this.handleInput(label);
+        this.handleInput(label, "keypad");
       });
       btn.on("pointerup", () => btn.setFillStyle(0x1b2340));
       btn.on("pointerout", () => btn.setFillStyle(0x1b2340));
@@ -1155,7 +723,7 @@ export default class GameScene extends Phaser.Scene implements AbilityHost {
       this.applyInputMode(inputMode() === "draw" ? "keys" : "draw"),
     );
     this.modeLabel = mode.text;
-    const clear = button(62, 44, "C", () => this.handleInput("C"));
+    const clear = button(62, 44, "C", () => this.handleInput("C", "pad"));
     this.padClear = [clear.bg, clear.text];
   }
 
@@ -1183,23 +751,27 @@ export default class GameScene extends Phaser.Scene implements AbilityHost {
   private onInk(e: InkEvent): void {
     if (this.gameOver || this.paused) return;
     if (e.type === "scratch") {
-      this.handleInput("C");
+      this.runExtras.ink.scratch++;
+      this.handleInput("C", "pad");
       return;
     }
     if (e.type === "unknown") {
+      this.runExtras.ink.unknown++;
       this.sound.play("blip", { volume: 0.4, rate: 0.5 });
       return;
     }
-    const fresh = this.typed.length + e.digits.length > ANSWER_MAX_DIGITS;
-    const text = (fresh ? "" : this.typed) + e.digits;
+    const typed = this.field.typed;
+    const fresh = typed.length + e.digits.length > ANSWER_MAX_DIGITS;
+    const text = (fresh ? "" : typed) + e.digits;
     const inks = e.inks.map((g) => g.flat());
     this.world.answerInk(text, [...text].map((_, i) => inks[i - (text.length - inks.length)] ?? null));
-    if (fresh) this.setTyped("");
-    this.handleInput(e.digits);
+    if (fresh) this.field.apply({ type: "clear" });
+    this.runExtras.ink.reads++;
+    this.handleInput(e.digits, "pad");
   }
 
   private bindKeyboard(): void {
-    this.input.keyboard?.on("keydown", (e: KeyboardEvent) => {
+    onKeyDown(this, (e) => {
       if (e.key === "p" || e.key === "P") {
         this.togglePause();
         return;
@@ -1213,55 +785,37 @@ export default class GameScene extends Phaser.Scene implements AbilityHost {
         this.triggerPower("freeze");
         return;
       }
-      if (e.key >= "0" && e.key <= "9") this.handleInput(e.key);
-      else if (e.key === "Backspace") this.handleInput("<");
-      else if (e.key === "Escape") this.handleInput("C");
+      if (e.key >= "0" && e.key <= "9") this.handleInput(e.key, "keyboard");
+      else if (e.key === "Backspace") this.handleInput("<", "keyboard");
+      else if (e.key === "Escape") this.handleInput("C", "keyboard");
       else if (e.key === "Enter" && this.gameOver) this.proceedAfterGameOver();
     });
   }
 
   /** A key: a digit (or several, from the drawing pad), C or <. */
-  private handleInput(key: string): void {
+  private handleInput(key: string, source: InputSource): void {
     if (this.gameOver) {
       this.proceedAfterGameOver();
       return;
     }
     if (this.paused) return;
+    this.runExtras.sources[source]++;
     this.sound.play("blip", { volume: 0.3 });
-    if (key === "C") this.setTyped("");
-    else if (key === "<") this.setTyped(this.typed.slice(0, -1));
-    else if (this.typed.length + key.length <= ANSWER_MAX_DIGITS) this.setTyped(this.typed + key);
-  }
-
-  private setTyped(value: string): void {
-    this.typed = value;
+    const input: FieldInput =
+      key === "C" ? { type: "clear" } : key === "<" ? { type: "back" } : { type: "digits", digits: key };
+    this.field.apply(input);
     this.refreshAnswer();
   }
+
 
   // ---------------------------------------------------------------------------
   // Answer feedback: the display, the lock-on brackets, the flying number
   // ---------------------------------------------------------------------------
-  /** The typed number and how it reads; with nothing typed, the locked answer
-   * stays shown (gold) until its alien is destroyed. */
-  private answerView(): AnswerView | null {
-    if (this.typed !== "") return { text: this.typed, state: this.typedState() };
-    const lock = this.lockedTarget;
-    return lock?.active ? { text: String(lock.result), state: "match" } : null;
-  }
 
-  /** match = an alien has this answer; typing = one could still (a longer
-   * answer starts with it); wrong = no alien's answer can. */
-  private typedState(): AnswerState {
-    if (this.enemiesInField.has(parseInt(this.typed, 10))) return "match";
-    const canGrow =
-      this.typed.length < ANSWER_MAX_DIGITS &&
-      [...this.enemiesInField.keys()].some((r) => String(r).startsWith(this.typed));
-    return canGrow ? "typing" : "wrong";
-  }
 
   /** Recompute the answer and react when its text or state changes. */
   private refreshAnswer(): void {
-    const view = this.answerView();
+    const view = this.field.answerView();
     const prev = this.answer;
     this.answer = view;
     if (view?.text === prev?.text && view?.state === prev?.state) return;
@@ -1274,7 +828,8 @@ export default class GameScene extends Phaser.Scene implements AbilityHost {
       .setScale(1)
       .setX(GAME.WIDTH / 2);
 
-    if (state === "match" && this.typed !== "") {
+    const typed = this.field.typed;
+    if (state === "match" && typed !== "") {
       this.sound.play("blip", { volume: 0.35, rate: 1.5 });
       this.typedText.setScale(FEEDBACK.MATCH_POP_SCALE);
       this.tweens.add({
@@ -1283,11 +838,10 @@ export default class GameScene extends Phaser.Scene implements AbilityHost {
         duration: FEEDBACK.MATCH_POP_MS,
         ease: "Back.easeOut",
       });
-      const alien = this.enemiesInField.get(parseInt(this.typed, 10));
-      if (alien) this.flyAnswer(this.typed, alien);
+      const alien = this.field.alienFor(parseInt(typed, 10));
+      if (alien) this.flyAnswer(typed, alien);
     } else if (state === "wrong") {
       this.sound.play("blip", { volume: 0.4, rate: 0.5 });
-      this.wrongLeftMs = FEEDBACK.WRONG_CLEAR_MS;
       this.tweens.add({
         targets: this.typedText,
         x: GAME.WIDTH / 2 + FEEDBACK.WRONG_SHAKE_PX,
@@ -1326,7 +880,7 @@ export default class GameScene extends Phaser.Scene implements AbilityHost {
 
   /** Corner brackets around the target's box; they snap in when it is acquired. */
   private drawReticle(delta: number): void {
-    const a = this.target?.active ? this.target : null;
+    const a = this.field.target?.active ? this.field.target : null;
     if (a !== this.reticleTarget) {
       this.reticleTarget = a;
       this.reticleAge = 0;
@@ -1335,17 +889,19 @@ export default class GameScene extends Phaser.Scene implements AbilityHost {
     if (!a) return;
     this.reticleAge += delta;
     const R = FEEDBACK.RETICLE;
+    const ax = a.viewX(this.stepAlpha);
+    const ay = a.viewY(this.stepAlpha);
     const t = Math.min(1, this.reticleAge / R.SNAP_MS);
     const grow = 1 + (R.SNAP_FROM - 1) * (1 - t) * (1 - t);
-    const top = a.y - a.top - R.PAD;
-    const bottom = a.y + a.bottom + R.PAD;
+    const top = ay - a.top - R.PAD;
+    const bottom = ay + a.bottom + R.PAD;
     const cy = (top + bottom) / 2;
     const hw = (a.halfW + R.PAD) * grow;
     const hh = ((bottom - top) / 2) * grow;
     this.reticle.lineStyle(R.WIDTH, R.COLOR, 0.4 + 0.6 * t);
     for (const sx of [-1, 1]) {
       for (const sy of [-1, 1]) {
-        const x = a.x + sx * hw;
+        const x = ax + sx * hw;
         const y = cy + sy * hh;
         this.reticle.beginPath();
         this.reticle.moveTo(x - sx * R.ARM, y);
@@ -1363,21 +919,31 @@ export default class GameScene extends Phaser.Scene implements AbilityHost {
     this.gameOver = true;
     this.reticle.clear();
     this.pad.setEnabled(false);
+    if (import.meta.env.DEV) {
+      // Calibrate the bots against your own play: compare with `npm run bots`.
+      const who = this.autopilot ? `bot ${this.autopilot.level}` : "you";
+      console.info(
+        `[metic] ${who}: survived ${Math.round(this.field.elapsedMs / 1000)} s, ` +
+          `score ${this.field.score}, ${this.field.kills} kills. Solve times by ball count:`,
+      );
+      console.table(summarizeSolves(this.field.solves));
+    }
 
     // Merge this run into the persistent mastery stats.
     const num = (k: string) => Number(localStorage.getItem(k) ?? 0);
+    const f = this.field;
     const priorHigh = num(STORAGE.HIGHSCORE);
-    this.newHighScore = this.score > 0 && this.score >= priorHigh;
-    const best = Math.max(this.score, priorHigh);
-    const bestCombo = Math.max(this.bestComboThisRun, num(STORAGE.BEST_COMBO));
-    const totalKills = num(STORAGE.TOTAL_KILLS) + this.killsThisRun;
+    this.newHighScore = f.score > 0 && f.score >= priorHigh;
+    const best = Math.max(f.score, priorHigh);
+    const bestCombo = Math.max(f.bestCombo, num(STORAGE.BEST_COMBO));
+    const totalKills = num(STORAGE.TOTAL_KILLS) + f.kills;
     const priorFastest = num(STORAGE.FASTEST_MS); // 0 = none recorded yet
     const fastest =
-      this.fastestSolveMs === Infinity
+      f.fastestSolveMs === Infinity
         ? priorFastest
         : priorFastest === 0
-          ? this.fastestSolveMs
-          : Math.min(priorFastest, this.fastestSolveMs);
+          ? f.fastestSolveMs
+          : Math.min(priorFastest, f.fastestSolveMs);
 
     localStorage.setItem(STORAGE.HIGHSCORE, String(best));
     localStorage.setItem(STORAGE.BEST_COMBO, String(bestCombo));
@@ -1406,15 +972,22 @@ export default class GameScene extends Phaser.Scene implements AbilityHost {
       })
       .setOrigin(0.5)
       .setDepth(11);
+    // This run's pace, to compare with the bots (`npm run bots`).
+    const secs = Math.floor(f.elapsedMs / 1000);
+    const survived = `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}`;
+    const medians = summarizeSolves(f.solves)
+      .map((s) => `${s.balls} balls ${s.median.toFixed(1)}s`)
+      .join(" · ");
     this.add
       .text(
         GAME.WIDTH / 2,
-        GAME.HEIGHT / 2 + 20,
-        `Score: ${this.score}    Best: ${best}\n` +
+        GAME.HEIGHT / 2 + 24,
+        `Score: ${f.score}    Best: ${best}\n` +
           `Best combo: ${bestCombo}    Kills: ${totalKills}\n` +
-          `Fastest solve: ${fastestStr}\n` +
-          `Energy earned ${Math.round(this.energy.earned)} · used ` +
-          `${Math.round(this.energy.spent.slow)} slow, ${Math.round(this.energy.spent.freeze)} freeze`,
+          `Survived ${survived}    Fastest solve: ${fastestStr}\n` +
+          `Median solve: ${medians || "—"}\n` +
+          `Energy earned ${Math.round(f.energy.earned)} · used ` +
+          `${Math.round(f.energy.spent.slow)} slow, ${Math.round(f.energy.spent.freeze)} freeze`,
         { fontFamily: "monospace", fontSize: "16px", color: "#ffffff", align: "center", lineSpacing: 8 },
       )
       .setOrigin(0.5)
@@ -1423,13 +996,28 @@ export default class GameScene extends Phaser.Scene implements AbilityHost {
       ? "tap / Enter to enter initials"
       : "tap / Enter to play again";
     this.add
-      .text(GAME.WIDTH / 2, GAME.HEIGHT / 2 + 96, continueText, {
+      .text(GAME.WIDTH / 2, GAME.HEIGHT / 2 + 118, continueText, {
         fontFamily: "monospace",
         fontSize: "16px",
         color: "#4ea1ff",
       })
       .setOrigin(0.5)
       .setDepth(11);
+
+    // Playtest build (a claude.ai Artifact): save the run for analysis.
+    this.runExtras.inputMode = inputMode();
+    void logRun(this.field, this.runExtras).then((status) => {
+      if (status === "off" || !this.scene.isActive()) return;
+      this.add
+        .text(
+          GAME.WIDTH / 2,
+          GAME.HEIGHT / 2 + 146,
+          status === "saved" ? "run saved for analysis ✓" : "couldn't save this run",
+          { fontFamily: "monospace", fontSize: "13px", color: status === "saved" ? "#5ef0ff" : "#ef476f" },
+        )
+        .setOrigin(0.5)
+        .setDepth(11);
+    });
 
     this.input.once("pointerdown", () => this.proceedAfterGameOver());
   }
@@ -1440,7 +1028,7 @@ export default class GameScene extends Phaser.Scene implements AbilityHost {
     this.proceeding = true;
     if (isLeaderboardEnabled()) {
       this.scene.start("NameEntryScene", {
-        score: this.score,
+        score: this.field.score,
         personalBest: this.newHighScore,
       });
     } else {

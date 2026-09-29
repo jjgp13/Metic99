@@ -20,6 +20,76 @@ export const PLAYER = {
   SCALE: 2, // ship model scale (16px source art)
 } as const;
 
+/**
+ * The game rules advance in fixed steps (docs/MULTIPLAYER_DESIGN.md §8): the
+ * same inputs then give the same run on a 60 Hz laptop and a 120 Hz phone. The
+ * renderer draws between the last two steps, so motion stays smooth.
+ */
+export const SIM = {
+  STEP_MS: 1000 / 60,
+  // After a stall (tab switch, slow device) run at most this many steps in one
+  // frame; the rest of the time is dropped so the game can't spiral behind.
+  MAX_STEPS_PER_FRAME: 8,
+} as const;
+
+/**
+ * Bot players (src/sim/Bot.ts, docs/MULTIPLAYER_DESIGN.md §7). A bot solves
+ * like a person: notice an alien (REACTION), work out the sum (THINK_BASE +
+ * PER_BALL per ball + PER_CARRY per carry, spread log-normally by NOISE), type
+ * it (PER_KEY per digit), and sometimes get it wrong (ERROR_RATE: off by 1 or
+ * 10), noticing after NOTICE_WRONG. FOCUS = chance it goes for the most
+ * dangerous alien rather than any readable one, and that it drops what it is
+ * thinking about when a clearly worse threat appears. Times in ms of game time.
+ */
+export const BOT = {
+  LEVELS: {
+    rookie: {
+      REACTION: 900,
+      THINK_BASE: 400,
+      PER_BALL: 700,
+      PER_CARRY: 500,
+      NOISE: 0.35,
+      PER_KEY: 250,
+      ERROR_RATE: 0.12,
+      NOTICE_WRONG: 700,
+      FOCUS: 0.6,
+    },
+    pilot: {
+      REACTION: 600,
+      THINK_BASE: 250,
+      PER_BALL: 450,
+      PER_CARRY: 300,
+      NOISE: 0.3,
+      PER_KEY: 180,
+      ERROR_RATE: 0.06,
+      NOTICE_WRONG: 500,
+      FOCUS: 0.85,
+    },
+    ace: {
+      REACTION: 350,
+      THINK_BASE: 150,
+      PER_BALL: 250,
+      PER_CARRY: 120,
+      NOISE: 0.25,
+      PER_KEY: 110,
+      ERROR_RATE: 0.02,
+      NOTICE_WRONG: 300,
+      FOCUS: 0.98,
+    },
+  },
+  // A mistake is off by 10 this often (else off by 1).
+  TENS_SLIP: 0.3,
+  // A strafer about to dive counts as this many px closer when picking targets.
+  DIVE_DANGER_PX: 200,
+  // While still thinking, a newly seen alien this much more dangerous (px)
+  // makes the bot switch to it (with chance FOCUS), dropping its thinking.
+  SWITCH_MARGIN_PX: 120,
+  // Balls hidden more than this (Blinker lids) can't be read.
+  MAX_READ_COVER: 0.5,
+} as const;
+
+export type BotLevel = keyof typeof BOT.LEVELS;
+
 /** The box under the ship that holds the keypad or the drawing pad, with the
  * SLOW / FREEZE buttons in its side gutters. */
 export const KEYPAD_AREA = {
@@ -56,7 +126,10 @@ export const ENEMY = {
   SPAWN_EDGE: 6, // px kept between a sweep and the field edge
 
   // 3+ ball sums are always lumberers; 2-ball sums pick a kind by weight.
-  TWO_BALL_KINDS: { darter: 0.6, strafer: 0.4 } as Record<"darter" | "strafer", number>,
+  TWO_BALL_KINDS: { darter: 0.4, strafer: 0.3, swooper: 0.3 } as Record<
+    "darter" | "strafer" | "swooper",
+    number
+  >,
 
   // Spawn pacing is gated by the board's CURRENT cognitive load, not a blind
   // clock. Each alien contributes its THREAT_BY_BALLS weight; new spawns are
@@ -111,6 +184,21 @@ export const MONSTERS = {
     PATROL_SPEED: 60, // px/s
     WINDUP_MS: 600, // telegraph: hovers and shakes before the dive
     DIVE_SPEED: 1.6, // × home speed
+  },
+  // 2 balls: flies in sideways from a screen edge through a band below the
+  // top HUD, slows into its lane, then glides straight down. Its spawn needs
+  // the whole flight path clear (Swarm.placeSwooper); a flight held up once it
+  // is fully on screen just turns down where it is.
+  swooper: {
+    MODEL: "alien_swooper",
+    HALF_W: 18,
+    BALLS_Y: 28,
+    BOTTOM: 16,
+    SPEED: 0.9, // × fall/home speed once it turns down
+    ENTER_SPEED: 120, // px/s sideways
+    BRAKE_PX: 40, // slows over the last px before its lane…
+    MIN_ENTER: 0.3, // …down to this share of ENTER_SPEED
+    BAND_Y: { min: 100, max: 160 }, // body y of the flight (ball row clears the HUD)
   },
   // Bonus: crosses sideways, never reaches the player (non-lethal). Solving it
   // gives an ENERGY_BURST; left alone it just leaves. Doesn't count toward the
@@ -212,6 +300,14 @@ export const SPLITTER = {
   // plus ENEMY.SPAWN_EDGE. The pair shifts inward together to respect it.
   EDGE_PX: 52,
   GLIDE_MS: 420,
+  // Splitlings keep their parent's pace (ABILITY.SPEED.splitter) instead of
+  // bursting out as full-speed darters (playtest: 123 px/s vs the parent's 67).
+  CHILD_SPEED: 0.7,
+  // After landing they hold still this long, so both new sums can be read.
+  HATCH_MS: 700,
+  // The second splitling lands this much higher, so the pair doesn't reach
+  // the player at the same moment (playtest: 7 of 8 splitling hits were pairs).
+  STAGGER_PX: 40,
   // Splitlings never land closer to the player than this, so a point-blank
   // kill doesn't drop two fresh sums on top of the ship.
   MAX_CHILD_Y: 260,
@@ -423,6 +519,10 @@ export const FEEDBACK = {
     SNAP_MS: 160,
   },
   EQUATION: { FONT_PX: 18, POP_MS: 150, HOLD_MS: 450, FADE_MS: 850, RISE_PX: 34 },
+  // HUD and pops drawn over the field fade to ALPHA while an alien's box
+  // (ball row + body) is under them, so they never hide a sum (owner's
+  // playtest: numbers sat under the top HUD half of every run). MS = fade time.
+  DUCK: { ALPHA: 0.12, MS: 90 },
 } as const;
 
 /**
@@ -521,6 +621,7 @@ export const RENDER3D = {
     "alien_lumberer",
     "alien_drifter",
     "alien_strafer",
+    "alien_swooper",
     "alien_shielded",
     "alien_blinker",
     "alien_splitter",
@@ -541,6 +642,7 @@ export const RENDER3D = {
     alien_lumberer: [0x2bb3a3, 0x1b7468, 0xf5f5f0],
     alien_drifter: [0x8e4fd8, 0xf29bc1, 0xff6be6],
     alien_strafer: [0xd63fa6, 0x5a2d96, 0x9aa0b5],
+    alien_swooper: [0x2bb3a3, 0x1b7468, 0xf2913d],
   } as Record<string, readonly number[]>,
 
   // Models worn by ability aliens (never picked at random), with debris colors.

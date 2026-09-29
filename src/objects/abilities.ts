@@ -113,7 +113,8 @@ export class Splitter extends Ability {
     const min = SPLITTER.EDGE_PX + SPLITTER.SPREAD_PX;
     const center = Math.min(Math.max(alien.x, min), GAME.WIDTH - min);
     const y = Math.min(alien.y, SPLITTER.MAX_CHILD_Y);
-    for (const side of [-1, 1]) host.spawnSplitling(alien, center + side * SPLITTER.SPREAD_PX, y);
+    host.spawnSplitling(alien, center - SPLITTER.SPREAD_PX, y);
+    host.spawnSplitling(alien, center + SPLITTER.SPREAD_PX, y - SPLITTER.STAGGER_PX);
   }
 }
 

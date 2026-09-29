@@ -40,6 +40,11 @@ loop. See the Decision Log.
 - **TypeScript** — strict mode.
 - **Vitest** — unit tests for Phaser-free logic (`src/**/*.test.ts`, `npm test`).
 - Node.js LTS required. `npm install` → `npm run dev` (port 5173) → `npm run build`.
+  `npm run bots` plays every bot level headless and prints a report
+  (`scripts/bot-report.ts`; `-- --lives 1 --seeds 20 --minutes 5
+  --ability splitter`), including which monsters cause the hits.
+  `npm run playtest -- runs.json` replays saved playtest runs and prints
+  them next to the bots (`scripts/playtest-report.ts`).
 
 ## Project layout
 
@@ -57,15 +62,18 @@ src/
     BootScene.ts      Preloads assets; defers animations (static frames for now)
     MenuScene.ts      Title screen: ship picker + PLAY / HOW TO PLAY / SCORES
     HowToPlayScene.ts Static rules screen reached from the menu
-    GameScene.ts      The core loop: spawn, input, targeting, combat, HUD.
-                      Owns plain game state (shipX, aliens[], bullets[]) and
-                      hands World3D a snapshot every frame.
+    GameScene.ts      Turns keypad/keyboard/pad into Field inputs, steps the
+                      Field at a fixed 60 Hz, and shows its events (sounds,
+                      HUD, pops). Hands World3D a snapshot every frame.
     NameEntryScene.ts Arcade 5-char initials entry shown at game over
     LeaderboardScene.ts Global top-N board; dual-mode (post-run / menu browse)
     HandwritingLabScene.ts `?lab=draw`: records real handwriting, exports JSON
   services/
     leaderboard.ts    Supabase global high scores: startMatch + match-gated
                       submitScore, plus getTop/getRank reads
+    playtestLog.ts    Playtest logger: in the claude.ai playtest Artifact,
+                      saves each finished run (seed + input log + extras)
+                      to the Artifact's `db`; a no-op anywhere else
   handwriting/        Phaser-free digit recognition (unit-tested)
     recognizer.ts     $P point-cloud recognizer + scratch-out detector
     digitTemplates.ts 0–9 templates (~31 variants): line/arc/curve recipes plus
@@ -78,10 +86,23 @@ src/
     realSamples.test.ts Replays samples/*.json through InkReader, prints a report
   ui/
     DrawPad.ts        The drawing pad: pointer capture, glowing ink, "?" flash
+    keyboard.ts       `onKeyDown`: each key press delivered once (Phaser bug)
   sim/
     energy.ts         Phaser-free energy rules: energyForKill, EnergyMeter
                       (charge/spend/drain per spender), SlowTime (SLOW / FREEZE powers).
                       Kept pure so a future server sim can share it.
+    rng.ts            Seeded random numbers (mulberry32 `Rng`, `derive` for
+                      keyed streams, `SpawnStreams` keyed by spawn number).
+    Field.ts          One player's whole field, Phaser-free: ship, bullets,
+                      typed answer, targeting, score, lives, energy, powers.
+                      Changes only via `apply(input)` + `step(dt)`, logs inputs
+                      (`inputLog`, `replayField`), emits events (spawned,
+                      fired, solved, hit, knockedOut).
+    Swarm.ts          The aliens inside a Field: game clock, seeded spawners,
+                      movement + readability guard, AbilityHost.
+    Bot.ts            Bot player: reads only what's on screen, acts only via
+                      `field.apply()`; skill levels in `BOT` (rookie/pilot/ace).
+    stats.ts          Solve-time summaries (players vs bots calibration).
   objects/
     Alien.ts          Pure alien state (x/y, digits, result, `kind`) + per-kind
                       movement patterns and readability box; no rendering.
@@ -195,6 +216,11 @@ Green=multiplication, Yellow=division.
 - **Renderer is a view:** `World3D.render(snapshot)` diffs the snapshot's
   aliens/bullets against its meshes (create/move/remove). Game code never
   imports Three.js, which keeps the path open to a shared sim for multiplayer.
+- **Fixed timestep + interpolation:** the rules run in fixed `SIM.STEP_MS`
+  (60 Hz) steps from an accumulator (at most `MAX_STEPS_PER_FRAME` per frame);
+  aliens, bullets and the ship keep their previous-step position and the
+  renderer draws `alpha` of the way between the two, so motion stays smooth
+  when a frame runs zero or two steps.
 - **Motion polish:** aliens sway (yaw) and bank into sideways moves, the ship
   banks toward its target, the strafer shakes before it dives,
   explosions burst into voxel debris in the alien's colors with a flash from one
@@ -202,13 +228,15 @@ Green=multiplication, Yellow=division.
 - **Models in play:** the player flies the ship picked on the menu
   (`RENDER3D.SHIPS`: FALCON `ship_player`, DART `ship_dart`, POD `ship_pod`; the
   pick is stored under `STORAGE.SHIP`). Each alien draws the model of its
-  `kind` (`MONSTERS[kind].MODEL`: darter / lumberer / strafer / drifter), with
+  `kind` (`MONSTERS[kind].MODEL`: darter / lumberer / strafer / swooper /
+  drifter), with
   its balls at the model's `socket_balls`. The kind lives in the `Alien` state
   (game logic picks it); `World3D` only draws it. Explosion debris uses the
   model's colors (`RENDER3D.ALIEN_MODELS`). The models' `anim_*` parts move
   with simple sine motion (`RENDER3D.ANIM`): darter tail wags, lumberer legs
   swing in step with its stomp (body lifts while stepping), drifter skirt spins
-  and pulses, strafer wings flap (faster in windup/dive).
+  and pulses, strafer and swooper wings flap (strafer: faster in windup/dive),
+  swooper tail wags.
   **Ability aliens** set `Alien.model` and wear their ability's model
   (`ABILITY.MODEL`, debris in `RENDER3D.ABILITY_MODELS`) while moving as their
   `kind`; the renderer mirrors ability state (ball lids, the Blinker's
@@ -225,14 +253,21 @@ Green=multiplication, Yellow=division.
   sum of the balls. `enemiesInField: Map<result, Alien>` keeps results unique so
   a typed number maps to exactly one target.
 - **Monster kinds** (`MONSTERS` in constants, movement in `Alien.advance`).
-  3+ ball sums are always lumberers; 2-ball sums pick darter/strafer by
-  `ENEMY.TWO_BALL_KINDS` weight:
+  3+ ball sums are always lumberers; 2-ball sums pick darter/strafer/swooper
+  by `ENEMY.TWO_BALL_KINDS` weight (40/30/30):
   - **Darter** (2 balls): fast zig-zag dive (×1.25 speed, ±26 px around its lane).
   - **Lumberer** (3 balls): slow stop-and-go stomp: moves half of each
     `STOMP_MS` cycle and stands still for the other half (same ×0.85 average).
   - **Strafer** (2 balls, Galaga-style): flies into a band at the top, patrols
     sideways for `DIFFICULTY.STRAFER_PATROL_MS` (5 s → 2.8 s, time to read its
     sum), hovers and shakes for `WINDUP_MS` (telegraph), then dives fast.
+  - **Swooper** (2 balls): flies in level from the left or right edge through
+    a band below the top HUD (`BAND_Y` 100–160), brakes into a random lane,
+    then glides straight down at ×0.9 speed (it skips the top of the field,
+    so it descends a little slower). Its spawn needs the whole flight path
+    clear (`Swarm.placeSwooper`); a flight held up once it is fully on screen
+    turns down where it is. Bots read an alien only once its center is on
+    screen sideways.
   - **Drifter** (2 balls, bonus): crosses sideways through a mid band and
     leaves; **non-lethal**. Solving it gives `ENERGY_BURST` energy (plus normal
     score). It runs on its own spawn clock (first after 15 s, then every
@@ -252,9 +287,12 @@ Green=multiplication, Yellow=division.
   (`MONSTERS[kind]` `HALF_W` / `BALLS_Y` / `BOTTOM`, widened for 3 balls).
   Two layers keep boxes apart:
   1. **Spawner:** a new alien enters just above the top only where its whole
-     horizontal **sweep** (zig-zag width, patrol span) clears the sweep of every
-     alien still above `ENEMY.ENTRY_ZONE_Y`, and its box clears everyone.
-     No room → the spawn retries in `SPAWN_RETRY_MS`.
+     horizontal **sweep** (zig-zag width, patrol span, a swooper's remaining
+     flight in) clears the sweep of every alien still above
+     `ENEMY.ENTRY_ZONE_Y`, and its box clears everyone. A swooper enters from
+     a side only if its flight path is clear of every alien in it or above
+     it (anything that could come down into it). No room → the spawn retries
+     in `SPAWN_RETRY_MS`.
   2. **Runtime guard** (`GameScene.advanceReadable`): a move that would bring
      two boxes within `ENEMY.READ_GAP` is not made. It is retried one axis at a
      time; the refused axis holds still, and a refused sideways move turns
@@ -362,8 +400,45 @@ Green=multiplication, Yellow=division.
   mark at the 10-energy start cost. Nothing covers the field or keys in
   portrait.
 - HUD (score, lives, difficulty bar, typed display) draws above gameplay
-  (`depth 5`) so entering aliens never obscure it.
+  (`depth 5`), so entering aliens never obscure it. **The numbers win over
+  the HUD:** every top-HUD piece, ability banner and score/equation/energy
+  pop sits in its own container that fades to `FEEDBACK.DUCK.ALPHA` while
+  any alien's box is under it (`GameScene.duckHud`); its own alpha (a lost
+  life, a pop's fade) multiplies on top.
 - High score persisted in `localStorage` (`metic-highscore`).
+- **Seeded runs + game clock** (`src/sim/rng.ts`): each run has a seed; the
+  rules draw every random number from seeded streams (field, lethal spawns,
+  drifters), so the same seed and inputs roll the same aliens. Rule timings
+  (solve time, fire cooldown) read the game clock `elapsedMs`, which stops
+  while paused. Dev: the seed is logged; `?seed=123` replays it.
+- **Inputs, not state:** the field changes only through `FieldInput`s
+  (digits, back, clear, power) and fixed steps. Every input is logged with
+  its step (`field.inputLog`), so `replayField(seed, log)` rebuilds the exact
+  run. Dev console: `__metic.game.scene.getScene("GameScene").field.inputLog`.
+- **Bots** (`src/sim/Bot.ts`, `BOT`): notice (reaction) → think (base + per
+  ball + per carry, log-normal spread) → type the whole answer at once;
+  slips (off by 1/10) at `ERROR_RATE`, noticed and cleared after
+  `NOTICE_WRONG`. They go for the most dangerous readable alien (chance
+  `FOCUS`), can't read shut Blinker lids, start the next sum while a shot
+  flies, and drop a sum mid-thought when a clearly worse threat appears.
+  Seeded per seat (`Bot.forSeat`). No powers yet (M4). Dev: `?bot=ace` puts a
+  bot on autopilot on your field; at game over the console prints your (or
+  the bot's) solve times by ball count to compare with `npm run bots`.
+  The GAME OVER screen also shows the run's survival time and median solve
+  time per ball count, so a phone playtest can be compared with the bots.
+- **Playtest logging** (`src/services/playtestLog.ts`): the owner playtests a
+  build published as a private claude.ai Artifact with the `db` capability
+  (`npm run playtest:build`, then publish `dist/playtest.html` with the
+  `dist/` files except `.glb`/`.map`). The Artifact host can't serve `.glb`,
+  so that build (`--mode playtest`, `.env.playtest`) loads each model as
+  `assets/models/<name>.json` = `{ glb: base64 }`. Each finished run is saved as one `runs` document: build
+  commit, device, seed + compact input log + steps (replayable exactly),
+  summary, solves, hits, input sources (keypad/keyboard/pad), pad reads vs
+  "?", pauses. GAME OVER shows "run saved for analysis". Claude reads the
+  runs (ArtifactData) and `npm run playtest -- runs.json` replays them.
+- **Keyboard:** raw key listeners use `onKeyDown` (`src/ui/keyboard.ts`).
+  Phaser 3.90 re-delivers earlier keys when several arrive in one frame
+  ("12" → "112", FREEZE toggled twice); the helper drops repeats.
 - **Pause** (`P` key or on-screen `II` button): freezes the field, difficulty
   timer, spawning and firing, and **hides all aliens + their number balls** (and
   the typed display) behind an overlay so the player can't solve sums on a break.
@@ -394,6 +469,9 @@ Green=multiplication, Yellow=division.
     either side (never closer to the player than `SPLITTER.MAX_CHILD_Y`). A
     splitling whose start or landing box would break the readability rule is
     not spawned; they start halfway out so their balls never overlap.
+    Splitlings keep the parent's pace (`CHILD_SPEED` 0.7), hold still for
+    `HATCH_MS` after landing so both sums can be read, and the second lands
+    `STAGGER_PX` higher so the pair doesn't reach the player together.
   - **Solo ramp:** abilities unlock by difficulty (Shielded d≥0.25, Blinker
     0.4, Splitter 0.55). A spawn gets one with `abilityChance` (20%→40%), with
     at most 1 ability alien on screen (2 from d≥0.8). Ability aliens always
@@ -461,7 +539,8 @@ curve is in `src/config/difficulty.ts` (`difficultyAt(elapsedMs, score)`).
        lumberer, drifter).
 6c. [x] **Monster movement patterns** — kind in the `Alien` state; darter
        zig-zag, lumberer stomp, new Galaga-style strafer (patrol → dive),
-       readability boxes + sweep-aware spawner, animated `anim_*` parts.
+       readability boxes + sweep-aware spawner, animated `anim_*` parts;
+       swooper enters from a side edge below the HUD (2026-09-28).
 6d. [x] **Monster abilities:** ability system (update/onHit/onKilled hooks) with
        Shielded, Blinker and Splitter (+ splitling), riding on the movement
        kinds and unlocked by difficulty in solo play. **Next:** Hider, Orbiter
@@ -488,19 +567,32 @@ curve is in `src/config/difficulty.ts` (`difficultyAt(elapsedMs, score)`).
        and add repo secrets `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY`).
 13. [ ] **Battle-royale multiplayer (Tetris 99-style)** — see
        `docs/MULTIPLAYER_DESIGN.md`. Single player first: [x] energy bar + slow
-       time (two modes under playtest; lives constant for 1 vs 3), [ ] alien
-       movement patterns, [ ] monster abilities; then offline bots (and energy
-       "send"), then the WebSocket match server (8–16 players to start).
+       time (two modes under playtest; lives constant for 1 vs 3), [x] alien
+       movement patterns, [x] monster abilities; then offline bots (and energy
+       "send"), then the WebSocket match server (8 players to start).
+       **Phase 0 (offline vs bots)** milestones M0–M9 are in
+       `docs/MULTIPLAYER_DESIGN.md` §10: [x] M0 battle rules/bots/contracts
+       written down, [x] M1 seeded random numbers + game clock, [x] M2a
+       Phaser-free `Field` (aliens, spawning, readability) + fixed timestep,
+       [x] M2b ship/combat/scoring/lives/energy/input into the sim (input log
+       + exact replay), [x] M3 bot v1 (solving, 3 skill levels, `?bot=`,
+       `npm run bots`), [ ] M4 bot powers, [ ] M5+ match, send.
 
 ## Conventions
 
 - Keep all tunables in `config/constants.ts`; avoid magic numbers in scenes.
 - Comment only non-obvious intent (per repo style).
 - Verify changes: `npx tsc --noEmit`, `npm test` and `npm run build` must pass.
+- **Game rules never use `Math.random()` or the wall clock** (`this.time.now`):
+  draw from the run's seeded streams and read the game clock. Visual-only
+  randomness (stars, debris) may use `Math.random()`. New monsters and
+  abilities follow the content checklist in `docs/MULTIPLAYER_DESIGN.md` §9.
 - **Git workflow:** feature branches are **local only** (never push them). Merge
   into `master` locally and push only `master` (pushing it deploys GitHub Pages).
   Every local merge into `master` is followed, without asking, by deleting the
   merged branch (`git branch -d`) and pushing `master` (after tsc + build pass).
+  **Cloud sessions** (Claude Code on the web) instead push their assigned
+  `claude/*` branch; the owner merges it into `master`.
 - Commit trailer: `Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>`.
 
 ---
@@ -508,6 +600,91 @@ curve is in `src/config/difficulty.ts` (`difficultyAt(elapsedMs, score)`).
 ## Decision Log
 
 Newest first. Format: `YYYY-MM-DD — decision — rationale`.
+
+- **2026-09-28 — Swooper: a 2-ball alien that enters from the side.** Flies in
+  level from the left/right edge below the HUD band, then glides down, so
+  fewer numbers start under the top HUD and the field gets a new pattern
+  (manta-ray model `alien_swooper`). 30% of 2-ball spawns. Readability: its
+  sweep is its remaining flight, its spawn needs the path clear, and a flight
+  held up on screen turns down early; soak with only swoopers = 0 overlaps.
+  `npm run bots` (20 seeds): at ×1.0 descent it was a bit deadlier than a
+  darter for pilots (starts lower), so it descends at ×0.9; survival in the
+  normal mix is now at or above the old baseline for every level.
+
+- **2026-09-29 — Numbers win over the HUD; playtest build ships its models.**
+  Second playtest (3 runs, desktop app + keyboard, 241–358 s, 64k–97k pts):
+  alien numbers sat under the top HUD for ~half of every run and 36–56% of
+  FREEZE time. HUD pieces and pops now fade while an alien is under them
+  (chosen over moving the HUD, which has no free space in portrait). The
+  playtest page showed voxel fallbacks (no .glb hosting), so all ships looked
+  the same; its build now loads models from base64 JSON.
+
+- **2026-09-28 — Splitlings keep their parent's pace, hatch, and stagger
+  (first phone playtest).** 4 logged runs (Android app, keypad): splitlings
+  caused 8 of 14 hits, fell at 123 px/s vs the parent's 67, and 7 of 8 hit in
+  same-step pairs (2 lives at once; on the last life it ended the run twice,
+  saving it twice — fixed: a knocked-out field ignores further hits). Now
+  children move at 70%, hold 0.7 s after landing and land 40 px apart in
+  height. Bot A/B with every spawn a splitter: survival rookie/pilot/ace
+  35/47/66 s → 60/84/95 s; in the normal mix splitlings fell from 49% to 19%
+  of ace hits. Owner's pace: 2-ball 3.3 s (≈ ace), 3-ball 6.8 s (slower than
+  every bot); FREEZE on/off every 10–15 s, SLOW almost unused.
+
+- **2026-09-27 — Playtests log themselves to a claude.ai Artifact db.** The
+  owner just plays; each finished run is saved (seed + input log + what the
+  sim can't see) so Claude can replay and measure it later instead of
+  choosing metrics up front. Chosen over a server or analytics service: no
+  backend, private to the owner, and the replay makes the log tiny. Only
+  active inside the Artifact (no `window.claude` elsewhere). Builds carry
+  their git commit (`__BUILD_ID__`) so a run replays with the same rules.
+
+- **2026-09-27 — Bot v1: human-like solver on the real inputs (battle royale
+  M3).** Bots see only the screen and act only through `field.apply()`, so
+  they can't cheat and replay exactly. Three levels from the design table.
+  Simulation findings (8 seeds, no powers): rookie/pilot/ace survive ~90/110/
+  105 s with 3 lives (~55/70/70 s with 1); aces earn difficulty by scoring,
+  so skill shows as score (3k/10k/27k), not survival. Half of ace deaths were
+  splitlings: two full-speed darters mid-field ≈ 1.6 s for two sums. Slower
+  splitlings (70%) gave aces +10 s; left for the owner to decide. Bots
+  interrupt a sum for a much worse threat (like people do).
+
+- **2026-09-27 — The whole field is sim, driven by inputs (battle royale
+  M2b).** Ship, bullets, targeting, the typed answer (incl. wrong auto-clear),
+  scoring, lives, hit recovery, energy and SLOW/FREEZE moved from GameScene
+  into `Field`; the aliens part became `Swarm`. The field changes only via
+  `apply(FieldInput)` + `step(dt)` and reports events; GameScene is now input
+  mapping + presentation (1449 → ~930 lines). Inputs apply at once but are
+  logged with their step, which replays identically (an input between steps
+  N and N+1 = start of step N+1), so UI response stays instant. Tests replay
+  runs exactly from seed + log. Found while testing: Phaser 3.90 re-delivers
+  queued keys within a frame (pre-existing: 20 presses → 49 calls); fixed
+  with `onKeyDown`, which drops repeats of the same event object.
+
+- **2026-09-27 — Phaser-free `Field` + fixed 60 Hz timestep (battle royale
+  M2a).** Aliens, spawners, the game clock and the readability guard moved
+  from GameScene into `src/sim/Field.ts`, driven by `step(dt, ctx)` and
+  reporting events; bots and a server can now run fields headless (Vitest
+  soaks 32 simulated minutes in < 1 s with zero box overlaps). The rules run in
+  fixed steps (a variable frame delta made runs differ by device; the ship's
+  per-frame lerp was also faster on 120 Hz screens) and the renderer
+  interpolates between steps instead of snapping. Ship/bullets/score/energy
+  follow in M2b.
+
+- **2026-09-27 — Seeded random numbers + game clock (battle royale M1).** Game
+  rules draw from a seeded mulberry32 `Rng` instead of `Math.random()`, with
+  spawner streams keyed by spawn number so an extra draw (a retry) doesn't
+  shift every later alien, and rule timings read the game clock instead of
+  `this.time.now`. Needed for replays, bots and a server that re-runs a
+  field. Side effect: solve times no longer count paused time (they used to).
+- **2026-09-27 — Battle rules, bots and contracts decided
+  (docs/MULTIPLAYER_DESIGN.md §6–§10).** Owner's picks: targeting = Tetris 99
+  strategies AND tapping an opponent; SEND = one tier button (25/50/100,
+  strongest affordable, hold for smaller); one life in battle (solo keeps 3);
+  8-player matches first. Bots are real players on their own field sim using
+  human inputs (rejected: timer-based fake bots). The design is not frozen:
+  content (monsters, tuning) changes any time; only the contracts (inputs,
+  attack shape, what others see, time model, KO rules) get locked before the
+  phase 1 server. Cloud sessions push their `claude/*` branch, not `master`.
 
 - **2026-09-27 — A separately drawn stem joins its digit.** The second lab
   session split a two-stroke 9 into "0" + a 1-like stem ("96" → "06"): a thin

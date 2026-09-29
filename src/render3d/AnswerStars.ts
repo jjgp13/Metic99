@@ -1,13 +1,9 @@
 import * as THREE from "three";
 import { GAME, RENDER3D } from "../config/constants";
+import type { AnswerState, AnswerView } from "../sim/Field";
 
-export type AnswerState = "typing" | "match" | "wrong";
-
-/** The number to spell in stars and how it reads (see GameScene.answerView). */
-export interface AnswerView {
-  text: string;
-  state: AnswerState;
-}
+// The number to spell in stars and how it reads (see Field.answerView).
+export type { AnswerState, AnswerView };
 
 /** A point in logical px (the drawing pad's ink). */
 export interface InkPoint {
