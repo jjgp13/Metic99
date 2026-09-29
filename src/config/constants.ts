@@ -86,12 +86,26 @@ export const BOT = {
   SWITCH_MARGIN_PX: 120,
   // Balls hidden more than this (Blinker lids) can't be read.
   MAX_READ_COVER: 0.5,
+  // Power policy, by the power's EFFECT (same for every level). "Danger" is
+  // the y of the lowest lethal alien not yet answered (the ship's line is
+  // PLAYER.Y = 430).
+  POWER: {
+    TIME_ON_Y: 320, // a time power goes on when danger passes this...
+    TIME_OFF_Y: 240, // ...and off once nothing unanswered is below this
+    BLAST_Y: 340, // blast (full bar) when danger passes this with 2+ unanswered,
+    BLAST_LAST_Y: 385, // or with any number once it passes this
+    // Don't waste overflow: with at least this much energy a time power also
+    // goes on while any unanswered alien is on screen, and stays on until the
+    // meter drops below SPEND_TO.
+    SPEND_ABOVE: 90,
+    SPEND_TO: 50,
+  },
 } as const;
 
 export type BotLevel = keyof typeof BOT.LEVELS;
 
 /** The box under the ship that holds the keypad or the drawing pad, with the
- * SLOW / FREEZE buttons in its side gutters. */
+ * POWER buttons in its side gutters. */
 export const KEYPAD_AREA = {
   TOP: PLAYER.Y + 52,
   BOTTOM: PLAYER.Y + 214,
@@ -340,6 +354,7 @@ export const STORAGE = {
   LAST_NAME: "metic-last-name", // remembers the player's last arcade initials
   LAST_LEN: "metic-last-len", // remembers the chosen initials length
   SHIP: "metic-ship", // player ship model picked on the menu
+  POWER: "metic-power", // power picked on the menu (POWER_KINDS)
   INPUT_MODE: "metic-input", // "keys" (keypad) or "draw" (handwriting pad)
   HW_LAB: "metic-hw-lab", // handwriting lab samples in progress (?lab=draw)
 } as const;
@@ -444,7 +459,7 @@ export const RECOVERY = {
  *   SLOW_MULT by SCORE.SLOW_MS (same window as the score's speed bonus).
  * - comboBonus: +COMBO_STEP per consecutive kill, capped at COMBO_MAX.
  *
- * An easy early kill gives ~8 (about 0.7 s of SLOW or 0.3 s of FREEZE); a fast
+ * An easy early kill gives ~8 (about 1.3 s of SLOW or 0.3 s of FREEZE); a fast
  * 3-ball kill on a streak gives 30+.
  */
 export const ENERGY = {
@@ -458,26 +473,63 @@ export const ENERGY = {
   COMBO_MAX: 2.0,
 } as const;
 
-/** The two ways to spend energy on time: each has its own button. */
-export type SlowMode = "slow" | "freeze";
-
 /**
- * Time powers: spend energy on the player's own field (aliens + spawn clock).
- * The ship and bullets keep full speed, and the difficulty clock keeps running.
- * Both are toggles that drain energy while on; only one runs at a time.
- * They trade efficiency for safety:
- * - slow: the economical option. Field at 30% for ~8 s per full bar
- *   (saves ~5.8 s of alien movement), but aliens still creep.
- * - freeze: the emergency option. Field fully stopped, but it burns twice as
- *   fast: ~4 s per full bar (saves ~4 s).
+ * Powers: each player picks ONE on the menu (the ship is only a look) and it is
+ * fixed for the run / match. The set is data: bots play any power by its
+ * EFFECT (sim/Bot.ts), so a new power that reuses an effect is one entry here;
+ * a new effect needs code in sim/energy.ts + Field and a bot rule.
+ *
+ * Rule for every power: it never pays for itself. Kills made while a time
+ * power runs, and aliens destroyed by a power, charge no energy (they still
+ * score and keep the streak). The first playtests showed why: kills made
+ * while frozen paid back 40–50% of FREEZE's cost, so it was on ~27% of the time.
+ *
+ * - time: a toggle that drains PER_SEC while on and runs the player's own
+ *   field (aliens + spawn clock) at FACTOR; the ship, bullets and difficulty
+ *   clock keep full speed. Needs MIN_START to switch on.
+ * - blast: pay COST (a full bar) to destroy every alien on the field. No score,
+ *   no energy, splitters don't split.
+ * - shield: pay COST to arm it; the next alien that reaches the ship is
+ *   destroyed instead of costing a life. One at a time; buy it in the calm.
  */
-export const SLOW_TIME = {
-  MODES: {
-    slow: { FACTOR: 0.3, PER_SEC: 12 },
-    freeze: { FACTOR: 0, PER_SEC: 25 },
-  } as Record<SlowMode, { FACTOR: number; PER_SEC: number }>,
-  MIN_START: 10, // energy needed to switch either on (stops tap-flicker at empty)
-} as const;
+export type PowerKind = "freeze" | "slow" | "blast" | "shield";
+
+interface PowerInfo {
+  NAME: string;
+  /** One line for the menu picker. */
+  BLURB: string;
+  COLOR: number;
+}
+export type PowerDef = PowerInfo &
+  (
+    | { EFFECT: "time"; FACTOR: number; PER_SEC: number; MIN_START: number }
+    | { EFFECT: "blast"; COST: number }
+    | { EFFECT: "shield"; COST: number }
+  );
+
+export const POWERS: Record<PowerKind, PowerDef> = {
+  // The panic button: total safety, twice the burn of SLOW per second saved.
+  freeze: {
+    EFFECT: "time", FACTOR: 0, PER_SEC: 25, MIN_START: 10,
+    NAME: "FREEZE", BLURB: "stop the field", COLOR: 0xb8d8ff,
+  },
+  // The tempo power: aliens still creep, but a bar lasts far longer.
+  slow: {
+    EFFECT: "time", FACTOR: 0.45, PER_SEC: 6, MIN_START: 10,
+    NAME: "SLOW", BLURB: "field at half speed, cheap", COLOR: 0x5ef0ff,
+  },
+  blast: {
+    EFFECT: "blast", COST: 60,
+    NAME: "BLAST", BLURB: "full bar: clear the screen", COLOR: 0xff9f5a,
+  },
+  shield: {
+    EFFECT: "shield", COST: 50,
+    NAME: "SHIELD", BLURB: "the next hit is blocked", COLOR: 0xffd166,
+  },
+};
+
+/** Menu order; the first is the default pick. */
+export const POWER_KINDS: readonly PowerKind[] = ["freeze", "slow", "blast", "shield"];
 
 /**
  * Answer feedback: what the player sees while typing. The typed number turns
@@ -640,6 +692,10 @@ export const RENDER3D = {
   // Shield bubble (never a ball color): radius clears the ball row above.
   SHIELD_COLOR: 0xff6be6,
   SHIELD_RADIUS: 21,
+  // The SHIELD power's bubble around the ship while it is armed (gold: the
+  // player's UI accent, so it never reads as an alien's magenta shield).
+  SHIP_SHIELD_COLOR: 0xffd166,
+  SHIP_SHIELD_RADIUS: 27,
   SHIELD_SHARDS: 16,
   // New sum after a shield breaks: the balls pop in from this scale.
   SUM_POP_SCALE: 1.6,

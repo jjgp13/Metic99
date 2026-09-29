@@ -73,7 +73,7 @@ export async function logRun(field: Field, extras: RunExtras): Promise<"saved" |
   const db = await runsDb();
   if (!db) return "off";
   const record = {
-    v: 1,
+    v: 2,
     build: __BUILD_ID__,
     at: new Date().toISOString(),
     device: {
@@ -87,6 +87,7 @@ export async function logRun(field: Field, extras: RunExtras): Promise<"saved" |
       seed: field.seed,
       lives: extras.lives,
       forcedAbilities: extras.forcedAbilities,
+      power: field.power.kind,
       steps: field.steps,
       inputs: field.inputLog.map(({ step, input }) => [step, compact(input)]),
     },
@@ -96,10 +97,10 @@ export async function logRun(field: Field, extras: RunExtras): Promise<"saved" |
       kills: field.kills,
       bestCombo: field.bestCombo,
       fastestSolveMs: Number.isFinite(field.fastestSolveMs) ? Math.round(field.fastestSolveMs) : null,
+      power: field.power.kind,
       energy: {
         earned: Math.round(field.energy.earned),
-        slow: Math.round(field.energy.spent.slow),
-        freeze: Math.round(field.energy.spent.freeze),
+        spent: Math.round(field.energy.spent[field.power.kind]),
       },
     },
     solves: field.solves.map((s) => [s.balls, Math.round(s.ms)]),
@@ -117,7 +118,7 @@ export async function logRun(field: Field, extras: RunExtras): Promise<"saved" |
   }
 }
 
-/** A short form of an input for the log: "d12", "b", "c", "ps" / "pf". */
+/** A short form of an input for the log: "d12", "b", "c", "p". */
 export function compact(input: FieldInput): string {
   switch (input.type) {
     case "digits":
@@ -127,7 +128,7 @@ export function compact(input: FieldInput): string {
     case "clear":
       return "c";
     case "power":
-      return input.mode === "slow" ? "ps" : "pf";
+      return "p";
   }
 }
 
@@ -136,5 +137,6 @@ export function expand(code: string): FieldInput {
   if (code.startsWith("d")) return { type: "digits", digits: code.slice(1) };
   if (code === "b") return { type: "back" };
   if (code === "c") return { type: "clear" };
-  return { type: "power", mode: code === "ps" ? "slow" : "freeze" };
+  // "p", or "ps" / "pf" from v1 logs (two power buttons; they no longer replay).
+  return { type: "power" };
 }

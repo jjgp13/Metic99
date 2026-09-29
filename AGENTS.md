@@ -57,6 +57,7 @@ src/
     constants.ts      All tunable gameplay/layout values
     difficulty.ts     Logistic difficulty curve
     ships.ts          Player's ship choice (menu picker, saved in localStorage)
+    powers.ts         Player's power choice (menu picker, saved in localStorage)
     inputMode.ts      On-screen input choice: keypad or drawing pad (localStorage)
   scenes/
     BootScene.ts      Preloads assets; defers animations (static frames for now)
@@ -89,7 +90,8 @@ src/
     keyboard.ts       `onKeyDown`: each key press delivered once (Phaser bug)
   sim/
     energy.ts         Phaser-free energy rules: energyForKill, EnergyMeter
-                      (charge/spend/drain per spender), SlowTime (SLOW / FREEZE powers).
+                      (charge/spend/drain per spender), Power (the picked
+                      power: time / blast / shield effects).
                       Kept pure so a future server sim can share it.
     rng.ts            Seeded random numbers (mulberry32 `Rng`, `derive` for
                       keyed streams, `SpawnStreams` keyed by spawn number).
@@ -97,7 +99,8 @@ src/
                       typed answer, targeting, score, lives, energy, powers.
                       Changes only via `apply(input)` + `step(dt)`, logs inputs
                       (`inputLog`, `replayField`), emits events (spawned,
-                      fired, solved, hit, knockedOut).
+                      fired, solved, hit, power, blasted, shielded,
+                      knockedOut).
     Swarm.ts          The aliens inside a Field: game clock, seeded spawners,
                       movement + readability guard, AbilityHost.
     Bot.ts            Bot player: reads only what's on screen, acts only via
@@ -225,7 +228,8 @@ Green=multiplication, Yellow=division.
   banks toward its target, the strafer shakes before it dives,
   explosions burst into voxel debris in the alien's colors with a flash from one
   reused point light (adding lights at runtime would trigger shader recompiles).
-- **Models in play:** the player flies the ship picked on the menu
+- **Models in play:** the player flies the ship picked on the menu (a look
+  only; the power is a separate pick)
   (`RENDER3D.SHIPS`: FALCON `ship_player`, DART `ship_dart`, POD `ship_pod`; the
   pick is stored under `STORAGE.SHIP`). Each alien draws the model of its
   `kind` (`MONSTERS[kind].MODEL`: darter / lumberer / strafer / drifter), with
@@ -308,13 +312,13 @@ Green=multiplication, Yellow=division.
   two), so the player never juggles two multi-number sums at once. When the cap
   is hit the spawn is forced to an easy 2-ball enemy.
 - Input: on-screen keypad **or** drawing pad, **and** physical keyboard (0–9,
-  Backspace, Esc, Space = SLOW, F = FREEZE, P = pause). Max 2 typed digits.
+  Backspace, Esc, Space or F = POWER, P = pause). Max 2 typed digits.
   The **DRAW / KEYPAD** switch right of the answer display picks the on-screen
   one (saved under `STORAGE.INPUT_MODE`); the keyboard works in both.
 - **Handwriting input** (`HANDWRITING`, `src/handwriting/`, `ui/DrawPad.ts`):
   the pad replaces the keypad in the same box (never over the field) and has a
   C button left of the answer display. Two touch pointers are active, so a
-  thumb can hit SLOW/FREEZE while the other finger draws (only the first
+  thumb can hit POWER while the other finger draws (only the first
   finger draws).
   - Recognizer: **$P point cloud** against ~25 hand-built digit templates
     (1 with/without flag or base, open/closed 4, 7 with/without bar, …). $P
@@ -369,24 +373,31 @@ Green=multiplication, Yellow=division.
   `BASE × ballBonus × digitBonus × speedBonus × comboBonus` (more balls, bigger
   average digit, faster solve, longer streak = more; ~8 for an easy early kill,
   30+ for a fast 3-ball streak kill). Overflow is lost. The meter only charges
-  and spends; each use is a separate spender (`"slow"` and `"freeze"` now,
-  `"send"` reserved for the battle royale). Per-run earned/spent totals show on game over.
-- **Time powers** (`SLOW_TIME`): the player spends energy on their OWN field
-  (alien movement + spawn clock); the ship, bullets and difficulty clock keep
-  full speed. Two powers, each with its own button, sharing the one meter:
-  - **SLOW** (left button, Space): field at 30%, drains 12/s (~8 s per bar,
-    saves ~5.8 s of alien movement). The economical option; aliens still creep.
-  - **FREEZE** (right button, F): field fully stopped, drains 25/s (~4 s per
-    bar, saves ~4 s). The emergency option: total safety at twice the burn.
-  Both are toggles needing 10 energy to start; only one runs at a time.
-  Pressing the running one turns it off, pressing the other switches over, and
-  it turns off when empty. Powers **hold** (no drain) while the hit-recovery
-  freeze already stops the field. The field is tinted (cyan / ice) while one
-  runs.
-- **Energy HUD**: SLOW and FREEZE are tall buttons in the gutters either side
-  of the keypad (one per thumb); the meter is a bar under the keypad with a
-  mark at the 10-energy start cost. Nothing covers the field or keys in
-  portrait.
+  and spends; each use is a separate spender (one per power, plus `"send"`
+  reserved for the battle royale). Per-run earned/spent totals show on game over.
+- **Powers** (`POWERS`, `Power` in `src/sim/energy.ts`): the ship is only a
+  look; the player picks ONE power on the menu (`STORAGE.POWER`), fixed for
+  the run. One POWER input (`{ type: "power" }`) uses it. The set is data: each
+  entry has an `EFFECT` (`time` / `blast` / `shield`) plus its numbers, and
+  bots play any power by its effect.
+  - **FREEZE** (time): field stopped, drains 25/s. The panic button.
+  - **SLOW** (time): field at 45%, drains 6/s, so a bar lasts ~17 s. About
+    twice the alien movement saved per energy, but aliens still creep.
+  - **BLAST**: 60 energy, destroys every alien on the field. No score, no
+    energy, streak untouched, splitters don't split.
+  - **SHIELD**: 50 energy to arm (one at a time); the next alien that reaches
+    the ship is destroyed instead of costing a life (no hit freeze, streak kept).
+    A gold bubble shows around the ship while armed.
+  Time powers are toggles needing 10 energy to start; they turn off when empty
+  and **hold** (no drain) while the hit-recovery freeze already stops the
+  field; the field is tinted in the power's color while one runs.
+  **Powers never pay for themselves:** kills made while a time power runs
+  charge no energy (they still score and extend the streak), and aliens
+  destroyed by BLAST or SHIELD charge nothing.
+- **Energy HUD**: the POWER button (named after the picked power) sits in
+  both gutters beside the keypad, one per thumb (the right one becomes SEND in
+  the battle royale); it lights while running/armed and dims when unaffordable.
+  The meter is a bar under the keypad with a mark at the power's cost.
 - HUD (score, lives, difficulty bar, typed display) draws above gameplay
   (`depth 5`), so entering aliens never obscure it. **The numbers win over
   the HUD:** every top-HUD piece, ability banner and score/equation/energy
@@ -409,7 +420,12 @@ Green=multiplication, Yellow=division.
   `NOTICE_WRONG`. They go for the most dangerous readable alien (chance
   `FOCUS`), can't read shut Blinker lids, start the next sum while a shot
   flies, and drop a sum mid-thought when a clearly worse threat appears.
-  Seeded per seat (`Bot.forSeat`). No powers yet (M4). Dev: `?bot=ace` puts a
+  Seeded per seat (`Bot.forSeat`). **Powers (M4)** by effect (`BOT.POWER`):
+  a time power goes on when an unanswered alien passes y 320 (or the bar is
+  ≥ 90, so energy isn't lost to overflow) and off once none is below 240;
+  BLAST fires with 2+ unanswered aliens past 340 or one past 385; SHIELD is
+  armed as soon as it's affordable. `npm run bots` compares every power plus
+  a no-power baseline (`--power`, `--level`). Dev: `?bot=ace` puts a
   bot on autopilot on your field; at game over the console prints your (or
   the bot's) solve times by ball count to compare with `npm run bots`.
   The GAME OVER screen also shows the run's survival time and median solve
@@ -420,13 +436,13 @@ Green=multiplication, Yellow=division.
   `dist/` files except `.glb`/`.map`). The Artifact host can't serve `.glb`,
   so that build (`--mode playtest`, `.env.playtest`) loads each model as
   `assets/models/<name>.json` = `{ glb: base64 }`. Each finished run is saved as one `runs` document: build
-  commit, device, seed + compact input log + steps (replayable exactly),
+  commit, device, seed + picked power + compact input log + steps (replayable exactly),
   summary, solves, hits, input sources (keypad/keyboard/pad), pad reads vs
   "?", pauses. GAME OVER shows "run saved for analysis". Claude reads the
   runs (ArtifactData) and `npm run playtest -- runs.json` replays them.
 - **Keyboard:** raw key listeners use `onKeyDown` (`src/ui/keyboard.ts`).
   Phaser 3.90 re-delivers earlier keys when several arrive in one frame
-  ("12" → "112", FREEZE toggled twice); the helper drops repeats.
+  ("12" → "112", a power toggled twice); the helper drops repeats.
 - **Pause** (`P` key or on-screen `II` button): freezes the field, difficulty
   timer, spawning and firing, and **hides all aliens + their number balls** (and
   the typed display) behind an overlay so the player can't solve sums on a break.
@@ -474,7 +490,7 @@ Green=multiplication, Yellow=division.
   shield.
 - **Lives** are a playtest constant, `PLAYER.LIVES` (3 by default; 1 = the
   battle-royale knockout rule). With 1 life the hit recovery below never runs:
-  the only hit ends the game, so slow time is the sole safety tool.
+  the only hit ends the game, so the power is the sole safety tool.
 - **Hit recovery**: on losing a life (but not the last) the whole field **freezes
   for `RECOVERY.FREEZE_MS` (3s)** so the player can read the board, then resumes
   at `RECOVERY.POST_HIT_FACTOR` (80%) speed for the rest of the run. The slowdown
@@ -553,8 +569,8 @@ curve is in `src/config/difficulty.ts` (`difficultyAt(elapsedMs, score)`).
 12. [ ] Publish on GitHub Pages (workflow added; enable Pages = "GitHub Actions"
        and add repo secrets `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY`).
 13. [ ] **Battle-royale multiplayer (Tetris 99-style)** — see
-       `docs/MULTIPLAYER_DESIGN.md`. Single player first: [x] energy bar + slow
-       time (two modes under playtest; lives constant for 1 vs 3), [x] alien
+       `docs/MULTIPLAYER_DESIGN.md`. Single player first: [x] energy bar +
+       one picked power (FREEZE / SLOW / BLAST / SHIELD), [x] alien
        movement patterns, [x] monster abilities; then offline bots (and energy
        "send"), then the WebSocket match server (8 players to start).
        **Phase 0 (offline vs bots)** milestones M0–M9 are in
@@ -563,7 +579,8 @@ curve is in `src/config/difficulty.ts` (`difficultyAt(elapsedMs, score)`).
        Phaser-free `Field` (aliens, spawning, readability) + fixed timestep,
        [x] M2b ship/combat/scoring/lives/energy/input into the sim (input log
        + exact replay), [x] M3 bot v1 (solving, 3 skill levels, `?bot=`,
-       `npm run bots`), [ ] M4 bot powers, [ ] M5+ match, send.
+       `npm run bots`), [x] M4 bot powers (per effect, compared headless),
+       [ ] M5+ match, send.
 
 ## Conventions
 
@@ -587,6 +604,18 @@ curve is in `src/config/difficulty.ts` (`difficultyAt(elapsedMs, score)`).
 ## Decision Log
 
 Newest first. Format: `YYYY-MM-DD — decision — rationale`.
+
+- **2026-09-29 — Ship = look; the player picks ONE power (FREEZE / SLOW /
+  BLAST / SHIELD); powers never pay for themselves.** Replayed runs showed
+  FREEZE on 24–29% of the time because kills made while frozen paid back
+  40–50% of its cost, which also erased SLOW's efficiency edge. Tying a power
+  to each ship was rejected (every new look = balance work, a must-pick
+  ship, a new bot rule); ships stay unlimited cosmetics and powers are a
+  small data set played by bots per EFFECT. No power's kills charge energy,
+  so BLAST no longer needs a full bar (60) to stop a snowball. Bots (24
+  seeds): rookie/pilot survive within ~±10% across the four in both 3-life
+  and 1-life play; open issue: an ace with FREEZE and 1 life lasts 301 s
+  vs 100–190 s for the others (many ~1.6 s micro-freezes).
 
 - **2026-09-29 — Numbers win over the HUD; playtest build ships its models.**
   Second playtest (3 runs, desktop app + keyboard, 241–358 s, 64k–97k pts):

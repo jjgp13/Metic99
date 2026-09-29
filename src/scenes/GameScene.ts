@@ -10,7 +10,6 @@ import {
   SIM,
   STORAGE,
   type InputMode,
-  type SlowMode,
 } from "../config/constants";
 import { isLeaderboardEnabled, startMatch } from "../services/leaderboard";
 import {
@@ -24,6 +23,7 @@ import type Alien from "../objects/Alien";
 import { ABILITY_KINDS, type AbilityKind } from "../objects/abilities";
 import World3D, { getWorld3D } from "../render3d/World3D";
 import { selectedShip } from "../config/ships";
+import { selectedPower } from "../config/powers";
 import {
   ANSWER_MAX_DIGITS,
   Field,
@@ -32,6 +32,7 @@ import {
   type FieldInput,
 } from "../sim/Field";
 import { Bot } from "../sim/Bot";
+import type { PowerUse } from "../sim/energy";
 import { randomSeed } from "../sim/rng";
 import { summarizeSolves } from "../sim/stats";
 import { inputMode, setInputMode } from "../config/inputMode";
@@ -39,8 +40,9 @@ import type { InkEvent } from "../handwriting/inkReader";
 import DrawPad from "../ui/DrawPad";
 import { onKeyDown } from "../ui/keyboard";
 
-// Energy HUD sits in the gutters beside the keypad so it never covers the field
-// or the keys: the meter on the left, the SLOW button on the right.
+// Energy HUD sits beside and under the keypad so it never covers the field or
+// the keys: the POWER button in both gutters (one per thumb; the right one will
+// become SEND in the battle royale), the meter under the keypad.
 const KEYPAD_TOP = KEYPAD_AREA.TOP;
 const KEYPAD_BOTTOM = KEYPAD_AREA.BOTTOM;
 const GUTTER_H = KEYPAD_BOTTOM - KEYPAD_TOP;
@@ -48,8 +50,7 @@ const ENERGY_COLOR = 0x5ef0ff;
 const METER_X = GAME.WIDTH / 2 - 180; // under the keypad, same width
 const METER_W = 360;
 const METER_Y = KEYPAD_BOTTOM + 22;
-const POWER_COLOR: Record<SlowMode, number> = { slow: ENERGY_COLOR, freeze: 0xb8d8ff };
-const POWER_ON_FILL: Record<SlowMode, number> = { slow: 0x1f6f7a, freeze: 0x3a5a8c };
+const BUTTON_FILL = 0x1b2340;
 // The answer display's row, between the ship and the keypad: the input-mode
 // switch sits on its right, the drawing pad's C button on its left.
 const ANSWER_Y = PLAYER.Y + 36;
@@ -94,13 +95,10 @@ export default class GameScene extends Phaser.Scene {
 
   private diffBar!: Phaser.GameObjects.Rectangle;
 
-  // Energy HUD: the meter under the keypad, SLOW / FREEZE in the gutters.
+  // Energy HUD: the meter under the keypad, the POWER button in the gutters.
   private energyFill!: Phaser.GameObjects.Rectangle;
   private energyText!: Phaser.GameObjects.Text;
-  private powerButtons = {} as Record<
-    SlowMode,
-    { bg: Phaser.GameObjects.Rectangle; text: Phaser.GameObjects.Text }
-  >;
+  private powerButtons: { bg: Phaser.GameObjects.Rectangle; text: Phaser.GameObjects.Text }[] = [];
   private slowTint!: Phaser.GameObjects.Rectangle;
 
   // Pause: while paused the field is frozen and aliens are hidden so the
@@ -159,6 +157,7 @@ export default class GameScene extends Phaser.Scene {
     this.seenAbilities.clear();
     this.keypadParts = [];
     this.padClear = [];
+    this.powerButtons = [];
 
     // The run's seed: the same seed and inputs roll the same aliens.
     // Dev: `?seed=123` replays a seed; `?ability=blinker,shielded` makes every
@@ -176,7 +175,7 @@ export default class GameScene extends Phaser.Scene {
         .filter((k): k is AbilityKind => (ABILITY_KINDS as string[]).includes(k));
       if (kinds?.length) forcedAbilities = kinds;
     }
-    this.field = new Field({ seed, forcedAbilities });
+    this.field = new Field({ seed, forcedAbilities, power: selectedPower() });
     this.runExtras = {
       lives: this.field.lives,
       forcedAbilities,
@@ -221,6 +220,7 @@ export default class GameScene extends Phaser.Scene {
         bullets: f.bullets,
         alpha,
         aliensHidden: this.paused,
+        shipShield: f.power.shieldArmed,
         answer: this.paused || this.gameOver ? null : this.answer,
       },
       time,
@@ -257,6 +257,20 @@ export default class GameScene extends Phaser.Scene {
         this.showEnergyGain(e.energy);
         this.popEquation(e.digits, e.alien);
         if (e.burst > 0) this.popBurst(e.burst, e.alien.x, e.alien.y);
+        break;
+      case "power":
+        this.showPowerUse(e.use);
+        break;
+      case "blasted":
+        for (const a of e.aliens) this.explode(a);
+        this.cameras.main.flash(180, 255, 159, 90);
+        this.cameras.main.shake(200, 0.012);
+        this.world.shake(200, 0.012);
+        break;
+      case "shielded":
+        this.explode(e.alien);
+        this.sound.play("explode", { volume: 0.4, rate: 0.7 });
+        this.cameras.main.flash(120, 255, 209, 102);
         break;
       case "hit":
         this.runExtras.hits.push(hitRecord(e.alien, this.field));
@@ -541,7 +555,7 @@ export default class GameScene extends Phaser.Scene {
   }
 
   // ---------------------------------------------------------------------------
-  // Energy & time powers (SLOW / FREEZE)
+  // Energy & the power (picked on the menu)
   // ---------------------------------------------------------------------------
   /** Pop the energy a kill stored next to the meter. */
   private showEnergyGain(stored: number): void {
@@ -563,48 +577,56 @@ export default class GameScene extends Phaser.Scene {
     });
   }
 
-  private triggerPower(mode: SlowMode): void {
+  private triggerPower(): void {
     if (this.gameOver || this.paused) return;
-    if (this.field.apply({ type: "power", mode })) {
-      this.sound.play("blip", { volume: 0.5, rate: mode === "freeze" ? 0.4 : 0.6 });
-    }
+    this.field.apply({ type: "power" });
     this.updateEnergyHud();
+  }
+
+  /** Sound for what a power press did (BLAST and SHIELD also get field events). */
+  private showPowerUse(use: PowerUse): void {
+    if (use === "blast") {
+      this.sound.play("explode", { volume: 0.6, rate: 0.5 });
+      return;
+    }
+    const rate = use === "off" ? 1.2 : use === "armed" ? 0.9 : this.field.power.kind === "freeze" ? 0.4 : 0.6;
+    this.sound.play("blip", { volume: 0.5, rate });
   }
 
   private buildEnergyHud(): void {
     const HUD_DEPTH = 5;
+    const def = this.field.power.def;
 
-    // Field tint while a power runs. It is drawn on the transparent Phaser
+    // Field tint while a time power runs. It is drawn on the transparent Phaser
     // canvas, so it tints the 3D playfield underneath (and sits below the HUD).
     this.slowTint = this.add
-      .rectangle(GAME.WIDTH / 2, 0, GAME.WIDTH, PLAYER.Y + 20, ENERGY_COLOR, 1)
+      .rectangle(GAME.WIDTH / 2, 0, GAME.WIDTH, PLAYER.Y + 20, def.COLOR, 1)
       .setOrigin(0.5, 0)
       .setDepth(4)
       .setVisible(false);
 
-    // Tall power buttons in the gutters beside the keypad, one per thumb.
-    const makeButton = (mode: SlowMode, x: number, label: string) => {
-      const color = POWER_COLOR[mode];
+    // The same POWER button in both gutters beside the keypad, one per thumb.
+    const makeButton = (x: number) => {
       const bg = this.add
-        .rectangle(x, KEYPAD_TOP + GUTTER_H / 2, 48, GUTTER_H, 0x1b2340)
-        .setStrokeStyle(2, color)
+        .rectangle(x, KEYPAD_TOP + GUTTER_H / 2, 48, GUTTER_H, BUTTON_FILL)
+        .setStrokeStyle(2, def.COLOR)
         .setDepth(HUD_DEPTH)
         .setInteractive({ useHandCursor: true });
       const text = this.add
-        .text(x, KEYPAD_TOP + GUTTER_H / 2, label.split("").join("\n"), {
+        .text(x, KEYPAD_TOP + GUTTER_H / 2, def.NAME.split("").join("\n"), {
           fontFamily: "monospace",
           fontSize: "18px",
           color: "#ffffff",
           align: "center",
-          lineSpacing: label.length > 4 ? 0 : 8,
+          lineSpacing: def.NAME.length > 4 ? 0 : 8,
         })
         .setOrigin(0.5)
         .setDepth(HUD_DEPTH);
-      bg.on("pointerdown", () => this.triggerPower(mode));
-      this.powerButtons[mode] = { bg, text };
+      bg.on("pointerdown", () => this.triggerPower());
+      this.powerButtons.push({ bg, text });
     };
-    makeButton("slow", 30, "SLOW");
-    makeButton("freeze", GAME.WIDTH - 30, "FREEZE");
+    makeButton(30);
+    makeButton(GAME.WIDTH - 30);
 
     // Horizontal energy meter under the keypad.
     this.add
@@ -612,7 +634,7 @@ export default class GameScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(HUD_DEPTH);
     this.add
-      .rectangle(METER_X, METER_Y, METER_W, 12, 0x1b2340)
+      .rectangle(METER_X, METER_Y, METER_W, 12, BUTTON_FILL)
       .setOrigin(0, 0.5)
       .setStrokeStyle(1, 0x33406e)
       .setDepth(HUD_DEPTH);
@@ -620,16 +642,16 @@ export default class GameScene extends Phaser.Scene {
       .rectangle(METER_X, METER_Y, 0, 8, ENERGY_COLOR)
       .setOrigin(0, 0.5)
       .setDepth(HUD_DEPTH);
-    // Marks the energy needed to switch a power on.
+    // Marks the energy needed to use the power.
     this.add
-      .rectangle(METER_X + METER_W * (this.field.slowTime.threshold / this.field.energy.max), METER_Y, 2, 18, 0xffd166)
+      .rectangle(METER_X + METER_W * (this.field.power.cost / this.field.energy.max), METER_Y, 2, 18, 0xffd166)
       .setDepth(HUD_DEPTH);
     this.energyText = this.add
       .text(GAME.WIDTH - 30, METER_Y, "0", { fontFamily: "monospace", fontSize: "12px", color: "#ffffff" })
       .setOrigin(0.5)
       .setDepth(HUD_DEPTH);
     this.add
-      .text(GAME.WIDTH / 2, METER_Y + 22, "SPACE slow  ·  F freeze", {
+      .text(GAME.WIDTH / 2, METER_Y + 22, `SPACE or F: ${def.NAME}`, {
         fontFamily: "monospace",
         fontSize: "11px",
         color: "#8892b0",
@@ -642,21 +664,20 @@ export default class GameScene extends Phaser.Scene {
 
   private updateEnergyHud(): void {
     const e = this.field.energy;
+    const power = this.field.power;
     this.energyFill.setSize(METER_W * e.fraction, 8);
     this.energyText.setText(String(Math.floor(e.value)));
 
-    const running = this.field.slowTime.mode;
-    const usable = this.field.slowTime.canTrigger(e);
-    for (const mode of ["slow", "freeze"] as const) {
-      const { bg, text } = this.powerButtons[mode];
-      const on = running === mode;
-      bg.setFillStyle(on ? POWER_ON_FILL[mode] : 0x1b2340).setAlpha(on || usable ? 1 : 0.35);
+    // Lit while running (time) or armed (shield); dim when it can't be used.
+    const on = power.running || power.shieldArmed;
+    const usable = power.canTrigger(e);
+    for (const { bg, text } of this.powerButtons) {
+      bg.setFillStyle(on ? power.def.COLOR : BUTTON_FILL, on ? 0.45 : 1).setAlpha(on || usable ? 1 : 0.35);
       text.setAlpha(on || usable ? 1 : 0.35);
     }
-    if (running) {
-      this.slowTint
-        .setVisible(true)
-        .setFillStyle(POWER_COLOR[running], running === "freeze" ? 0.22 : 0.1);
+    const def = power.def;
+    if (power.running && def.EFFECT === "time") {
+      this.slowTint.setVisible(true).setFillStyle(def.COLOR, def.FACTOR === 0 ? 0.22 : 0.1);
     } else {
       this.slowTint.setVisible(false);
     }
@@ -776,13 +797,9 @@ export default class GameScene extends Phaser.Scene {
         this.togglePause();
         return;
       }
-      if (e.key === " ") {
+      if (e.key === " " || e.key === "f" || e.key === "F") {
         e.preventDefault();
-        this.triggerPower("slow");
-        return;
-      }
-      if (e.key === "f" || e.key === "F") {
-        this.triggerPower("freeze");
+        this.triggerPower();
         return;
       }
       if (e.key >= "0" && e.key <= "9") this.handleInput(e.key, "keyboard");
@@ -986,8 +1003,8 @@ export default class GameScene extends Phaser.Scene {
           `Best combo: ${bestCombo}    Kills: ${totalKills}\n` +
           `Survived ${survived}    Fastest solve: ${fastestStr}\n` +
           `Median solve: ${medians || "—"}\n` +
-          `Energy earned ${Math.round(f.energy.earned)} · used ` +
-          `${Math.round(f.energy.spent.slow)} slow, ${Math.round(f.energy.spent.freeze)} freeze`,
+          `Energy earned ${Math.round(f.energy.earned)} · ` +
+          `${Math.round(f.energy.spent[f.power.kind])} on ${f.power.def.NAME}`,
         { fontFamily: "monospace", fontSize: "16px", color: "#ffffff", align: "center", lineSpacing: 8 },
       )
       .setOrigin(0.5)

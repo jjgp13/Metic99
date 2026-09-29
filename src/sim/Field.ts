@@ -6,14 +6,15 @@ import {
   MONSTERS,
   PLAYER,
   RECOVERY,
+  POWER_KINDS,
   SCORE,
-  type SlowMode,
+  type PowerKind,
 } from "../config/constants";
 import { difficultyAt, type DifficultyParams } from "../config/difficulty";
 import type Alien from "../objects/Alien";
 import type { AbilityKind } from "../objects/abilities";
 import type { Bullet } from "../objects/Bullet";
-import { EnergyMeter, SlowTime, energyForKill } from "./energy";
+import { EnergyMeter, Power, energyForKill, type PowerUse } from "./energy";
 import { Swarm } from "./Swarm";
 
 const PLAYER_START_X = GAME.WIDTH / 2;
@@ -32,8 +33,8 @@ export type FieldInput =
   | { type: "digits"; digits: string }
   | { type: "back" }
   | { type: "clear" }
-  /** Press SLOW or FREEZE: start it, switch to it, or turn it off. */
-  | { type: "power"; mode: SlowMode };
+  /** Press POWER: use the player's picked power (a time power toggles). */
+  | { type: "power" };
 
 /** match = an alien has this answer; typing = one could still (a longer answer
  * starts with it); wrong = no alien's answer can. */
@@ -59,7 +60,8 @@ export type FieldEvent =
       alien: Alien;
       digits: readonly number[];
       points: number;
-      /** Energy actually stored (overflow past the max is lost). */
+      /** Energy actually stored (overflow past the max is lost; 0 while a
+       * time power runs, since powers never pay for themselves). */
       energy: number;
       /** Drifter bonus energy included in `energy`'s gain (0 otherwise). */
       burst: number;
@@ -67,6 +69,12 @@ export type FieldEvent =
     }
   /** A lethal alien reached the player line (it is already removed). */
   | { type: "hit"; alien: Alien; livesLeft: number }
+  /** The power was pressed and did something. */
+  | { type: "power"; use: PowerUse }
+  /** BLAST destroyed these aliens (already removed): no score, no energy. */
+  | { type: "blasted"; aliens: Alien[] }
+  /** An armed SHIELD destroyed this alien at the ship instead of a life. */
+  | { type: "shielded"; alien: Alien }
   | { type: "knockedOut" };
 
 /** One kill: how many balls its sum had and how long it took (spawn → hit). */
@@ -81,6 +89,8 @@ export interface FieldOptions {
   lives?: number;
   /** Dev play-testing: every allowed spawn gets one of these abilities. */
   forcedAbilities?: AbilityKind[] | null;
+  /** The power picked before the run (default: the first of POWER_KINDS). */
+  power?: PowerKind;
 }
 
 /**
@@ -92,7 +102,7 @@ export interface FieldOptions {
  *
  * Every input is logged with the step it arrived at (`inputLog`), so a run can
  * be replayed exactly (`replayField`). The aliens live in a `Swarm`; this adds
- * the ship, bullets, typed answer, score, lives, energy and time powers.
+ * the ship, bullets, typed answer, score, lives, energy and the power.
  */
 export class Field {
   readonly seed: number;
@@ -124,7 +134,7 @@ export class Field {
   readonly solves: Solve[] = [];
 
   readonly energy = new EnergyMeter();
-  readonly slowTime = new SlowTime();
+  readonly power: Power;
   /** Hit recovery: the field is frozen while > 0 (a countdown, so pausing the
    * scene can't eat it), then runs at POST_HIT_FACTOR for the rest of the run. */
   freezeLeftMs = 0;
@@ -144,6 +154,7 @@ export class Field {
   constructor(options: FieldOptions) {
     this.seed = options.seed;
     this.lives = options.lives ?? PLAYER.LIVES;
+    this.power = new Power(options.power ?? POWER_KINDS[0]);
     this.swarm = new Swarm({ seed: options.seed, forcedAbilities: options.forcedAbilities });
   }
 
@@ -195,9 +206,13 @@ export class Field {
       case "clear":
         this.typed = "";
         break;
-      case "power":
-        changed = this.slowTime.trigger(input.mode, this.energy);
+      case "power": {
+        const use = this.power.trigger(this.energy);
+        changed = use !== null;
+        if (use) this.events.push({ type: "power", use });
+        if (use === "blast") this.blast();
         break;
+      }
     }
     this.checkTyped();
     return changed;
@@ -210,11 +225,12 @@ export class Field {
 
     // After a hit the field FREEZES for a few seconds (factor 0), then resumes at
     // POST_HIT_FACTOR for the rest of the run. The difficulty timer keeps running
-    // underneath, so absolute speed still climbs over time. Slow time multiplies
-    // on top; it holds (no drain) while the hit freeze already stops the field.
+    // underneath, so absolute speed still climbs over time. A time power
+    // multiplies on top; it holds (no drain) while the hit freeze already stops
+    // the field.
     const hitFrozen = this.freezeLeftMs > 0;
     if (hitFrozen) this.freezeLeftMs -= dt;
-    const slowFactor = this.slowTime.update(dt, this.energy, hitFrozen);
+    const slowFactor = this.power.update(dt, this.energy, hitFrozen);
     const speed = hitFrozen ? 0 : slowFactor * (this.postHitSlow ? RECOVERY.POST_HIT_FACTOR : 1);
 
     // Resolve the current target. A locked target (already fired upon) stays
@@ -235,6 +251,7 @@ export class Field {
     });
     for (const e of this.swarm.takeEvents()) {
       if (e.type === "spawned") this.events.push(e);
+      else if (this.power.absorbHit()) this.events.push({ type: "shielded", alien: e.alien });
       else this.loseLife(e.alien);
     }
     if (this.knockedOut) return;
@@ -347,7 +364,8 @@ export class Field {
   }
 
   /**
-   * A correct answer landed. It scores, charges energy and extends the streak.
+   * A correct answer landed. It scores, charges energy (unless a time power
+   * runs) and extends the streak.
    * If an ability absorbs it (a shield broke and rolled a new sum) the alien
    * lives on and the lock is released so its new sum can be targeted.
    */
@@ -373,7 +391,9 @@ export class Field {
     this.score += points;
     // The bonus drifter adds its burst on top of the normal kill energy.
     const burst = alien.lethal ? 0 : MONSTERS.drifter.ENERGY_BURST;
-    const energy = this.energy.charge(energyForKill({ digits, solveMs, combo: this.combo }) + burst);
+    const energy = this.power.running
+      ? 0
+      : this.energy.charge(energyForKill({ digits, solveMs, combo: this.combo }) + burst);
 
     if (this.lockedTarget === alien) {
       this.lockedTarget = null;
@@ -385,6 +405,21 @@ export class Field {
       alien.ability?.onKilled(alien, this.swarm);
     }
     this.events.push({ type: "solved", alien, digits, points, energy, burst, absorbed });
+  }
+
+  /**
+   * BLAST: every alien on the field is destroyed. Nothing scores or charges,
+   * the streak is untouched, and splitters don't split (their onKilled is
+   * skipped). A shot in flight at one of them just flies off.
+   */
+  private blast(): void {
+    const aliens = this.aliens.filter((a) => a.active);
+    for (const a of aliens) this.swarm.remove(a);
+    this.lockedTarget = null;
+    this.lockedBullet = null;
+    this.target = null;
+    this.typed = "";
+    this.events.push({ type: "blasted", aliens });
   }
 
   /** points = BASE * ballCountBonus * speedBonus * difficultyMult * comboMult. */
