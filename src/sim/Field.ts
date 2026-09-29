@@ -8,6 +8,7 @@ import {
   RECOVERY,
   POWER_KINDS,
   SCORE,
+  type AlienKind,
   type PowerKind,
 } from "../config/constants";
 import { difficultyAt, type DifficultyParams } from "../config/difficulty";
@@ -89,6 +90,8 @@ export interface FieldOptions {
   lives?: number;
   /** Dev play-testing: every allowed spawn gets one of these abilities. */
   forcedAbilities?: AbilityKind[] | null;
+  /** Testing: every 2-ball spawn without an ability is one of these kinds. */
+  forcedKinds?: AlienKind[] | null;
   /** The power picked before the run (default: the first of POWER_KINDS). */
   power?: PowerKind;
 }
@@ -155,7 +158,11 @@ export class Field {
     this.seed = options.seed;
     this.lives = options.lives ?? PLAYER.LIVES;
     this.power = new Power(options.power ?? POWER_KINDS[0]);
-    this.swarm = new Swarm({ seed: options.seed, forcedAbilities: options.forcedAbilities });
+    this.swarm = new Swarm({
+      seed: options.seed,
+      forcedAbilities: options.forcedAbilities,
+      forcedKinds: options.forcedKinds,
+    });
   }
 
   get aliens(): readonly Alien[] {

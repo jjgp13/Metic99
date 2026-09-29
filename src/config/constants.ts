@@ -140,7 +140,10 @@ export const ENEMY = {
   SPAWN_EDGE: 6, // px kept between a sweep and the field edge
 
   // 3+ ball sums are always lumberers; 2-ball sums pick a kind by weight.
-  TWO_BALL_KINDS: { darter: 0.6, strafer: 0.4 } as Record<"darter" | "strafer", number>,
+  TWO_BALL_KINDS: { darter: 0.4, strafer: 0.3, swooper: 0.3 } as Record<
+    "darter" | "strafer" | "swooper",
+    number
+  >,
 
   // Spawn pacing is gated by the board's CURRENT cognitive load, not a blind
   // clock. Each alien contributes its THREAT_BY_BALLS weight; new spawns are
@@ -195,6 +198,21 @@ export const MONSTERS = {
     PATROL_SPEED: 60, // px/s
     WINDUP_MS: 600, // telegraph: hovers and shakes before the dive
     DIVE_SPEED: 1.6, // × home speed
+  },
+  // 2 balls: flies in sideways from a screen edge through a band below the
+  // top HUD, slows into its lane, then glides straight down. Its spawn needs
+  // the whole flight path clear (Swarm.placeSwooper); a flight held up once it
+  // is fully on screen just turns down where it is.
+  swooper: {
+    MODEL: "alien_swooper",
+    HALF_W: 18,
+    BALLS_Y: 28,
+    BOTTOM: 16,
+    SPEED: 0.9, // × fall/home speed once it turns down
+    ENTER_SPEED: 120, // px/s sideways
+    BRAKE_PX: 40, // slows over the last px before its lane…
+    MIN_ENTER: 0.3, // …down to this share of ENTER_SPEED
+    BAND_Y: { min: 100, max: 160 }, // body y of the flight (ball row clears the HUD)
   },
   // Bonus: crosses sideways, never reaches the player (non-lethal). Solving it
   // gives an ENERGY_BURST; left alone it just leaves. Doesn't count toward the
@@ -655,6 +673,7 @@ export const RENDER3D = {
     "alien_lumberer",
     "alien_drifter",
     "alien_strafer",
+    "alien_swooper",
     "alien_shielded",
     "alien_blinker",
     "alien_splitter",
@@ -675,6 +694,7 @@ export const RENDER3D = {
     alien_lumberer: [0x2bb3a3, 0x1b7468, 0xf5f5f0],
     alien_drifter: [0x8e4fd8, 0xf29bc1, 0xff6be6],
     alien_strafer: [0xd63fa6, 0x5a2d96, 0x9aa0b5],
+    alien_swooper: [0x2bb3a3, 0x1b7468, 0xf2913d],
   } as Record<string, readonly number[]>,
 
   // Models worn by ability aliens (never picked at random), with debris colors.

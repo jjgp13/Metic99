@@ -3,6 +3,7 @@
  * they did. Run with `npm run bots` (add `-- --lives 1` for the battle rule,
  * `-- --minutes 5` to cap runs, `-- --seeds 20` for more runs,
  * `-- --ability splitter` to make every allowed spawn that ability,
+ * `-- --kind swooper` to make every 2-ball spawn that kind,
  * `-- --power slow` or `-- --power none,freeze` to pick powers (default: every
  * power plus "none", the no-power baseline), `-- --level ace` for one level).
  *
@@ -10,7 +11,7 @@
  * re-run, and compare, instead of playing dozens of games by hand. Compare the
  * solve times with your own (dev console at game over).
  */
-import { BOT, POWER_KINDS, SIM, type BotLevel, type PowerKind } from "../src/config/constants";
+import { BOT, POWER_KINDS, SIM, type AlienKind, type BotLevel, type PowerKind } from "../src/config/constants";
 import { Bot } from "../src/sim/Bot";
 import type { AbilityKind } from "../src/objects/abilities";
 import { Field } from "../src/sim/Field";
@@ -28,6 +29,8 @@ const MINUTES = arg("minutes", 10);
 const LIVES = arg("lives", 3);
 const abilityArg = process.argv.indexOf("--ability");
 const FORCED = abilityArg >= 0 ? (process.argv[abilityArg + 1].split(",") as AbilityKind[]) : null;
+const kindArg = process.argv.indexOf("--kind");
+const KINDS = kindArg >= 0 ? (process.argv[kindArg + 1].split(",") as AlienKind[]) : null;
 const list = (name: string) => {
   const i = process.argv.indexOf(`--${name}`);
   return i >= 0 ? process.argv[i + 1].split(",") : null;
@@ -59,6 +62,7 @@ for (const power of POWERS_RUN) {
       seed,
       lives: LIVES,
       forcedAbilities: FORCED,
+      forcedKinds: KINDS,
       power: power === "none" ? undefined : power,
     });
     const bot = Bot.forSeat(level, seed);
@@ -114,6 +118,7 @@ for (const power of POWERS_RUN) {
 }
 console.log(
   `${SEEDS} seeds per level, ${LIVES} ${LIVES === 1 ? "life" : "lives"}, runs capped at ${MINUTES} min` +
-    (FORCED ? `, every allowed spawn: ${FORCED.join(", ")}` : ""),
+    (FORCED ? `, every allowed spawn: ${FORCED.join(", ")}` : "") +
+    (KINDS ? `, every 2-ball spawn: ${KINDS.join(", ")}` : ""),
 );
 console.table(rows);

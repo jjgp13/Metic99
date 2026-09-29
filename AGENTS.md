@@ -232,13 +232,15 @@ Green=multiplication, Yellow=division.
   only; the power is a separate pick)
   (`RENDER3D.SHIPS`: FALCON `ship_player`, DART `ship_dart`, POD `ship_pod`; the
   pick is stored under `STORAGE.SHIP`). Each alien draws the model of its
-  `kind` (`MONSTERS[kind].MODEL`: darter / lumberer / strafer / drifter), with
+  `kind` (`MONSTERS[kind].MODEL`: darter / lumberer / strafer / swooper /
+  drifter), with
   its balls at the model's `socket_balls`. The kind lives in the `Alien` state
   (game logic picks it); `World3D` only draws it. Explosion debris uses the
   model's colors (`RENDER3D.ALIEN_MODELS`). The models' `anim_*` parts move
   with simple sine motion (`RENDER3D.ANIM`): darter tail wags, lumberer legs
   swing in step with its stomp (body lifts while stepping), drifter skirt spins
-  and pulses, strafer wings flap (faster in windup/dive).
+  and pulses, strafer and swooper wings flap (strafer: faster in windup/dive),
+  swooper tail wags.
   **Ability aliens** set `Alien.model` and wear their ability's model
   (`ABILITY.MODEL`, debris in `RENDER3D.ABILITY_MODELS`) while moving as their
   `kind`; the renderer mirrors ability state (ball lids, the Blinker's
@@ -255,14 +257,21 @@ Green=multiplication, Yellow=division.
   sum of the balls. `enemiesInField: Map<result, Alien>` keeps results unique so
   a typed number maps to exactly one target.
 - **Monster kinds** (`MONSTERS` in constants, movement in `Alien.advance`).
-  3+ ball sums are always lumberers; 2-ball sums pick darter/strafer by
-  `ENEMY.TWO_BALL_KINDS` weight:
+  3+ ball sums are always lumberers; 2-ball sums pick darter/strafer/swooper
+  by `ENEMY.TWO_BALL_KINDS` weight (40/30/30):
   - **Darter** (2 balls): fast zig-zag dive (×1.25 speed, ±26 px around its lane).
   - **Lumberer** (3 balls): slow stop-and-go stomp: moves half of each
     `STOMP_MS` cycle and stands still for the other half (same ×0.85 average).
   - **Strafer** (2 balls, Galaga-style): flies into a band at the top, patrols
     sideways for `DIFFICULTY.STRAFER_PATROL_MS` (5 s → 2.8 s, time to read its
     sum), hovers and shakes for `WINDUP_MS` (telegraph), then dives fast.
+  - **Swooper** (2 balls): flies in level from the left or right edge through
+    a band below the top HUD (`BAND_Y` 100–160), brakes into a random lane,
+    then glides straight down at ×0.9 speed (it skips the top of the field,
+    so it descends a little slower). Its spawn needs the whole flight path
+    clear (`Swarm.placeSwooper`); a flight held up once it is fully on screen
+    turns down where it is. Bots read an alien only once its center is on
+    screen sideways.
   - **Drifter** (2 balls, bonus): crosses sideways through a mid band and
     leaves; **non-lethal**. Solving it gives `ENERGY_BURST` energy (plus normal
     score). It runs on its own spawn clock (first after 15 s, then every
@@ -282,9 +291,12 @@ Green=multiplication, Yellow=division.
   (`MONSTERS[kind]` `HALF_W` / `BALLS_Y` / `BOTTOM`, widened for 3 balls).
   Two layers keep boxes apart:
   1. **Spawner:** a new alien enters just above the top only where its whole
-     horizontal **sweep** (zig-zag width, patrol span) clears the sweep of every
-     alien still above `ENEMY.ENTRY_ZONE_Y`, and its box clears everyone.
-     No room → the spawn retries in `SPAWN_RETRY_MS`.
+     horizontal **sweep** (zig-zag width, patrol span, a swooper's remaining
+     flight in) clears the sweep of every alien still above
+     `ENEMY.ENTRY_ZONE_Y`, and its box clears everyone. A swooper enters from
+     a side only if its flight path is clear of every alien in it or above
+     it (anything that could come down into it). No room → the spawn retries
+     in `SPAWN_RETRY_MS`.
   2. **Runtime guard** (`GameScene.advanceReadable`): a move that would bring
      two boxes within `ENEMY.READ_GAP` is not made. It is retried one axis at a
      time; the refused axis holds still, and a refused sideways move turns
@@ -543,7 +555,8 @@ curve is in `src/config/difficulty.ts` (`difficultyAt(elapsedMs, score)`).
        lumberer, drifter).
 6c. [x] **Monster movement patterns** — kind in the `Alien` state; darter
        zig-zag, lumberer stomp, new Galaga-style strafer (patrol → dive),
-       readability boxes + sweep-aware spawner, animated `anim_*` parts.
+       readability boxes + sweep-aware spawner, animated `anim_*` parts;
+       swooper enters from a side edge below the HUD (2026-09-28).
 6d. [x] **Monster abilities:** ability system (update/onHit/onKilled hooks) with
        Shielded, Blinker and Splitter (+ splitling), riding on the movement
        kinds and unlocked by difficulty in solo play. **Next:** Hider, Orbiter
@@ -616,6 +629,15 @@ Newest first. Format: `YYYY-MM-DD — decision — rationale`.
   seeds): rookie/pilot survive within ~±10% across the four in both 3-life
   and 1-life play; open issue: an ace with FREEZE and 1 life lasts 301 s
   vs 100–190 s for the others (many ~1.6 s micro-freezes).
+- **2026-09-28 — Swooper: a 2-ball alien that enters from the side.** Flies in
+  level from the left/right edge below the HUD band, then glides down, so
+  fewer numbers start under the top HUD and the field gets a new pattern
+  (manta-ray model `alien_swooper`). 30% of 2-ball spawns. Readability: its
+  sweep is its remaining flight, its spawn needs the path clear, and a flight
+  held up on screen turns down early; soak with only swoopers = 0 overlaps.
+  `npm run bots` (20 seeds): at ×1.0 descent it was a bit deadlier than a
+  darter for pilots (starts lower), so it descends at ×0.9; survival in the
+  normal mix is now at or above the old baseline for every level.
 
 - **2026-09-29 — Numbers win over the HUD; playtest build ships its models.**
   Second playtest (3 runs, desktop app + keyboard, 241–358 s, 64k–97k pts):
