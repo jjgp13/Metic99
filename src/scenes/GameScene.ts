@@ -13,6 +13,7 @@ import {
   STORAGE,
   TARGET_STRATEGIES,
   type InputMode,
+  type TargetStrategy,
 } from "../config/constants";
 import { isLeaderboardEnabled, startMatch } from "../services/leaderboard";
 import {
@@ -80,7 +81,6 @@ export default class GameScene extends Phaser.Scene {
   private field!: Field;
   /** Battle mode: the match; the player plays `match.fields[0]`. Null in solo. */
   private match: Match | null = null;
-  private battleText: Phaser.GameObjects.Text | null = null;
   /** Battle: views of the other players (ui/battleViews.ts), and the match
    * events they haven't seen yet. */
   private battleViews: BattleView[] = [];
@@ -162,6 +162,7 @@ export default class GameScene extends Phaser.Scene {
     if (this.match) {
       this.battleViews = createBattleViews(this, this.match, {
         aimAt: (seat) => this.aimAt(seat),
+        aimBy: (strategy) => this.aimBy(strategy),
       });
     }
 
@@ -214,7 +215,6 @@ export default class GameScene extends Phaser.Scene {
       this.match = null;
       this.field = new Field({ seed, forcedAbilities, power: selectedPower() });
     }
-    this.battleText = null;
     this.battleViews = [];
     this.viewEvents = [];
     this.sendButton = null;
@@ -303,42 +303,10 @@ export default class GameScene extends Phaser.Scene {
     }
   }
 
-  /** Battle: other players' KOs, attacks, the end of the match. */
+  /** Battle: the end of the match. KOs and attacks are shown by the battle
+   * views (ui/battleViews.ts). */
   private showMatch(e: MatchEvent): void {
-    const name = (seat: number) => (seat === 0 ? "YOU" : `P${seat + 1}`);
-    switch (e.type) {
-      case "ko":
-        this.updateBattleText();
-        if (e.seat !== 0) this.flashBattle(`${name(e.seat)} OUT`, "#8893b5");
-        break;
-      case "attack":
-        if (e.from === 0) this.flashBattle(`SENT ${e.cost} → ${name(e.to)}`, ATTACK_CSS);
-        else if (e.to === 0) this.flashBattle(`INCOMING ${e.cost} FROM ${name(e.from)}`, ATTACK_CSS);
-        break;
-      case "over":
-        if (e.winner === 0) this.endGame();
-        break;
-    }
-  }
-
-  /**
-   * Battle status (a stand-in until the battle UI): players left, your target
-   * and strategy, badges and how many aim at you. Tap it or press T to cycle
-   * the strategy.
-   */
-  private updateBattleText(): void {
-    const m = this.match;
-    if (!m || !this.battleText) return;
-    const aim = this.field.aim;
-    const target = m.targets[0];
-    const badges = Match.badgeLevel(m.badgePoints[0]);
-    const aimedAt = m.targetedBy(0);
-    this.battleText.setText(
-      `${m.alive.length}/${m.seats.length} LEFT\n` +
-        `→ ${target === null ? "-" : `P${target + 1}`} ${typeof aim === "string" ? aim.toUpperCase() : "PICKED"}` +
-        (badges ? `  ★${badges}` : "") +
-        (aimedAt ? `  ⚠${aimedAt}` : ""),
-    );
+    if (e.type === "over" && e.winner === 0) this.endGame();
   }
 
   /** Aim at one opponent by hand (a view's tile was tapped). */
@@ -346,40 +314,20 @@ export default class GameScene extends Phaser.Scene {
     if (!this.match || this.gameOver || this.paused || seat === 0) return;
     this.field.apply({ type: "target", aim: { seat } });
     this.sound.play("blip", { volume: 0.4, rate: 1.3 });
-    this.updateBattleText();
+  }
+
+  /** Aim by a targeting strategy (a view's aim chip, or T). */
+  private aimBy(strategy: TargetStrategy): void {
+    if (!this.match || this.gameOver || this.paused) return;
+    this.field.apply({ type: "target", aim: strategy });
+    this.sound.play("blip", { volume: 0.4, rate: 1.3 });
   }
 
   /** Next targeting strategy (random → KOs → attackers → badges). */
   private cycleAim(): void {
-    if (!this.match || this.gameOver || this.paused) return;
     const aim = this.field.aim;
     const i = typeof aim === "string" ? TARGET_STRATEGIES.indexOf(aim) : -1;
-    this.field.apply({ type: "target", aim: TARGET_STRATEGIES[(i + 1) % TARGET_STRATEGIES.length] });
-    this.sound.play("blip", { volume: 0.4, rate: 1.3 });
-    this.updateBattleText();
-  }
-
-  /** A one-line battle message under the top HUD that fades out. */
-  private flashBattle(message: string, color: string): void {
-    const text = this.duckable(
-      this.add
-        .text(GAME.WIDTH / 2, 112, message, {
-          fontFamily: "monospace",
-          fontSize: "14px",
-          color,
-          stroke: "#05060f",
-          strokeThickness: 3,
-        })
-        .setOrigin(0.5),
-    );
-    this.tweens.add({
-      targets: text,
-      y: text.y - 12,
-      alpha: 0,
-      delay: 700,
-      duration: 600,
-      onComplete: () => text.destroy(),
-    });
+    this.aimBy(TARGET_STRATEGIES[(i + 1) % TARGET_STRATEGIES.length]);
   }
 
   /** Turn a field event into sound, pops and HUD changes. */
@@ -439,7 +387,6 @@ export default class GameScene extends Phaser.Scene {
   /** Once per frame: HUD and answer feedback, which only show the rules' state. */
   private updateHud(delta: number): void {
     this.diffBar.setSize(this.field.difficulty.d * (GAME.WIDTH - 24), 4); // show ramp progress
-    this.updateBattleText();
 
     // Aliens come and go, so an answer can turn right or wrong without a key.
     this.refreshAnswer();
@@ -679,26 +626,10 @@ export default class GameScene extends Phaser.Scene {
       }),
     );
 
-    if (this.match) {
-      this.battleText = this.duckable(
-        this.add
-          .text(GAME.WIDTH - 12, 54, "", {
-            fontFamily: "monospace",
-            fontSize: "13px",
-            color: ATTACK_CSS,
-            align: "right",
-          })
-          .setOrigin(1, 0)
-          .setInteractive({ useHandCursor: true }),
-      );
-      this.battleText.on("pointerdown", () => this.cycleAim());
-      this.updateBattleText();
-    }
-
     if (this.autopilot) {
       this.duckable(
         this.add
-          .text(GAME.WIDTH - 12, this.match ? 96 : 62, `AUTOPILOT: ${this.autopilot.level.toUpperCase()}`, {
+          .text(GAME.WIDTH - 12, 62, `AUTOPILOT: ${this.autopilot.level.toUpperCase()}`, {
             fontFamily: "monospace",
             fontSize: "12px",
             color: "#5ef0ff",
@@ -886,14 +817,17 @@ export default class GameScene extends Phaser.Scene {
       .text(GAME.WIDTH - 30, METER_Y, "0", { fontFamily: "monospace", fontSize: "12px", color: "#ffffff" })
       .setOrigin(0.5)
       .setDepth(HUD_DEPTH);
-    this.add
-      .text(GAME.WIDTH / 2, METER_Y + 22, this.match ? `SPACE send  ·  F ${def.NAME}` : `SPACE or F: ${def.NAME}`, {
-        fontFamily: "monospace",
-        fontSize: "11px",
-        color: "#8892b0",
-      })
-      .setOrigin(0.5)
-      .setDepth(HUD_DEPTH);
+    // Key hint; in a battle the battle dock (ui/battleViews.ts) sits here.
+    if (!this.match) {
+      this.add
+        .text(GAME.WIDTH / 2, METER_Y + 22, `SPACE or F: ${def.NAME}`, {
+          fontFamily: "monospace",
+          fontSize: "11px",
+          color: "#8892b0",
+        })
+        .setOrigin(0.5)
+        .setDepth(HUD_DEPTH);
+    }
 
     this.updateEnergyHud();
   }

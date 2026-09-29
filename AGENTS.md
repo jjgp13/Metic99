@@ -95,8 +95,9 @@ src/
     keyboard.ts       `onKeyDown`: each key press delivered once (Phaser bug)
     battleViews.ts    `BattleView` seam for the battle UI (M8): views of the
                       other players get `match.tiles()` + match events each
-                      frame and act only via `BattleActions.aimAt`; register
-                      new views in `createBattleViews` (desktop board, phone)
+                      frame and act only via `BattleActions` (`aimAt`,
+                      `aimBy`); register new views in `createBattleViews`.
+                      `PhoneBattleDock`: the phone battle HUD (M8)
   sim/
     energy.ts         Phaser-free energy rules: energyForKill, EnergyMeter
                       (charge/spend/drain per spender), Power (the picked
@@ -552,8 +553,8 @@ Green=multiplication, Yellow=division.
   cost); only the rest charges the meter. Battle HUD: SEND replaces SLOW in
   the left gutter (tap = strongest affordable tier, hold steps down, slide off
   cancels; Space = send), incoming aliens are orange blocks eating the meter
-  from its right end (blinking in their last second), "N/8 LEFT", a one-line
-  feed (SENT / INCOMING / Pn OUT), and game over shows the placement.
+  from its right end (blinking in their last second), the battle dock
+  below (see the phone battle HUD), and game over shows the placement.
 - **Targeting, KO credit, badges** (M7, `MATCH`): the `target` input aims a
   player's attacks by a strategy (`TARGET_STRATEGIES`: random, kos = whoever
   is closest to falling (danger + incoming), attackers = whoever aims at you,
@@ -567,9 +568,8 @@ Green=multiplication, Yellow=division.
   (1 + bonus): the receiver must cancel the weight, and each 25 above the
   cost adds a darter. `KO_ENERGY` (a `reward` message) and `ATTACK_MULT` are
   balance levers, off (0 / 1) for now. Bots aim by level (`TARGETING`:
-  rookie random, pilot attackers, ace kos). Stand-in battle HUD: the top-right
-  line shows players left, your target and strategy, badges (★) and how many
-  aim at you (⚠); tap it or press T to cycle the strategy.
+  rookie random, pilot attackers, ace kos). T cycles the strategy on a
+  keyboard; on screen it is the dock's aim chip.
 - **What others see = `match.tiles()`** (`PlayerTile`): per seat: who (level
   or human), alive, placement, score, kills, danger 0–1, incoming, energy
   0–1, power and whether it's on, alien dots (0–1 x/y, `sent` marked),
@@ -577,7 +577,25 @@ Green=multiplication, Yellow=division.
   bonus. The battle UI reads only this (it is also what the phase 1 server
   will broadcast per player), through `BattleView`s (`src/ui/battleViews.ts`):
   GameScene calls each view once per frame with the tiles and new match
-  events; a view acts only via `aimAt(seat)`.
+  events; a view acts only via `aimAt(seat)` / `aimBy(strategy)`.
+- **Phone battle HUD** (M8, `PhoneBattleDock`, `BATTLE_HUD`): a **dock under
+  the energy meter** (the only portrait strip never over the field, so it
+  never ducks or hides a sum; the solo key hint sits there otherwise).
+  Left: the **aim chip** (strategy or PICK, `→P3` target, `⚠n` = n aim at
+  you; tap = next strategy). Middle: **one tile per opponent** in seat order,
+  filled from the bottom by their danger (blue → gold → pink, pulsing near
+  the line), their incoming stacked on top in orange, gold badge pips, an
+  **orange frame = aims at you**, **white brackets = your target** (blinking
+  while a hand pick waits for the 1.5 s re-pick); knocked out = dark + final
+  place; tap = aim at them, tap again = back to your strategy. It flashes
+  when it attacks you or you attack it, white/gold when it falls. Right:
+  players left, your badges (★), the last KO ("P4 OUT", gold "KO P4" if
+  yours). **Edge glow**: orange on both field edges while attacks are queued
+  for you (stronger with more incoming, a flash per attack), dimmed next to
+  your own aliens. **Haptics** (`navigator.vibrate`, Android; iPhone has
+  none): a pulse per 25 of an attack at you, a tap-tap for your KO, a long
+  buzz when you're out. Replaced the top-right status line and the
+  SENT / INCOMING / OUT flashes.
 - **Lives** are a playtest constant, `PLAYER.LIVES` (3 by default; 1 = the
   battle-royale knockout rule). With 1 life the hit recovery below never runs:
   the only hit ends the game, so the power is the sole safety tool.
@@ -677,8 +695,8 @@ dMatch)`; it is 0 in solo play.
        fitted to the owner), [x] M5 match (N fields, KOs, placement,
        pressure + sudden death, `npm run match`), [x] M6 SEND + incoming
        queue + cancel (menu BATTLE beta), [x] M7 targeting, KO credit,
-       badges, `tiles()`, [ ] M8 battle UI (split: desktop opponent board,
-       phone feedback), [ ] sending must pay (owner's call, see log).
+       badges, `tiles()`, [ ] M8 battle UI (split: desktop opponent board
+       [ ], phone feedback [x] dock + edge glow + haptics), [ ] sending must pay (owner's call, see log).
 
 ## Conventions
 
@@ -702,6 +720,17 @@ dMatch)`; it is 0 in solo play.
 ## Decision Log
 
 Newest first. Format: `YYYY-MM-DD — decision — rationale`.
+
+- **2026-09-30 — Phone battle HUD = a dock under the energy meter + edge
+  glow + haptics (M8, phone half).** Owner's pick of three (top strip under
+  the score: closer to the eyes but ducks whenever an alien enters; ambient
+  only: no tiles, so no hand-picking or seeing who is about to fall). The
+  dock is the only portrait strip never over the field and it sits by the
+  thumbs; the glow brings attacks to the eyes. The glow is for incoming
+  only: in 20 simulated matches "2+ aim at you" toggled ~10×/min (re-picks
+  every 1.5 s), so aim is shown on the tiles and chip instead. `BattleActions`
+  gained `aimBy(strategy)` for the chip (phones had no way to change
+  strategy once the stand-in line went).
 
 - **2026-09-30 — Targeting, KO credit and badges (battle royale M7); the
   tile contract for the battle UI.** Tetris 99's four strategies plus a seat

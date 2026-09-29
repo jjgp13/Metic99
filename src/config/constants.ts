@@ -83,6 +83,51 @@ export const MATCH = {
 export type TargetStrategy = "random" | "kos" | "attackers" | "badges";
 export const TARGET_STRATEGIES: readonly TargetStrategy[] = ["random", "kos", "attackers", "badges"];
 
+/**
+ * The phone battle HUD (src/ui/battleViews.ts, M8): a dock under the energy
+ * meter, the only strip of a portrait screen that is never over the field,
+ * so it never hides a sum and never has to duck. Left to right: the aim chip
+ * (tap = next strategy), one tile per opponent (tap = aim at them), players
+ * left + a one-line KO feed. Incoming attacks glow on the field's side edges
+ * (they are what a kill can still cancel) and vibrate the phone. Being aimed
+ * at is shown on the tiles, not the edges: in simulated matches it flips on
+ * and off ~10×/min (targets are re-picked every 1.5 s), so a glow for it
+ * would be noise.
+ */
+export const BATTLE_HUD = {
+  // Under the energy meter (at KEYPAD_AREA.BOTTOM + 22 = PLAYER.Y + 236, ± its
+  // cost mark) to the bottom of the canvas.
+  DOCK: { TOP: PLAYER.Y + 249, BOTTOM: 717, MARGIN: 6 },
+  CHIP_W: 72, // the aim chip
+  INFO_W: 54, // players left + KO feed
+  GAP: 5, // between the chip, the tiles and the info
+  TILE_GAP: 4,
+  TILE_MAX_W: 52,
+  // A tile fills from the bottom with its player's danger (0 = calm, 1 = an
+  // unanswered alien at their ship) in these colors; the incoming attacks
+  // still to land stack on top in the attack color, full at INCOMING_FULL.
+  // Not red: red is reserved for subtraction balls.
+  DANGER: { CALM: 0x3b4f8a, WARN: 0xffd166, CRITICAL: 0xff5fa2, CALM_TO: 0.4, WARN_AT: 0.7, CRITICAL_AT: 0.85 },
+  INCOMING_FULL: 100,
+  ATTACK: 0xff8c42,
+  BADGE: 0xffd166,
+  FLASH_MS: 600, // a tile's flash when it sends to you, you send to it, or it falls
+  FEED_MS: 2600, // how long a KO stays in the feed
+  // Side-edge glow while attacks are queued for you: brighter with more
+  // incoming (full at FULL_AT energy), a flash when one is sent. It spans the
+  // field's height and dims next to any of your aliens, so balls near an
+  // edge (a swooper flying in) stay clear.
+  GLOW: { W: 12, TOP: 60, BOTTOM: PLAYER.Y + 30, FULL_AT: 50, ALPHA: 0.45, FLASH_MS: 700, DUCK_PX: 44 },
+  // navigator.vibrate patterns (ms on/off). Phones without it (iPhone) skip.
+  VIBRATE: {
+    ATTACK_PULSE: 40, // one pulse per 25 energy of an attack sent to you, max 3
+    ATTACK_GAP: 60,
+    KO: [20, 40, 20], // you knocked someone out
+    OUT: [220], // you are out
+    WIN: [60, 60, 60, 60, 200],
+  },
+} as const;
+
 /** What a sent alien is: a plain darter, or an alien with one of the abilities
  * (picked by the sender from all of them, unlocked or not). */
 export type SentKind = "darter" | "ability";

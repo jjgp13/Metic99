@@ -163,6 +163,10 @@ the agreed shape.
   (danger color, alien dots, your target marked, attackers edged red), an
   incoming meter by the energy bar and a KO feed. Full fields are never drawn.
   A tile shows exactly what the future server broadcasts per player.
+  **Phone (built M8):** portrait has no room above the field, so the tiles
+  sit in a dock under the energy meter (never over the field), with an aim
+  chip and players left + KO feed; attacks queued for you glow on the
+  field's side edges and vibrate the phone (AGENTS.md → Phone battle HUD).
 
 ## 7. Bots (phase 0)
 
@@ -308,7 +312,7 @@ but marked as such.
 | M5 | `Match` with N fields: KOs, placement, `dMatch`, sudden death, match end | 16 headless bots: the match always ends; `npm run match` | done 2026-09-29 |
 | M6 | SEND + incoming queue + cancel; SEND button + incoming meter | Cancel math; sent aliens pass the readability soak | done 2026-09-29 |
 | M7 | Targeting strategies, badges, defense bonus | Unit tests; bot tournaments | done 2026-09-30 |
-| M8 | Battle UI: opponent strip, KO feed, results, fast-forward; menu entry. Split into two chats: desktop opponent board (Tetris 99-style tiles beside the field) and phone feedback; both read only `match.tiles()` and match events | Play it on desktop and phone | |
+| M8 | Battle UI: opponent strip, KO feed, results, fast-forward; menu entry. Split into two chats: desktop opponent board (Tetris 99-style tiles beside the field) and phone feedback; both read only `match.tiles()` and match events | Play it on desktop and phone | phone: done 2026-09-30 (dock, edge glow, haptics); desktop: open |
 | M9 | Playtest and tune; then phase 1 (move `Match` to a Node server) | | |
 
 Sources: [TetrisWiki: Tetris 99](https://tetris.wiki/Tetris_99),
