@@ -157,8 +157,10 @@ the agreed shape.
   (max 100) that only SEND spends. Measured: senders win 61/39 (aces) and
   67/33 (pilots) in mirror matches. Kills during a time power charge
   neither gauge.
-- **After your KO:** the results screen, with the option to fast-forward the
-  rest of the match (the sim runs without drawing) or to watch.
+- **After your KO (built M8):** a live results panel while the match plays
+  on; fast-forward runs it headless to the end; watch shows another live
+  player's field (whoever KO'd you first). At the end: the winner, again
+  or menu.
 - **What you see of the others:** a thin strip of small tiles above the field
   (danger color, alien dots, your target marked, attackers edged red), an
   incoming meter by the energy bar and a KO feed. Full fields are never drawn.
@@ -308,7 +310,7 @@ but marked as such.
 | M5 | `Match` with N fields: KOs, placement, `dMatch`, sudden death, match end | 16 headless bots: the match always ends; `npm run match` | done 2026-09-29 |
 | M6 | SEND + incoming queue + cancel; SEND button + incoming meter | Cancel math; sent aliens pass the readability soak | done 2026-09-29 |
 | M7 | Targeting strategies, badges, defense bonus | Unit tests; bot tournaments | done 2026-09-30 |
-| M8 | Battle UI: opponent strip, KO feed, results, fast-forward; menu entry. Split into two chats: desktop opponent board (Tetris 99-style tiles beside the field) and phone feedback; both read only `match.tiles()` and match events | Play it on desktop and phone | |
+| M8 | Battle UI: opponent strip, KO feed, results, fast-forward; menu entry. Results + fast-forward + watch done 2026-09-30. Split into two chats: desktop opponent board (Tetris 99-style tiles beside the field) and phone feedback; both read only `match.tiles()` and match events | Play it on desktop and phone | |
 | M9 | Playtest and tune; then phase 1 (move `Match` to a Node server) | | |
 
 Sources: [TetrisWiki: Tetris 99](https://tetris.wiki/Tetris_99),

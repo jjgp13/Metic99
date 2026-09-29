@@ -47,6 +47,10 @@ export interface PlayerTile extends FieldSummary {
   /** Badge points (KOs + the badges they took) and the badge level 0–4. */
   badgePoints: number;
   badges: number;
+  /** KOs credited to this player, and who knocked them out (null: nobody
+   * credited, or still in). */
+  kos: number;
+  koBy: number | null;
   /** How this player aims, and who they aim at right now (null: nobody). */
   aim: Aim;
   target: number | null;
@@ -90,6 +94,12 @@ export class Match {
   readonly targets: (number | null)[];
   /** Badge points per seat. */
   readonly badgePoints: number[];
+  /** KOs credited per seat, and who knocked each seat out. */
+  readonly kos: number[];
+  readonly koBy: (number | null)[];
+  /** A seat someone is watching: its field's events are left for the viewer
+   * to drain (others' are dropped, since nobody draws them). */
+  spectate: number | null = null;
   private events: MatchEvent[] = [];
   private readonly rng: Rng;
   private retargetLeftMs: number[];
@@ -107,6 +117,8 @@ export class Match {
     this.placements = this.seats.map(() => 0);
     this.targets = this.seats.map(() => null);
     this.badgePoints = this.seats.map(() => 0);
+    this.kos = this.seats.map(() => 0);
+    this.koBy = this.seats.map(() => null);
     this.retargetLeftMs = this.seats.map(() => 0);
     this.lastAttack = this.seats.map(() => null);
     this.rng = Rng.derive(this.seed, MATCH_STREAM);
@@ -141,6 +153,8 @@ export class Match {
       placement: this.placements[seat],
       badgePoints: this.badgePoints[seat],
       badges: Match.badgeLevel(this.badgePoints[seat]),
+      kos: this.kos[seat],
+      koBy: this.koBy[seat],
       aim: field.aim,
       target: this.targets[seat],
       targetedBy: this.targetedBy(seat),
@@ -171,8 +185,9 @@ export class Match {
       if (this.placements[seat] !== 0) return;
       this.bots[seat]?.update(field, dt);
       field.step(dt);
-      // Nobody draws a bot's field; drop its events (the person's scene drains its own).
-      if (this.bots[seat]) field.takeEvents();
+      // Nobody draws a bot's field (unless it is being watched): drop its
+      // events. A person's scene drains its own.
+      if (this.bots[seat] && seat !== this.spectate) field.takeEvents();
     });
 
     this.countKOs();
@@ -196,7 +211,11 @@ export class Match {
       this.koOrder.push(seat);
       const by = this.koCredit(seat, out);
       const badges = by === null ? 0 : this.badgePoints[seat] + 1;
-      if (by !== null) this.badgePoints[by] += badges;
+      this.koBy[seat] = by;
+      if (by !== null) {
+        this.badgePoints[by] += badges;
+        this.kos[by]++;
+      }
       this.events.push({ type: "ko", seat, placement, by, badges, step: this.steps });
     });
 

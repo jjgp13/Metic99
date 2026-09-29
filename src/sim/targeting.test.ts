@@ -101,12 +101,16 @@ describe("KO credit and badges", () => {
     for (const seed of [1, 2, 3]) {
       const m = new Match({ seed, seats });
       const earned = seats.map(() => 0);
+      const kos = seats.map(() => 0);
+      const koBy = seats.map((): number | null => null);
       while (!m.over) {
         m.step(STEP);
         for (const e of m.takeEvents()) {
           if (e.type !== "ko" || e.by === null) continue;
           credited++;
           earned[e.by] += e.badges;
+          kos[e.by]++;
+          koBy[e.seat] = e.by;
           expect(e.by).not.toBe(e.seat);
         }
       }
@@ -114,11 +118,24 @@ describe("KO credit and badges", () => {
       const tiles = m.tiles();
       expect(tiles.map((t) => t.placement).sort()).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
       expect(tiles.map((t) => t.badges)).toEqual(earned.map((p) => Match.badgeLevel(p)));
+      expect(tiles.map((t) => t.kos)).toEqual(kos);
+      expect(tiles.map((t) => t.koBy)).toEqual(koBy);
       // Bots aim by their level's strategy.
       expect(tiles[0].aim).toBe("kos");
       expect(tiles[2].aim).toBe("attackers");
       expect(tiles[5].aim).toBe("random");
     }
     expect(credited).toBeGreaterThan(6);
+  });
+});
+
+describe("watching a player", () => {
+  it("keeps the watched bot's field events for the viewer, and drops the others'", () => {
+    const m = new Match({ seed: 3, seats: ["ace", "pilot", "rookie"] });
+    m.spectate = 1;
+    for (let i = 0; i < 60 * 20; i++) m.step(STEP);
+    const kept = m.fields[1].takeEvents();
+    expect(kept.some((e) => e.type === "solved")).toBe(true);
+    expect(m.fields[0].takeEvents()).toEqual([]);
   });
 });

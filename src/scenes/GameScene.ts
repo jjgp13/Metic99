@@ -37,6 +37,7 @@ import {
 import { Bot } from "../sim/Bot";
 import { Match, type MatchEvent } from "../sim/Match";
 import { createBattleViews, type BattleView } from "../ui/battleViews";
+import { BattleResults, WatchBar } from "../ui/BattleResults";
 import type { PowerUse } from "../sim/energy";
 import { randomSeed } from "../sim/rng";
 import { summarizeSolves } from "../sim/stats";
@@ -88,6 +89,12 @@ export default class GameScene extends Phaser.Scene {
    * events they haven't seen yet. */
   private battleViews: BattleView[] = [];
   private viewEvents: MatchEvent[] = [];
+  /** Battle, after the player is out: the results panel (the match keeps
+   * running live), fast-forwarding to the end, or watching another player. */
+  private after: "results" | "ff" | "watch" | null = null;
+  private results: BattleResults | null = null;
+  private watchBar: WatchBar | null = null;
+  private watchSeat: number | null = null;
   /** Dev only (`?bot=ace`): a bot plays this field through the same inputs. */
   private autopilot: Bot | null = null;
   /** What the playtest log records beyond the field (services/playtestLog.ts). */
@@ -220,6 +227,10 @@ export default class GameScene extends Phaser.Scene {
     this.battleText = null;
     this.battleViews = [];
     this.viewEvents = [];
+    this.after = null;
+    this.results = null;
+    this.watchBar = null;
+    this.watchSeat = null;
     this.sendButton = null;
     this.sendHeldSince = null;
     this.powerButtons = [];
@@ -254,6 +265,8 @@ export default class GameScene extends Phaser.Scene {
       }
       this.updateHud(delta);
       this.pad.update(delta);
+    } else if (this.after) {
+      this.runRestOfMatch(delta);
     }
 
     if (this.match && this.battleViews.length) {
@@ -272,7 +285,9 @@ export default class GameScene extends Phaser.Scene {
     // Draw between the last two sim steps (interpolation) so motion is smooth
     // even when a frame runs zero or two steps.
     const alpha = this.stepAlpha;
-    const f = this.field;
+    // Watching another player after a KO: draw their field instead.
+    const watched = this.after === "watch" && this.watchSeat !== null ? this.match?.fields[this.watchSeat] : undefined;
+    const f = watched ?? this.field;
     this.world.render(
       {
         shipX: f.prevShipX + (f.shipX - f.prevShipX) * alpha,
@@ -1069,6 +1084,10 @@ export default class GameScene extends Phaser.Scene {
 
   private bindKeyboard(): void {
     onKeyDown(this, (e) => {
+      if (this.after) {
+        this.afterKey(e.key);
+        return;
+      }
       if (e.key === "p" || e.key === "P") {
         this.togglePause();
         return;
@@ -1098,7 +1117,7 @@ export default class GameScene extends Phaser.Scene {
   /** A key: a digit (or several, from the drawing pad), C or <. */
   private handleInput(key: string, source: InputSource): void {
     if (this.gameOver) {
-      this.proceedAfterGameOver();
+      if (!this.match) this.proceedAfterGameOver(); // battle: the results panel's buttons
       return;
     }
     if (this.paused) return;
@@ -1254,29 +1273,29 @@ export default class GameScene extends Phaser.Scene {
     localStorage.setItem(STORAGE.TOTAL_KILLS, String(totalKills));
     localStorage.setItem(STORAGE.FASTEST_MS, String(fastest));
 
+    if (this.match) {
+      this.runExtras.battle!.placement = this.match.placements[0];
+      this.saveRun(GAME.HEIGHT - 12);
+      this.openResults();
+      return;
+    }
+
     const rank = RANKS.reduce((acc, r) => (best >= r.min ? r.name : acc), RANKS[0].name);
     const fastestStr = fastest > 0 ? `${(fastest / 1000).toFixed(2)}s` : "—";
 
     this.add
       .rectangle(GAME.WIDTH / 2, GAME.HEIGHT / 2, GAME.WIDTH, GAME.HEIGHT, 0x05060f, 0.8)
       .setDepth(10);
-    // Battle: where you placed (final at your KO, or 1st if you outlasted all).
-    const placement = this.match ? this.match.placements[0] : null;
-    const won = placement === 1;
-    if (this.runExtras.battle) this.runExtras.battle.placement = placement;
     this.add
-      .text(GAME.WIDTH / 2, GAME.HEIGHT / 2 - 110, won ? "WINNER!" : this.match ? "KNOCKED OUT" : "GAME OVER", {
+      .text(GAME.WIDTH / 2, GAME.HEIGHT / 2 - 110, "GAME OVER", {
         fontFamily: "monospace",
-        fontSize: won ? "40px" : this.match ? "34px" : "40px",
-        color: won ? "#ffd166" : "#ef476f",
+        fontSize: "40px",
+        color: "#ef476f",
       })
       .setOrigin(0.5)
       .setDepth(11);
-    const subtitle = this.match
-      ? `Place #${placement} of ${this.match.seats.length}`
-      : `Rank: ${rank}`;
     this.add
-      .text(GAME.WIDTH / 2, GAME.HEIGHT / 2 - 60, subtitle, {
+      .text(GAME.WIDTH / 2, GAME.HEIGHT / 2 - 60, `Rank: ${rank}`, {
         fontFamily: "monospace",
         fontSize: "24px",
         color: "#ffd166",
@@ -1297,20 +1316,13 @@ export default class GameScene extends Phaser.Scene {
           `Best combo: ${bestCombo}    Kills: ${totalKills}\n` +
           `Survived ${survived}    Fastest solve: ${fastestStr}\n` +
           `Median solve: ${medians || "—"}\n` +
-          (this.match
-            ? `Attack sent ${Math.round(f.attack.spent.send)} · ${f.power.def.NAME} ` +
-              `${Math.round(f.energy.spent[f.power.kind])} · cancelled ${Math.round(f.cancelledTotal)}`
-            : `Energy earned ${Math.round(f.energy.earned)} · ` +
-              `${Math.round(f.energy.spent[f.power.kind])} on ${f.power.def.NAME}`),
+          `Energy earned ${Math.round(f.energy.earned)} · ` +
+          `${Math.round(f.energy.spent[f.power.kind])} on ${f.power.def.NAME}`,
         { fontFamily: "monospace", fontSize: "16px", color: "#ffffff", align: "center", lineSpacing: 8 },
       )
       .setOrigin(0.5)
       .setDepth(11);
-    const continueText = this.match
-      ? "tap / Enter for the menu"
-      : isLeaderboardEnabled()
-      ? "tap / Enter to enter initials"
-      : "tap / Enter to play again";
+    const continueText = isLeaderboardEnabled() ? "tap / Enter to enter initials" : "tap / Enter to play again";
     this.add
       .text(GAME.WIDTH / 2, GAME.HEIGHT / 2 + 118, continueText, {
         fontFamily: "monospace",
@@ -1320,22 +1332,149 @@ export default class GameScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(11);
 
-    // Playtest build (a claude.ai Artifact): save the run for analysis.
+    this.saveRun(GAME.HEIGHT / 2 + 146);
+    this.input.once("pointerdown", () => this.proceedAfterGameOver());
+  }
+
+  /** Playtest build (a claude.ai Artifact): save the run for analysis. */
+  private saveRun(y: number): void {
     this.runExtras.inputMode = inputMode();
     void logRun(this.field, this.runExtras).then((status) => {
       if (status === "off" || !this.scene.isActive()) return;
       this.add
         .text(
           GAME.WIDTH / 2,
-          GAME.HEIGHT / 2 + 146,
+          y,
           status === "saved" ? "run saved for analysis ✓" : "couldn't save this run",
           { fontFamily: "monospace", fontSize: "13px", color: status === "saved" ? "#5ef0ff" : "#ef476f" },
         )
         .setOrigin(0.5)
-        .setDepth(11);
+        .setDepth(12);
     });
+  }
 
-    this.input.once("pointerdown", () => this.proceedAfterGameOver());
+  // ---------------------------------------------------------------------------
+  // Battle: after the player is out (M8)
+  // ---------------------------------------------------------------------------
+  /** Open the results panel; the match keeps running behind it. */
+  private openResults(): void {
+    const f = this.field;
+    const secs = Math.floor(f.elapsedMs / 1000);
+    const stats =
+      `Survived ${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")} · ` +
+      `${f.kills} kills · ${f.score.toLocaleString("en-US")} pts\n` +
+      `Attack sent ${Math.round(f.attack.spent.send)} · cancelled ${Math.round(f.cancelledTotal)} · ` +
+      `${f.power.def.NAME} ${Math.round(f.energy.spent[f.power.kind])}`;
+    this.results = new BattleResults(this, this.match!.seats.length, stats, {
+      fastForward: () => this.setAfter("ff"),
+      watch: () => this.setAfter("watch"),
+      again: () => this.scene.restart({ battle: true }),
+      menu: () => this.proceedAfterGameOver(),
+    });
+    this.watchBar = new WatchBar(this, {
+      next: (dir) => this.watchNext(dir),
+      results: () => this.setAfter("results"),
+    });
+    this.stepAccMs = 0;
+    this.setAfter("results");
+  }
+
+  private setAfter(mode: "results" | "ff" | "watch"): void {
+    const m = this.match!;
+    if (m.over && mode !== "results") return;
+    this.after = mode;
+    if (mode === "watch") {
+      // Start on whoever knocked the player out, if they're still in.
+      const by = m.koBy[0];
+      this.watchSeat = by !== null && m.placements[by] === 0 ? by : null;
+      if (this.watchSeat === null) this.watchNext(1);
+      else m.spectate = this.watchSeat;
+    } else {
+      this.watchSeat = null;
+      m.spectate = null;
+    }
+    this.results?.setVisible(mode !== "watch");
+    this.watchBar?.setVisible(mode === "watch");
+    this.refreshAfter();
+  }
+
+  /** Watch the next (dir 1) or previous player still in the match. */
+  private watchNext(dir: 1 | -1): void {
+    const m = this.match!;
+    const alive = m.alive.filter((s) => s !== 0);
+    if (!alive.length) return;
+    const from = this.watchSeat ?? 0;
+    const n = m.seats.length;
+    let seat = from;
+    do seat = (seat + dir + n) % n;
+    while (!alive.includes(seat));
+    this.watchSeat = seat;
+    m.spectate = seat;
+    this.refreshAfter();
+  }
+
+  /**
+   * Keep the match going after the player's KO: live (results or watching)
+   * or as fast as possible (fast-forward, nothing drawn). When it ends, the
+   * results panel shows the winner.
+   */
+  private runRestOfMatch(delta: number): void {
+    const m = this.match!;
+    if (!m.over) {
+      if (this.after === "ff") {
+        for (let i = 0; i < MATCH.FAST_FORWARD_STEPS && !m.over; i++) this.stepRest();
+      } else {
+        this.stepAccMs = Math.min(this.stepAccMs + delta, SIM.STEP_MS * SIM.MAX_STEPS_PER_FRAME);
+        while (this.stepAccMs >= SIM.STEP_MS && !m.over) {
+          this.stepRest();
+          this.stepAccMs -= SIM.STEP_MS;
+        }
+      }
+      if (m.over) this.setAfter("results");
+    }
+    this.refreshAfter();
+  }
+
+  /** One match step with the player already out. */
+  private stepRest(): void {
+    const m = this.match!;
+    m.step(SIM.STEP_MS);
+    // The watched player's kills and hits explode on screen (no pops or HUD).
+    if (this.watchSeat !== null) {
+      for (const e of m.fields[this.watchSeat].takeEvents()) {
+        if ((e.type === "solved" && !e.absorbed) || e.type === "hit") this.world.explode(e.alien.x, e.alien.y, e.alien);
+        else if (e.type === "blasted") for (const a of e.aliens) this.world.explode(a.x, a.y, a);
+      }
+    }
+    for (const e of m.takeEvents()) {
+      this.viewEvents.push(e);
+      if (e.type === "ko" && e.seat === this.watchSeat && !m.over) this.watchNext(1);
+    }
+  }
+
+  private refreshAfter(): void {
+    const m = this.match;
+    if (!m || !this.results) return;
+    const tiles = m.tiles();
+    if (this.results.visible) {
+      this.results.update({ tiles, you: 0, over: m.over, fastForwarding: this.after === "ff" && !m.over });
+    }
+    if (this.watchBar?.visible && this.watchSeat !== null) this.watchBar.update(tiles, this.watchSeat, 0);
+  }
+
+  /** Keys after a battle KO: F fast-forward, W watch, ←/→ switch, R again,
+   * Enter back to results (while watching) or the menu. */
+  private afterKey(key: string): void {
+    const k = key.toLowerCase();
+    if (k === "f") this.setAfter("ff");
+    else if (k === "w") this.setAfter("watch");
+    else if (k === "arrowleft" && this.after === "watch") this.watchNext(-1);
+    else if (k === "arrowright" && this.after === "watch") this.watchNext(1);
+    else if (k === "r" && this.match?.over) this.scene.restart({ battle: true });
+    else if (k === "enter") {
+      if (this.after === "watch") this.setAfter("results");
+      else this.proceedAfterGameOver();
+    }
   }
 
   /** Single, idempotent exit from game-over: leaderboard flow or plain restart. */

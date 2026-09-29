@@ -93,6 +93,8 @@ src/
   ui/
     DrawPad.ts        The drawing pad: pointer capture, glowing ink, "?" flash
     keyboard.ts       `onKeyDown`: each key press delivered once (Phaser bug)
+    BattleResults.ts  Battle results panel (live standings; FAST-FORWARD /
+                      WATCH / MENU, then AGAIN) and the WATCH bar (M8)
     battleViews.ts    `BattleView` seam for the battle UI (M8): views of the
                       other players get `match.tiles()` + match events each
                       frame and act only via `BattleActions.aimAt`; register
@@ -559,8 +561,19 @@ Green=multiplication, Yellow=division.
   gauge: it fills from the bottom in orange (marks at each tier) while
   incoming attacks hang from its top as pink blocks (blinking in their last
   second); tap = strongest affordable tier, hold steps down, slide off
-  cancels; Space = send. Plus "N/8 LEFT", a one-line feed (SENT / INCOMING
-  weight / Pn OUT), and game over shows the placement.
+  cancels; Space = send. Plus "N/8 LEFT" and a one-line feed (SENT /
+  INCOMING weight / Pn OUT).
+- **After your KO** (M8, `ui/BattleResults.ts`): the results panel opens
+  and the match keeps running behind it at real speed, so the standings are
+  live (still playing first, then by place; your row gold): your place, who
+  knocked you out, your run stats, each player's badges, KOs and score.
+  **FAST-FORWARD** (F) runs the rest headless (`MATCH.FAST_FORWARD_STEPS`
+  per frame, a whole match in a few frames); **WATCH** (W) draws another
+  live player's field (starting with whoever KO'd you; ◀ ▶ / arrows switch,
+  auto-switches when they fall; `match.spectate` keeps that field's events
+  so its kills explode); **MENU** (Enter). At the end: the winner, **AGAIN**
+  (R, a new battle) and MENU. Winning opens the same panel. The run is saved
+  to the playtest log at the KO (placement is final then).
 - **Targeting, KO credit, badges** (M7, `MATCH`): the `target` input aims a
   player's attacks by a strategy (`TARGET_STRATEGIES`: random, kos = whoever
   is closest to falling (danger + incoming), attackers = whoever aims at you,
@@ -580,7 +593,7 @@ Green=multiplication, Yellow=division.
   or human), alive, placement, score, kills, danger 0–1, incoming, energy
   0–1, attack gauge 0–1, power and whether it's on, alien dots (0–1 x/y, `sent` marked),
   badge points/level, aim, current target, how many aim at them, attack
-  bonus, attack gauge 0–1. The battle UI reads only this (it is also what the phase 1 server
+  bonus, attack gauge 0–1, KOs credited, who KO'd them. The battle UI reads only this (it is also what the phase 1 server
   will broadcast per player), through `BattleView`s (`src/ui/battleViews.ts`):
   GameScene calls each view once per frame with the tiles and new match
   events; a view acts only via `aimAt(seat)`.
@@ -684,8 +697,8 @@ dMatch)`; it is 0 in solo play.
        pressure + sudden death, `npm run match`), [x] M6 SEND + incoming
        queue + cancel (menu BATTLE beta), [x] M7 targeting, KO credit,
        badges, `tiles()`, [x] sending pays: separate attack gauge,
-       [ ] M8 battle UI (split: desktop opponent board, phone feedback;
-       results + fast-forward here).
+       [ ] M8 battle UI: [x] results + fast-forward + watch, [ ] desktop
+       opponent board, [ ] phone feedback (UI chats).
 
 ## Conventions
 
@@ -709,6 +722,13 @@ dMatch)`; it is 0 in solo play.
 ## Decision Log
 
 Newest first. Format: `YYYY-MM-DD — decision — rationale`.
+
+- **2026-09-30 — After a battle KO: live results, fast-forward, watch (M8).**
+  The match keeps running behind a results panel (live standings) instead
+  of ending the scene; fast-forward simulates the rest headless in a few
+  frames; watch draws another player's field in the 3D view (the renderer
+  already takes any field's snapshot, so spectating is free). Tiles gained
+  `kos` and `koBy`.
 
 - **2026-09-30 — Separate attack gauge: sending pays (owner picked A).**
   Kills charge the power meter in full; their value pays off incoming first

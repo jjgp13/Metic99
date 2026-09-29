@@ -74,6 +74,9 @@ export const MATCH = {
   EXTRA_ALIEN_PER: 25,
   // An attack weighs ATTACK_MULT × its cost before bonuses (a balance lever).
   ATTACK_MULT: 1,
+  // After the player's KO, fast-forward runs this many steps per frame
+  // (~20 s of match per frame at 60 Hz; a whole match takes a few frames).
+  FAST_FORWARD_STEPS: 1200,
 } as const;
 
 /** How a player aims their attacks (Tetris 99's four strategies). */
