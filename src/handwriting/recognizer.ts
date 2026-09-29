@@ -63,6 +63,19 @@ export function recognize(
   return best;
 }
 
+/** Every digit's closest template, closest first (for the lab and tuning). */
+export function rankDigits(strokes: Stroke[], templates: readonly Template[]): Recognition[] {
+  const n = templates[0]?.cloud.length ?? HANDWRITING.CLOUD_POINTS;
+  const cloud = toCloud(strokes, n);
+  const best = new Map<string, Recognition>();
+  for (const t of templates) {
+    const distance = greedyCloudMatch(cloud, t.cloud, Infinity);
+    const prev = best.get(t.digit);
+    if (!prev || distance < prev.distance) best.set(t.digit, { digit: t.digit, distance, name: t.name });
+  }
+  return [...best.values()].sort((a, b) => a.distance - b.distance);
+}
+
 /** Bounding box of some strokes. */
 export function bounds(strokes: readonly Stroke[]): { minX: number; minY: number; maxX: number; maxY: number } {
   let minX = Infinity;

@@ -67,6 +67,7 @@ src/
                       HUD, pops). Hands World3D a snapshot every frame.
     NameEntryScene.ts Arcade 5-char initials entry shown at game over
     LeaderboardScene.ts Global top-N board; dual-mode (post-run / menu browse)
+    HandwritingLabScene.ts `?lab=draw`: records real handwriting, exports JSON
   services/
     leaderboard.ts    Supabase global high scores: startMatch + match-gated
                       submitScore, plus getTop/getRank reads
@@ -75,10 +76,14 @@ src/
                       to the Artifact's `db`; a no-op anywhere else
   handwriting/        Phaser-free digit recognition (unit-tested)
     recognizer.ts     $P point-cloud recognizer + scratch-out detector
-    digitTemplates.ts 0–9 templates (~25 variants) built from line/arc/curve
+    digitTemplates.ts 0–9 templates (~31 variants): line/arc/curve recipes plus
+                      paths traced from real phone samples
     inkReader.ts      Strokes → digit groups (sideways overlap) → pause → InkEvent
     testShapes.ts     Test-only digits in other styles + a seeded shaky hand
+    samples.ts        Lab sample file format (flat int points per stroke)
+    samples/*.json    Real handwriting exported from the lab (test data)
     handwriting.test.ts
+    realSamples.test.ts Replays samples/*.json through InkReader, prints a report
   ui/
     DrawPad.ts        The drawing pad: pointer capture, glowing ink, "?" flash
     keyboard.ts       `onKeyDown`: each key press delivered once (Phaser bug)
@@ -331,6 +336,24 @@ Green=multiplication, Yellow=division.
     brackets, solved sum, wrong auto-clear) is the normal answer feedback.
   - Measured on distorted test digits: ~96% per digit, ~94% for 2-digit reads;
     the known lookalikes are flat-top 3 ↔ 5 and short-bar 7 ↔ flagged 1.
+    On the owner's phone it did worse (e.g. 4 read as 9), so real samples are
+    the measure now:
+  - **Handwriting lab** (`?lab=draw`, not linked in game; Boot opens it instead
+    of the menu): asks for each digit 3× in random order plus six 2-digit
+    numbers (`HANDWRITING_LAB`) on the game's pad (same size/place,
+    `KEYPAD_AREA`), shows the read and the 3 closest digits with distances,
+    keeps progress in localStorage (UNDO / SKIP), and exports JSON (copy /
+    share) to save as `src/handwriting/samples/<name>.json`, which
+    `realSamples.test.ts` replays (≥ 90% must read right).
+  - First real session (`samples/owner-phone-1.json`): 25/36 → **33/36** after
+    adding traced templates for the owner's style (one-stroke 4 with a bowl or
+    flat bar, 3 with a middle cusp, 2 with a bottom loop, big-loop 6, wide 7).
+    Some templates were traced from these same samples, so a fresh session is
+    the honest check. Second session (`owner-phone-2.json`): **31/36 live**
+    (the honest number); a stem drawn separately at a digit's right edge now
+    joins it (`TOUCH_PX`), plus long-flag 1 and flat-loop 9 → 66/72 over both.
+    Cross-session test: using the player's OWN drawings from the other session
+    as templates reads 34–35/36 on unseen drawings (vs 31/36 built-in only).
 - **Answer feedback** (`FEEDBACK`, `RENDER3D.ANSWER_STARS`): the typed number
   is white while typing, **gold** (with a pop and a confirm blip) when it
   matches an alien, and **red** (shake) as soon as no alien's answer can start
@@ -518,8 +541,9 @@ curve is in `src/config/difficulty.ts` (`difficultyAt(elapsedMs, score)`).
        (not over the field); $P point-cloud recognizer with ~25 templates;
        digits split by sideways overlap and read together after a pause;
        scratch-out clears, unlike ink shows "?"; the ink turns into the answer
-       stars. **Next:** play-test on phones; maybe learn the player's own
-       strokes as extra templates.
+       stars. **Next:** record real samples with the lab (`?lab=draw`), tune
+       templates until `realSamples.test.ts` passes; maybe learn the player's
+       own strokes as extra templates (measured: ~86% → ~95% on unseen drawings).
 9. [ ] Other operations (subtraction/multiplication/division) via color-coded balls
 10. [ ] Sprite animations + richer explosion/background VFX
 10b. [x] **3D playfield (Three.js)** — same top-down view, voxel models built
@@ -639,6 +663,24 @@ Newest first. Format: `YYYY-MM-DD — decision — rationale`.
   attack shape, what others see, time model, KO rules) get locked before the
   phase 1 server. Cloud sessions push their `claude/*` branch, not `master`.
 
+- **2026-09-27 — A separately drawn stem joins its digit.** The second lab
+  session split a two-stroke 9 into "0" + a 1-like stem ("96" → "06"): a thin
+  stroke touching the digit's right edge now always joins it. Also measured
+  that the player's own samples beat more hand-traced templates (94–97% vs
+  86% on unseen drawings), which makes per-player templates the next step.
+- **2026-09-27 — Templates traced from real handwriting.** The owner's first
+  lab session read 25/36; every 4 failed because it is written in one stroke
+  (down-left, across, up, down the stem), a shape no template had, so $P chose
+  9. Six traced templates (4 ×2, 3, 2, 6, 7) raised it to 33/36 without
+  hurting the synthetic tests. Adding templates is the cheap fix; if more
+  players' styles miss, the next step is per-player templates recorded in-game.
+- **2026-09-27 — Handwriting is tuned on real samples from a lab page.** On
+  the owner's phone some digits misread (4 → 9) although synthetic tests
+  passed, so the synthetic hand isn't a good enough measure. A hidden
+  `?lab=draw` page (shipped in the build so it runs on real phones) records
+  prompted digits on the game's own pad and exports them as JSON test data;
+  `realSamples.test.ts` replays them through the game's reader. Drawing stays
+  an opt-in mode (keypad default) meanwhile.
 - **2026-09-27 — Handwriting input: $P recognizer, overlap-split digits read
   together after a pause.** Own $P point-cloud recognizer (no ML model, no
   browser handwriting API, which iPhone Safari lacks): tiny, ~2 ms per read,

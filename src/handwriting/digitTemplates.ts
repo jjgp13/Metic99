@@ -38,6 +38,14 @@ export function curve(p0: [number, number], p1: [number, number], p2: [number, n
   });
 }
 
+/** A polyline through points (a stroke traced from real handwriting). */
+export function path(points: Array<[number, number]>): Point[] {
+  return points.slice(1).flatMap(([x, y], i) => {
+    const seg = line(points[i][0], points[i][1], x, y);
+    return i === 0 ? seg : seg.slice(1);
+  });
+}
+
 /** Vertical figure eight (lemniscate of Gerono), one stroke. */
 function figureEight(cx: number, cy: number, halfW: number, halfH: number): Point[] {
   return Array.from({ length: 49 }, (_, i) => {
@@ -107,6 +115,32 @@ export const DIGIT_SHAPES: ReadonlyArray<{ digit: string; name: string; strokes:
 
   { digit: "9", name: "9-stick", strokes: [pen(arc(30, 26, 24, 26, 0, -360), line(54, 26, 50, 100))] },
   { digit: "9", name: "9-curve", strokes: [pen(arc(30, 26, 24, 26, 0, -360), curve([54, 26], [54, 82], [20, 100]))] },
+
+  // Styles traced from the owner's phone (samples/owner-phone-1.json).
+  // 4 in one stroke: down-left, across (a bowl or a flat bar), up to the top
+  // right, then back down the stem.
+  { digit: "4", name: "4-one-bowl", strokes: [path([[19, 0], [0, 34], [18, 41], [49, 37], [72, 26], [81, 9], [70, 55], [56, 100]])] },
+  { digit: "4", name: "4-one-flat", strokes: [path([[28, 15], [0, 50], [6, 52], [50, 50], [92, 45], [95, 0], [86, 50], [76, 96]])] },
+  {
+    digit: "3",
+    name: "3-cusp",
+    strokes: [path([[5, 8], [30, 0], [48, 5], [52, 20], [42, 35], [22, 48], [32, 48], [50, 56], [58, 72], [52, 88], [30, 98], [5, 100]])],
+  },
+  {
+    digit: "2",
+    name: "2-loop",
+    strokes: [path([[12, 19], [43, 1], [65, 3], [72, 19], [63, 53], [40, 87], [22, 97], [5, 93], [0, 79], [15, 64], [50, 70], [91, 91], [100, 95]])],
+  },
+  { digit: "6", name: "6-big-loop", strokes: [path([[44, 0], [14, 30], [0, 78], [12, 97], [42, 100], [72, 87], [73, 62], [42, 57], [8, 82]])] },
+  { digit: "7", name: "7-wide", strokes: [path([[0, 2], [100, 0], [52, 100]])] },
+  // samples/owner-phone-2.json: a 1 whose flag is as long as half the stem, and
+  // a 9 whose loop is a flat triangle closing into the stem.
+  { digit: "1", name: "1-long-flag", strokes: [path([[0, 50], [40, 0], [20, 100]])] },
+  {
+    digit: "9",
+    name: "9-flat-loop",
+    strokes: [path([[48, 30], [19, 37], [0, 34], [3, 27], [26, 5], [41, 0], [42, 8], [34, 32], [27, 70], [35, 100]])],
+  },
 ];
 
 export const DIGIT_TEMPLATES: readonly Template[] = DIGIT_SHAPES.map((s) =>
