@@ -27,8 +27,8 @@ interface Plan {
  * Solving model per answer: notice (REACTION) → think (base + per ball + per
  * carry, spread log-normally) → type the whole answer at once (PER_KEY per
  * digit; like the drawing pad, so "23" never passes through "2") → sometimes a
- * slip (off by 1 or 10) that it notices and clears. Like a person it starts on
- * the next alien while its shot is still flying, and it drops a sum it is
+ * slip (off by 1 or 10) that it notices and clears. Like a person it reads the
+ * next alien while the ship lines up its shot, and it drops a sum it is
  * still thinking about when a clearly worse threat appears.
  *
  * Call `update()` once per sim step, before `field.step()`. Its randomness
@@ -70,16 +70,15 @@ export class Bot {
 
     // Waiting on an entered answer: a right one fires (and clears the typed
     // answer); a slip stays wrong, or dangles as the start of another answer.
+    // While a right one waits for the ship, the bot reads ahead like a person.
+    const waiting = this.enteredAt !== null && field.typed !== "";
     if (this.enteredAt !== null) {
       if (field.typed === "") {
         this.enteredAt = null;
-      } else if (
-        field.answerView()?.state !== "match" &&
-        this.clock - this.enteredAt >= this.skill.NOTICE_WRONG
-      ) {
+      } else if (field.answerView()?.state !== "match") {
+        if (this.clock - this.enteredAt < this.skill.NOTICE_WRONG) return;
         field.apply({ type: "clear" });
         this.enteredAt = null;
-      } else {
         return;
       }
     }
@@ -88,7 +87,9 @@ export class Bot {
     if (plan) {
       if (!plan.alien.active || plan.alien.sumVersion !== plan.sumVersion) {
         this.plan = null; // gone, or its sum changed under us: look again
-      } else if (this.clock >= plan.readyAt) {
+      } else if (this.clock >= plan.readyAt && !waiting) {
+        // Typing now can't cancel a shot: the answer box is empty or holds a
+        // leftover that doesn't match anything.
         if (field.typed !== "") field.apply({ type: "clear" });
         field.apply({ type: "digits", digits: String(plan.answer) });
         this.enteredAt = this.clock;
@@ -125,10 +126,13 @@ export class Bot {
 
   /** Aliens whose balls a person could read right now. */
   private readable(field: Field): Alien[] {
+    // The alien whose answer is typed and waiting for the ship is done.
+    const answered = field.typed === "" ? undefined : field.alienFor(parseInt(field.typed, 10));
     return field.aliens.filter(
       (a) =>
         a.active &&
         a !== field.lockedTarget &&
+        a !== answered &&
         a.y - a.top >= 0 && // its balls are on screen
         (a.ability?.cover ?? 0) <= BOT.MAX_READ_COVER,
     );
@@ -147,7 +151,7 @@ export class Bot {
     const sum = sumOf(alien);
     this.weighed.add(alien);
     const think =
-      (s.THINK_BASE + s.PER_BALL * alien.ballCount + s.PER_CARRY * carries(alien.digits)) *
+      (s.THINK_BASE + s.PER_ADD * (alien.ballCount - 1) + s.PER_CARRY * carries(alien.digits)) *
       Math.exp(s.NOISE * this.gaussian());
     const answer = this.rng.chance(s.ERROR_RATE) ? this.slip(sum) : sum;
     this.answers++;

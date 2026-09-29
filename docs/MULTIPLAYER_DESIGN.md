@@ -134,7 +134,8 @@ the agreed shape.
   Rejected: "fake" bots that kill on a timer (can't use powers, react to
   attacks or be surprised by a Blinker, and nothing carries over to a server).
 - **Solving model:** notice (reaction time) → pick a target (usually the most
-  dangerous) → think (base + per ball + per carry, log-normal spread) → type
+  dangerous) → think (base + per addition + per carry, log-normal spread; an
+  addition = balls − 1, fitted to the owner's playtests) → type
   → sometimes answer off by 1 or 10, then notice and clear. A bot enters the
   whole answer at once (like the drawing pad), so "2" on the way to "23"
   never locks onto another alien.

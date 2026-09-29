@@ -12,6 +12,7 @@ import { BOT, SIM, type BotLevel } from "../src/config/constants";
 import { Bot } from "../src/sim/Bot";
 import type { AbilityKind } from "../src/objects/abilities";
 import { Field } from "../src/sim/Field";
+import { answerTimes, formatTimes, mergeTimes } from "../src/sim/pace";
 import { quantile, summarizeSolves } from "../src/sim/stats";
 
 // Runs in Node (vite-node); the project has no Node types, and argv is all we need.
@@ -36,6 +37,7 @@ for (const level of Object.keys(BOT.LEVELS) as BotLevel[]) {
   let slips = 0;
   const solves = [];
   const hitsBy = new Map<string, number>();
+  const paces = new Map<number, number[]>();
   let hits = 0;
   for (let seed = 1; seed <= SEEDS; seed++) {
     const field = new Field({ seed, lives: LIVES, forcedAbilities: FORCED });
@@ -51,6 +53,7 @@ for (const level of Object.keys(BOT.LEVELS) as BotLevel[]) {
         hits++;
       }
     }
+    mergeTimes(paces, answerTimes({ seed, lives: LIVES, forcedAbilities: FORCED }, field.inputLog, field.steps));
     survived.push(field.elapsedMs / 1000);
     scores.push(field.score);
     kills += field.kills;
@@ -70,6 +73,7 @@ for (const level of Object.keys(BOT.LEVELS) as BotLevel[]) {
     "score (median)": quantile(scores, 0.5),
     "kills/run": Math.round(kills / SEEDS),
     slips: `${((100 * slips) / Math.max(1, answers)).toFixed(0)}%`,
+    "answer time": formatTimes(paces),
     "solve time (median)": bySize,
     "hit by": [...hitsBy.entries()]
       .sort((a, b) => b[1] - a[1])

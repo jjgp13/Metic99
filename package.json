@@ -10,7 +10,8 @@
     "test": "vitest run",
     "bots": "vite-node scripts/bot-report.ts",
     "playtest": "vite-node scripts/playtest-report.ts",
-    "playtest:build": "vite build --mode playtest && vite-node scripts/playtest-page.ts"
+    "playtest:build": "vite build --mode playtest && vite-node scripts/playtest-page.ts",
+    "bots:fit": "vite-node scripts/bot-fit.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.106.2",

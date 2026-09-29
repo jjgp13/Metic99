@@ -14,6 +14,7 @@ import { readFileSync } from "node:fs";
 import { SIM } from "../src/config/constants";
 import { expand } from "../src/services/playtestLog";
 import { replayField } from "../src/sim/Field";
+import { answerTimes, formatTimes, mergeTimes } from "../src/sim/pace";
 import { summarizeSolves } from "../src/sim/stats";
 
 // Runs in Node (vite-node); the project has no Node types.
@@ -38,6 +39,7 @@ if (!path) throw new Error("usage: npm run playtest -- runs.json");
 const raw = JSON.parse(readFileSync(path, "utf8"));
 const runs: RunDoc[] = (Array.isArray(raw) ? raw : raw.docs ?? []).map((d: { data?: RunDoc }) => d.data ?? d);
 
+const allPaces = new Map<number, number[]>();
 const rows = runs
   .sort((a, b) => a.at.localeCompare(b.at))
   .map((run) => {
@@ -49,6 +51,12 @@ const rows = runs
       SIM.STEP_MS,
     );
     const matches = replay.score === run.summary.score && replay.kills === run.summary.kills;
+    const paces = answerTimes(
+      { seed: run.replay.seed, lives: run.replay.lives, forcedAbilities: run.replay.forcedAbilities as never },
+      log,
+      run.replay.steps,
+    );
+    if (matches) mergeTimes(allPaces, paces);
     const solves = summarizeSolves(run.solves.map(([balls, ms]) => ({ balls, ms })));
     const phone = /iPhone|Android|Mobile/i.test(run.device.ua) ? "phone" : "desktop";
     return {
@@ -57,6 +65,7 @@ const rows = runs
       survived: `${Math.round(run.summary.survivedMs / 1000)} s`,
       score: run.summary.score,
       kills: run.summary.kills,
+      "answer time": matches ? formatTimes(paces) : "-",
       "solve 2b / 3b": solves.map((s) => `${s.median.toFixed(1)}s`).join(" / "),
       "slow/freeze used": `${run.summary.energy.slow}/${run.summary.energy.freeze} of ${run.summary.energy.earned}`,
       "killed by": run.hits.map((h) => h.model?.replace("alien_", "") ?? h.kind).join(", "),
@@ -69,4 +78,4 @@ console.log(`${runs.length} runs (builds: ${[...new Set(runs.map((r) => r.build)
 console.table(rows);
 const all = summarizeSolves(runs.flatMap((r) => r.solves.map(([balls, ms]) => ({ balls, ms }))));
 console.log("All runs, median solve by ball count:", all.map((s) => `${s.balls} balls ${s.median}s (n=${s.count})`).join(" · "));
-console.log("Bots (npm run bots): rookie 5.0s · pilot 4.2s / 5.4s · ace 3.0s / 3.5s");
+console.log(`Answer time (exact replays only): ${formatTimes(allPaces)}. Compare with the bots' "answer time" in npm run bots.`);

@@ -44,7 +44,8 @@ loop. See the Decision Log.
   (`scripts/bot-report.ts`; `-- --lives 1 --seeds 20 --minutes 5
   --ability splitter`), including which monsters cause the hits.
   `npm run playtest -- runs.json` replays saved playtest runs and prints
-  them next to the bots (`scripts/playtest-report.ts`).
+  them next to the bots (`scripts/playtest-report.ts`). `npm run bots:fit --
+  ace 1.15 2.27` fits a bot level to a player's answer times.
 
 ## Project layout
 
@@ -102,7 +103,9 @@ src/
                       movement + readability guard, AbilityHost.
     Bot.ts            Bot player: reads only what's on screen, acts only via
                       `field.apply()`; skill levels in `BOT` (rookie/pilot/ace).
-    stats.ts          Solve-time summaries (players vs bots calibration).
+    stats.ts          Solve-time summaries.
+    pace.ts           Answer times by ball count (replayed from an input
+                      log): the measure bots are calibrated with.
   objects/
     Alien.ts          Pure alien state (x/y, digits, result, `kind`) + per-kind
                       movement patterns and readability box; no rendering.
@@ -404,11 +407,14 @@ Green=multiplication, Yellow=division.
   its step (`field.inputLog`), so `replayField(seed, log)` rebuilds the exact
   run. Dev console: `__metic.game.scene.getScene("GameScene").field.inputLog`.
 - **Bots** (`src/sim/Bot.ts`, `BOT`): notice (reaction) → think (base + per
-  ball + per carry, log-normal spread) → type the whole answer at once;
-  slips (off by 1/10) at `ERROR_RATE`, noticed and cleared after
-  `NOTICE_WRONG`. They go for the most dangerous readable alien (chance
-  `FOCUS`), can't read shut Blinker lids, start the next sum while a shot
-  flies, and drop a sum mid-thought when a clearly worse threat appears.
+  addition, i.e. balls − 1, + per carry, log-normal spread) → type the whole
+  answer at once; slips (off by 1/10) at `ERROR_RATE`, noticed and cleared
+  after `NOTICE_WRONG`. They go for the most dangerous readable alien (chance
+  `FOCUS`), can't read shut Blinker lids, read the next sum while the ship
+  lines up its shot, and drop a sum mid-thought when a clearly worse threat
+  appears. Calibrated on the owner's runs by **answer time** (`sim/pace.ts`:
+  readable or previous answer → matching answer): owner 1.15 s (2 balls) /
+  2.27 s (3 balls); ace ≈ owner, pilot ≈ 1.5× slower, rookie a guess.
   Seeded per seat (`Bot.forSeat`). No powers yet (M4). Dev: `?bot=ace` puts a
   bot on autopilot on your field; at game over the console prints your (or
   the bot's) solve times by ball count to compare with `npm run bots`.
@@ -563,7 +569,8 @@ curve is in `src/config/difficulty.ts` (`difficultyAt(elapsedMs, score)`).
        Phaser-free `Field` (aliens, spawning, readability) + fixed timestep,
        [x] M2b ship/combat/scoring/lives/energy/input into the sim (input log
        + exact replay), [x] M3 bot v1 (solving, 3 skill levels, `?bot=`,
-       `npm run bots`), [ ] M4 bot powers, [ ] M5+ match, send.
+       `npm run bots`; calibrated on playtests), [ ] M4 bot powers,
+       [ ] M5+ match, send.
 
 ## Conventions
 
@@ -587,6 +594,15 @@ curve is in `src/config/difficulty.ts` (`difficultyAt(elapsedMs, score)`).
 ## Decision Log
 
 Newest first. Format: `YYYY-MM-DD — decision — rationale`.
+
+- **2026-09-29 — Bots think per addition and are fitted to the owner.**
+  Measured by answer time (not solve time, which mixes in entry time, slow
+  aliens left for later and ship travel), the owner answers 2-ball sums in
+  1.15 s and 3-ball in 2.27 s: each addition costs the same, while bots
+  charged per ball and made the 3rd ball nearly free. Bots now pay per
+  addition (`PER_ADD × (balls − 1)`), read ahead while their shot lines up,
+  and were fitted with `npm run bots:fit`: ace 1.30 / 2.35 s ≈ owner, pilot
+  1.87 / 3.42 s, rookie a guess until a beginner playtests.
 
 - **2026-09-29 — Numbers win over the HUD; playtest build ships its models.**
   Second playtest (3 runs, desktop app + keyboard, 241–358 s, 64k–97k pts):

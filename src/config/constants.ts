@@ -35,43 +35,50 @@ export const SIM = {
 /**
  * Bot players (src/sim/Bot.ts, docs/MULTIPLAYER_DESIGN.md §7). A bot solves
  * like a person: notice an alien (REACTION), work out the sum (THINK_BASE +
- * PER_BALL per ball + PER_CARRY per carry, spread log-normally by NOISE), type
+ * PER_ADD per addition, i.e. balls - 1, + PER_CARRY per carry, spread
+ * log-normally by NOISE), type
  * it (PER_KEY per digit), and sometimes get it wrong (ERROR_RATE: off by 1 or
  * 10), noticing after NOTICE_WRONG. FOCUS = chance it goes for the most
  * dangerous alien rather than any readable one, and that it drops what it is
  * thinking about when a clearly worse threat appears. Times in ms of game time.
+ *
+ * Calibrated on the owner's logged runs (2026-09-29), measured as "answer
+ * time" (from an alien becoming readable, or the previous answer, to the
+ * typed answer matching it): the owner answers 2-ball sums in 1.15 s and
+ * 3-ball sums in 2.27 s, so each addition costs about the same. ACE ≈ the
+ * owner, PILOT ≈ 1.5× slower. ROOKIE is a guess (no beginner runs yet).
  */
 export const BOT = {
   LEVELS: {
     rookie: {
-      REACTION: 900,
-      THINK_BASE: 400,
-      PER_BALL: 700,
-      PER_CARRY: 500,
+      REACTION: 700,
+      THINK_BASE: 600,
+      PER_ADD: 900,
+      PER_CARRY: 300,
       NOISE: 0.35,
-      PER_KEY: 250,
+      PER_KEY: 220,
       ERROR_RATE: 0.12,
       NOTICE_WRONG: 700,
       FOCUS: 0.6,
     },
     pilot: {
-      REACTION: 600,
-      THINK_BASE: 250,
-      PER_BALL: 450,
-      PER_CARRY: 300,
+      REACTION: 400,
+      THINK_BASE: 0,
+      PER_ADD: 1200,
+      PER_CARRY: 400,
       NOISE: 0.3,
-      PER_KEY: 180,
+      PER_KEY: 150,
       ERROR_RATE: 0.06,
       NOTICE_WRONG: 500,
       FOCUS: 0.85,
     },
     ace: {
-      REACTION: 350,
-      THINK_BASE: 150,
-      PER_BALL: 250,
-      PER_CARRY: 120,
+      REACTION: 200,
+      THINK_BASE: 0,
+      PER_ADD: 900,
+      PER_CARRY: 300,
       NOISE: 0.25,
-      PER_KEY: 110,
+      PER_KEY: 100,
       ERROR_RATE: 0.02,
       NOTICE_WRONG: 300,
       FOCUS: 0.98,
