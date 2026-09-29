@@ -1,11 +1,13 @@
 import Phaser from "phaser";
 import {
   ABILITY,
+  BOT,
   FEEDBACK,
   GAME,
   KEYPAD_AREA,
   MATCH,
   PLAYER,
+  POWER_NUDGE,
   RANKS,
   SCORE,
   SEND,
@@ -36,6 +38,7 @@ import {
 } from "../sim/Field";
 import { Bot } from "../sim/Bot";
 import { Match, type MatchEvent } from "../sim/Match";
+import { isDangerous } from "../sim/danger";
 import { createBattleViews, type BattleView } from "../ui/battleViews";
 import { BattleResults, WatchBar } from "../ui/BattleResults";
 import type { PowerUse } from "../sim/energy";
@@ -129,6 +132,10 @@ export default class GameScene extends Phaser.Scene {
   // and the incoming attacks drawn over the right end of the meter.
   private sendButton: { bg: Phaser.GameObjects.Rectangle; text: Phaser.GameObjects.Text } | null = null;
   private sendHeldSince: number | null = null;
+  /** Battle: the POWER button is pulsing (a dangerous moment), and since when
+   * (game clock) the current nudge has gone unanswered. */
+  private nudging = false;
+  private nudgeAtMs: number | null = null;
   private incomingGfx!: Phaser.GameObjects.Graphics;
   private slowTint!: Phaser.GameObjects.Rectangle;
 
@@ -233,11 +240,14 @@ export default class GameScene extends Phaser.Scene {
     this.watchSeat = null;
     this.sendButton = null;
     this.sendHeldSince = null;
+    this.nudging = false;
+    this.nudgeAtMs = null;
     this.powerButtons = [];
     this.runExtras = {
       lives: this.field.lives,
       forcedAbilities,
       battle: battle ? { players: MATCH.OPPONENTS.length + 1, opponents: [...MATCH.OPPONENTS], placement: null } : null,
+      nudges: { shown: 0, answered: 0, atKo: false },
       inputMode: inputMode(),
       sources: { keypad: 0, keyboard: 0, pad: 0 },
       ink: { reads: 0, unknown: 0, scratch: 0 },
@@ -805,7 +815,11 @@ export default class GameScene extends Phaser.Scene {
 
   private triggerPower(): void {
     if (this.gameOver || this.paused) return;
-    this.field.apply({ type: "power" });
+    const used = this.field.apply({ type: "power" });
+    if (used && this.nudgeAtMs !== null && this.field.elapsedMs - this.nudgeAtMs <= POWER_NUDGE.ANSWER_MS) {
+      this.runExtras.nudges.answered++;
+      this.nudgeAtMs = null;
+    }
     this.updateEnergyHud();
   }
 
@@ -927,8 +941,17 @@ export default class GameScene extends Phaser.Scene {
     // Lit while running (time) or armed (shield); dim when it can't be used.
     const on = power.running || power.shieldArmed;
     const usable = power.canTrigger(e);
+    const nudge = this.updateNudge(on, usable);
+    const pulse = nudge ? 0.5 + 0.5 * Math.sin((Math.PI * this.time.now) / POWER_NUDGE.PULSE_MS) : 0;
     for (const { bg, text } of this.powerButtons) {
-      bg.setFillStyle(on ? power.def.COLOR : BUTTON_FILL, on ? 0.45 : 1).setAlpha(on || usable ? 1 : 0.35);
+      text.setScale(1 + 0.12 * pulse);
+      if (nudge) {
+        bg.setFillStyle(power.def.COLOR, 0.2 + 0.6 * pulse).setStrokeStyle(2 + 4 * pulse, 0xffffff).setAlpha(1);
+      } else {
+        bg.setFillStyle(on ? power.def.COLOR : BUTTON_FILL, on ? 0.45 : 1)
+          .setStrokeStyle(2, power.def.COLOR)
+          .setAlpha(on || usable ? 1 : 0.35);
+      }
       text.setAlpha(on || usable ? 1 : 0.35);
     }
     this.updateSendHud();
@@ -938,6 +961,32 @@ export default class GameScene extends Phaser.Scene {
     } else {
       this.slowTint.setVisible(false);
     }
+  }
+
+  /**
+   * Battle: pulse the POWER button in a dangerous moment while the power can
+   * be used (the bots' own rule, at the owner's distances: POWER_NUDGE). A
+   * soft tick when a moment starts; counted for the playtest log.
+   */
+  private updateNudge(on: boolean, usable: boolean): boolean {
+    const nudge =
+      this.match !== null &&
+      !this.gameOver &&
+      !this.paused &&
+      !on &&
+      usable &&
+      isDangerous(this.field, {
+        minOpen: BOT.FREEZE_MIN_OPEN,
+        nearPx: POWER_NUDGE.NEAR_PX,
+        panicPx: POWER_NUDGE.PANIC_PX,
+      });
+    if (nudge && !this.nudging) {
+      this.sound.play("blip", { volume: 0.25, rate: 2 });
+      this.runExtras.nudges.shown++;
+      this.nudgeAtMs = this.field.elapsedMs;
+    }
+    this.nudging = nudge;
+    return nudge;
   }
 
   /** Battle: the SEND button's tier and the incoming segments on the meter. */
@@ -1275,6 +1324,7 @@ export default class GameScene extends Phaser.Scene {
 
     if (this.match) {
       this.runExtras.battle!.placement = this.match.placements[0];
+      this.runExtras.nudges.atKo = this.nudging;
       this.saveRun(GAME.HEIGHT - 12);
       this.openResults();
       return;

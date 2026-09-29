@@ -1,6 +1,7 @@
-import { BOT, GAME, PLAYER, type BotLevel } from "../config/constants";
+import { BOT, PLAYER, type BotLevel } from "../config/constants";
 import type Alien from "../objects/Alien";
 import type { Field } from "./Field";
+import { isDangerous, openThreats, readableAliens } from "./danger";
 import { Rng } from "./rng";
 
 /** Key of the bots' random streams: seat N of a match seeded S draws from
@@ -186,13 +187,14 @@ export class Bot {
    * held for REACTION, like a person noticing.
    */
   private useTimePower(field: Field): void {
-    const open = this.readable(field).filter((a) => a.lethal);
-    const nearest = open.reduce((d, a) => Math.min(d, PLAYER.Y - a.y), Infinity);
     const frozen = field.power.running;
     const want = frozen
-      ? open.length > 0 // stay frozen until the board is clear
-      : (open.length >= BOT.FREEZE_MIN_OPEN && nearest <= this.skill.FREEZE_AT_PX) ||
-        nearest <= this.skill.PANIC_PX;
+      ? openThreats(field).length > 0 // stay frozen until the board is clear
+      : isDangerous(field, {
+          minOpen: BOT.FREEZE_MIN_OPEN,
+          nearPx: this.skill.FREEZE_AT_PX,
+          panicPx: this.skill.PANIC_PX,
+        });
     // Nothing to change (or the hit-recovery freeze already holds the field).
     if (want === frozen || field.freezeLeftMs > 0 || (!frozen && !field.power.canTrigger(field.energy))) {
       this.powerSince = null;
@@ -236,19 +238,9 @@ export class Bot {
     this.sendSince = null;
   }
 
-  /** Aliens whose balls a person could read right now. */
+  /** Aliens whose balls a person could read right now (sim/danger.ts). */
   private readable(field: Field): Alien[] {
-    // The alien whose answer is typed and waiting for the ship is done.
-    const answered = field.typed === "" ? undefined : field.alienFor(parseInt(field.typed, 10));
-    return field.aliens.filter(
-      (a) =>
-        a.active &&
-        a !== field.lockedTarget &&
-        a !== answered &&
-        a.y - a.top >= 0 && // its balls are on screen
-        a.x >= 0 && a.x <= GAME.WIDTH && // not still coming in from a side edge
-        (a.ability?.cover ?? 0) <= BOT.MAX_READ_COVER,
-    );
+    return readableAliens(field);
   }
 
   /** Usually the most dangerous readable alien; sometimes (1 - FOCUS) any. */

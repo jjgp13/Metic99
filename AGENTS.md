@@ -121,6 +121,8 @@ src/
                       targeting, KO credit, badges, attack delivery, and
                       `tiles()`: what every player shows the others (the UI's
                       only source for opponents).
+    danger.ts         What a person can read (`readableAliens`) and a dangerous
+                      moment (`isDangerous`): shared by bots and the nudge
     Bot.ts            Bot player: reads only what's on screen, acts only via
                       `field.apply()`; skill levels in `BOT` (rookie/pilot/ace).
     stats.ts          Solve-time summaries.
@@ -567,6 +569,13 @@ Green=multiplication, Yellow=division.
   second); tap = strongest affordable tier, hold steps down, slide off
   cancels; Space = send. Plus "N/8 LEFT" and a one-line feed (SENT /
   INCOMING weight / Pn OUT).
+- **Power nudge** (battle, `POWER_NUDGE`): the POWER button pulses (white
+  edge, fill and label beating ~2×/s) with one soft tick while the board is
+  dangerous and the power can be used: the bots' time-power rule
+  (`sim/danger.ts` `isDangerous`: 2+ unanswered aliens with the nearest
+  within 170 px of the ship, or one within 90 px, the owner's own FREEZE
+  distance). The run log counts nudges shown, answered (a press within 2 s)
+  and whether one was showing at the KO.
 - **After your KO** (M8, `ui/BattleResults.ts`): the results panel opens
   and the match keeps running behind it at real speed, so the standings are
   live (still playing first, then by place; your row gold): your place, who
@@ -745,6 +754,13 @@ dMatch)`; it is 0 in solo play.
 ## Decision Log
 
 Newest first. Format: `YYYY-MM-DD — decision — rationale`.
+
+- **2026-09-30 — Battle power nudge.** In 8 battles the owner pressed POWER
+  0–5 times per match (solo: every 10–15 s) and most KOs came with energy to
+  spare: attention went to SEND and the board. The POWER button now pulses in
+  a dangerous moment, judged by the same rule the bots use (moved to
+  `sim/danger.ts` so they can't drift apart). Battle only for now; logged
+  (shown / answered / at KO) to see if it helps before adding it to solo.
 
 - **2026-09-30 — After a battle KO: live results, fast-forward, watch (M8).**
   The match keeps running behind a results panel (live standings) instead

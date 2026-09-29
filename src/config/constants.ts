@@ -79,6 +79,21 @@ export const MATCH = {
   FAST_FORWARD_STEPS: 1200,
 } as const;
 
+/**
+ * Battle: the POWER button pulses in a dangerous moment while the power can be
+ * used. In battles the owner pressed it 0–5 times per match (solo: every
+ * 10–15 s) and most KOs came with power energy to spare. "Dangerous" is the
+ * bots' time-power rule (sim/danger.ts) at the owner's own distances: 2+
+ * unanswered aliens with the nearest within NEAR_PX of the ship, or one
+ * within PANIC_PX. A press within ANSWER_MS counts as answering it (logged).
+ */
+export const POWER_NUDGE = {
+  NEAR_PX: 170,
+  PANIC_PX: 90,
+  PULSE_MS: 260, // half a pulse
+  ANSWER_MS: 2000,
+} as const;
+
 /** How a player aims their attacks (Tetris 99's four strategies). */
 export type TargetStrategy = "random" | "kos" | "attackers" | "badges";
 export const TARGET_STRATEGIES: readonly TargetStrategy[] = ["random", "kos", "attackers", "badges"];

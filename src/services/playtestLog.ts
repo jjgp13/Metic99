@@ -54,6 +54,9 @@ export interface RunExtras {
   pauses: number;
   /** Battle mode: the lineup and where the player placed (null in solo). */
   battle: { players: number; opponents: string[]; placement: number | null } | null;
+  /** Battle: power nudges shown, answered with a press within ANSWER_MS, and
+   * whether one was showing at the KO. */
+  nudges: { shown: number; answered: number; atKo: boolean };
   hits: { atMs: number; kind: string; model: string | null; ability: string | null; digits: readonly number[]; d: number }[];
 }
 
@@ -117,6 +120,7 @@ export async function logRun(field: Field, extras: RunExtras): Promise<"saved" |
     ink: extras.ink,
     pauses: extras.pauses,
     battle: extras.battle,
+    nudges: extras.nudges,
   };
   try {
     await db.collection("runs").add(record);
