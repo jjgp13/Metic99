@@ -115,9 +115,15 @@ the agreed shape.
 - **KO credit** goes to the sender of the alien that knocked you out, else to
   your last attacker within ~10 s. The KO takes your badges + 1; 2/4/8/16
   badges = +25/50/75/100% attack.
-- **Placement** = players alive + 1 at the moment of the KO. A match-pressure
-  term `dMatch` rises as players drop out, so matches end:
-  `d = max(dScore, dTime, dMatch)`.
+- **Placement** = players alive + 1 at the moment of the KO (players who fall
+  in the same step: higher score places better, then lower seat). A
+  match-pressure term `dMatch` rises as players drop out and in overtime:
+  `d = max(dScore, dTime, dMatch)`, and it also opens the unsolved cap.
+  `dMatch = min(0.99, 0.6·out/(N−2) + max(0, t − 3:00)/2 min)`.
+- **Sudden death (M5).** A perfect player survives the top of the curve
+  forever, so from 5:00 the aliens also speed up without limit (+100% per
+  minute). People are out long before; it bounds a match's length, which a
+  server needs (a cheating script can't hold a match open).
 - **After your KO:** the results screen, with the option to fast-forward the
   rest of the match (the sim runs without drawing) or to watch.
 - **What you see of the others:** a thin strip of small tiles above the field
@@ -193,10 +199,14 @@ the agreed shape.
   `apply(FieldInput)` (digits, back, clear, power; send/target come with the
   match) and `step(dt)`. Each input is logged with its step; seed + input log
   = an exact replay (`replayField`: debugging now, server checks in phase 2).
-- **The Match ↔ Field seam is the future protocol:**
-  `field.receiveAttack()`, `field.takeOutgoing()`, `field.summary()`,
-  `field.knockedOut`. Offline these are calls; in phase 1 they become
+- **The Match ↔ Field seam is the future protocol** (`Match` done in M5):
+  match → field only as messages, `field.receive(MatchMessage)` (M5:
+  `standing` = players left; M6 adds attacks), logged in the field's input
+  log so a field still replays from seed + log alone; field → match only
+  `field.knockedOut`, `score`, `summary()` (the tile) and, from M6,
+  `takeOutgoing()`. Offline these are calls; in phase 1 they become
   WebSocket messages (the server owns the match, clients own their field).
+  All fields in a match share one seed (same base aliens).
 - **Float caveat:** `Math.sin`/`Math.exp` may differ in the last bit between
   Safari and Node, so a cross-engine replay can drift. Keep them out of
   decisions or let the server check with a tolerance.
@@ -244,7 +254,7 @@ but marked as such.
 | M2b | Combat, energy, abilities, input into `Field`; events out | Same seed + inputs → same state hash | done 2026-09-27 |
 | M3 | Bot v1 (solving) + dev autopilot `?bot=ace` on your own field | Survival per skill level; calibrate vs your solve times | done 2026-09-27 |
 | M4 | Bot energy policy (SLOW/FREEZE) | Headless A/B: survival with vs without powers | done 2026-09-29 |
-| M5 | `Match` with N fields: KOs, placement, `dMatch`, match end | 16 headless bots: the match always ends | |
+| M5 | `Match` with N fields: KOs, placement, `dMatch`, sudden death, match end | 16 headless bots: the match always ends; `npm run match` | done 2026-09-29 |
 | M6 | SEND + incoming queue + cancel; SEND button + incoming meter | Cancel math; sent aliens pass the readability soak | |
 | M7 | Targeting strategies, badges, defense bonus | Unit tests; bot tournaments | |
 | M8 | Battle UI: opponent strip, KO feed, results, fast-forward; menu entry | Play it | |

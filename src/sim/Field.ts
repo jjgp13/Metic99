@@ -9,7 +9,7 @@ import {
   SCORE,
   type SlowMode,
 } from "../config/constants";
-import { difficultyAt, type DifficultyParams } from "../config/difficulty";
+import { difficultyAt, matchPressure, suddenDeathSpeed, type DifficultyParams } from "../config/difficulty";
 import type Alien from "../objects/Alien";
 import type { AbilityKind } from "../objects/abilities";
 import type { Bullet } from "../objects/Bullet";
@@ -34,6 +34,36 @@ export type FieldInput =
   | { type: "clear" }
   /** Press SLOW or FREEZE: start it, switch to it, or turn it off. */
   | { type: "power"; mode: SlowMode };
+
+/**
+ * What the match tells a field (docs/MULTIPLAYER_DESIGN.md §8, the Match ↔
+ * Field seam). Offline it is a method call; in phase 1 the server sends it.
+ * It is logged with the player's inputs, so a battle field replays from its
+ * seed and its log alone. Attacks (M6) will be another message.
+ */
+export type MatchMessage =
+  /** Players still in the match (sent at the start and after every KO). */
+  { type: "standing"; alive: number; total: number };
+
+/** One entry of a field's log: a player input or a message from the match. */
+export interface LoggedInput {
+  step: number;
+  input: FieldInput | MatchMessage;
+}
+
+/**
+ * What the other players see of a field (a tile in the opponent strip), and
+ * what the server will broadcast per player. Small on purpose.
+ */
+export interface FieldSummary {
+  score: number;
+  kills: number;
+  knockedOut: boolean;
+  /** 0 = calm, 1 = an unanswered alien is at the player line. */
+  danger: number;
+  /** Aliens on screen, as 0–1 positions on the field (the tile's dots). */
+  aliens: { x: number; y: number }[];
+}
 
 /** match = an alien has this answer; typing = one could still (a longer answer
  * starts with it); wrong = no alien's answer can. */
@@ -98,7 +128,7 @@ export class Field {
   readonly seed: number;
   /** Steps run so far (the input log's clock). */
   steps = 0;
-  readonly inputLog: { step: number; input: FieldInput }[] = [];
+  readonly inputLog: LoggedInput[] = [];
 
   shipX = PLAYER_START_X;
   /** shipX before the last step, for drawing between steps. */
@@ -115,6 +145,8 @@ export class Field {
   score = 0;
   lives: number;
   knockedOut = false;
+  /** The alien that ended the run (M7: its sender gets the KO credit). */
+  knockedOutBy: Alien | null = null;
   /** Kill streak without a hit (scores and charges more). */
   combo = 0;
   kills = 0;
@@ -129,6 +161,8 @@ export class Field {
    * scene can't eat it), then runs at POST_HIT_FACTOR for the rest of the run. */
   freezeLeftMs = 0;
   private postHitSlow = false;
+  /** Players still in the battle, from the match (null in solo play). */
+  standing: { alive: number; total: number } | null = null;
 
   private readonly swarm: Swarm;
   /** The in-flight bullet aimed at lockedTarget: no second shot while one is on
@@ -157,7 +191,13 @@ export class Field {
   }
 
   get difficulty(): DifficultyParams {
-    return difficultyAt(this.swarm.elapsedMs, this.score);
+    return difficultyAt(this.swarm.elapsedMs, this.score, this.dMatch);
+  }
+
+  /** Battle pressure on this field (0 in solo play). */
+  get dMatch(): number {
+    const s = this.standing;
+    return s ? matchPressure(this.swarm.elapsedMs, s.alive, s.total) : 0;
   }
 
   /** The live alien whose answer is `result`, if any. */
@@ -203,6 +243,35 @@ export class Field {
     return changed;
   }
 
+  /** A message from the match. Logged like an input (it changes the run). */
+  receive(message: MatchMessage): void {
+    if (this.knockedOut) return;
+    this.inputLog.push({ step: this.steps, input: message });
+    switch (message.type) {
+      case "standing":
+        this.standing = { alive: message.alive, total: message.total };
+        break;
+    }
+  }
+
+  /** What the other players see of this field. */
+  summary(): FieldSummary {
+    let danger = 0;
+    const aliens = [];
+    for (const a of this.aliens) {
+      if (!a.active) continue;
+      aliens.push({ x: a.x / GAME.WIDTH, y: Math.max(0, a.y) / PLAYER.Y });
+      if (a.lethal && a !== this.lockedTarget) danger = Math.max(danger, a.y / PLAYER.Y);
+    }
+    return {
+      score: this.score,
+      kills: this.kills,
+      knockedOut: this.knockedOut,
+      danger: Math.min(1, Math.max(0, danger)),
+      aliens,
+    };
+  }
+
   /** Advance the rules by `dt` ms (always SIM.STEP_MS in play). */
   step(dt: number): void {
     if (this.knockedOut) return;
@@ -215,7 +284,8 @@ export class Field {
     const hitFrozen = this.freezeLeftMs > 0;
     if (hitFrozen) this.freezeLeftMs -= dt;
     const slowFactor = this.slowTime.update(dt, this.energy, hitFrozen);
-    const speed = hitFrozen ? 0 : slowFactor * (this.postHitSlow ? RECOVERY.POST_HIT_FACTOR : 1);
+    const suddenDeath = this.standing ? suddenDeathSpeed(this.elapsedMs) : 1;
+    const speed = hitFrozen ? 0 : slowFactor * (this.postHitSlow ? RECOVERY.POST_HIT_FACTOR : 1) * suddenDeath;
 
     // Resolve the current target. A locked target (already fired upon) stays
     // committed until it is destroyed; otherwise the typed number picks one.
@@ -229,6 +299,7 @@ export class Field {
     // Spawn, run ability clocks and move the aliens. The target holds still.
     this.swarm.step(dt, {
       score: this.score,
+      dMatch: this.dMatch,
       speed,
       held: this.target,
       locked: this.lockedTarget,
@@ -410,6 +481,7 @@ export class Field {
     this.events.push({ type: "hit", alien, livesLeft: this.lives });
     if (this.lives <= 0) {
       this.knockedOut = true;
+      this.knockedOutBy = alien;
       this.events.push({ type: "knockedOut" });
       return;
     }
@@ -426,16 +498,21 @@ export class Field {
  */
 export function replayField(
   options: FieldOptions,
-  log: readonly { step: number; input: FieldInput }[],
+  log: readonly LoggedInput[],
   steps: number,
   dt: number,
 ): Field {
   const field = new Field(options);
   let next = 0;
-  for (let i = 0; i < steps; i++) {
-    while (next < log.length && log[next].step === i) field.apply(log[next++].input);
-    field.step(dt);
+  for (let i = 0; i <= steps; i++) {
+    while (next < log.length && log[next].step === i) feed(field, log[next++].input);
+    if (i < steps) field.step(dt);
   }
-  while (next < log.length && log[next].step === steps) field.apply(log[next++].input);
   return field;
+}
+
+/** Hand a logged entry back to the field the way it first arrived. */
+export function feed(field: Field, input: FieldInput | MatchMessage): void {
+  if (input.type === "standing") field.receive(input);
+  else field.apply(input);
 }

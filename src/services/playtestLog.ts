@@ -1,5 +1,5 @@
 import type Alien from "../objects/Alien";
-import type { Field, FieldInput } from "../sim/Field";
+import type { Field, FieldInput, MatchMessage } from "../sim/Field";
 
 /**
  * Playtest logger. When the game runs as a claude.ai Artifact with the `db`
@@ -117,8 +117,9 @@ export async function logRun(field: Field, extras: RunExtras): Promise<"saved" |
   }
 }
 
-/** A short form of an input for the log: "d12", "b", "c", "ps" / "pf". */
-export function compact(input: FieldInput): string {
+/** A short form of an input for the log: "d12", "b", "c", "ps" / "pf", and
+ * a match's standing "s5/8". */
+export function compact(input: FieldInput | MatchMessage): string {
   switch (input.type) {
     case "digits":
       return `d${input.digits}`;
@@ -128,12 +129,18 @@ export function compact(input: FieldInput): string {
       return "c";
     case "power":
       return input.mode === "slow" ? "ps" : "pf";
+    case "standing":
+      return `s${input.alive}/${input.total}`;
   }
 }
 
 /** Undo `compact` (scripts/playtest-report.ts replays runs with it). */
-export function expand(code: string): FieldInput {
+export function expand(code: string): FieldInput | MatchMessage {
   if (code.startsWith("d")) return { type: "digits", digits: code.slice(1) };
+  if (code.startsWith("s")) {
+    const [alive, total] = code.slice(1).split("/").map(Number);
+    return { type: "standing", alive, total };
+  }
   if (code === "b") return { type: "back" };
   if (code === "c") return { type: "clear" };
   return { type: "power", mode: code === "ps" ? "slow" : "freeze" };

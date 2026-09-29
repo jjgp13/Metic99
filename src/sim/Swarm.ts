@@ -31,6 +31,8 @@ export type SwarmEvent =
 export interface StepContext {
   /** The player's score: difficulty is earned by scoring. */
   score: number;
+  /** Battle pressure from the match (0 in solo play). */
+  dMatch: number;
   /** Field speed: 1 normal, below 1 slow time / post-hit, 0 frozen. */
   speed: number;
   /** The targeted alien: it holds still while the ship lines up the shot. */
@@ -69,6 +71,7 @@ export class Swarm implements AbilityHost {
   private spawnCountdown = 0; // the first alien spawns on the first step
   private drifterCountdown: number = MONSTERS.drifter.FIRST_MS;
   private score = 0;
+  private dMatch = 0;
   private locked: Alien | null = null;
   private events: SwarmEvent[] = [];
 
@@ -81,7 +84,7 @@ export class Swarm implements AbilityHost {
   }
 
   get difficulty(): DifficultyParams {
-    return difficultyAt(this.elapsedMs, this.score);
+    return difficultyAt(this.elapsedMs, this.score, this.dMatch);
   }
 
   /** The live alien whose answer is `result`, if any. */
@@ -100,6 +103,7 @@ export class Swarm implements AbilityHost {
    */
   step(dt: number, ctx: StepContext): void {
     this.score = ctx.score;
+    this.dMatch = ctx.dMatch;
     this.locked = ctx.locked;
     this.elapsedMs += dt;
     const diff = this.difficulty;

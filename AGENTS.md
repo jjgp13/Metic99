@@ -45,7 +45,10 @@ loop. See the Decision Log.
   --ability splitter`), including which monsters cause the hits.
   `npm run playtest -- runs.json` replays saved playtest runs and prints
   them next to the bots (`scripts/playtest-report.ts`). `npm run bots:fit --
-  ace 1.15 2.27` fits a bot level to a player's answer times.
+  ace 1.15 2.27` fits a bot level to a player's answer times. `npm run match`
+  plays whole bot-only battle matches (`scripts/match-report.ts`; `--
+  --matches 40 --players 16 --seats ace,pilot,...`): win rate and placement
+  per level, match length, KO times, what knocks players out.
 
 ## Project layout
 
@@ -101,6 +104,8 @@ src/
                       fired, solved, hit, knockedOut).
     Swarm.ts          The aliens inside a Field: game clock, seeded spawners,
                       movement + readability guard, AbilityHost.
+    Match.ts          Battle match: N Fields on one seed stepped together, bots
+                      per seat, KOs, placement, standing messages (pressure).
     Bot.ts            Bot player: reads only what's on screen, acts only via
                       `field.apply()`; skill levels in `BOT` (rookie/pilot/ace).
     stats.ts          Solve-time summaries.
@@ -483,6 +488,18 @@ Green=multiplication, Yellow=division.
   bullet carries the alien whose answer fired it (`Bullet.target`); it flies
   through every other alien, so only the solved alien can die or lose its
   shield.
+- **Battle match** (`src/sim/Match.ts`, `MATCH`; headless until the M8 UI):
+  N fields (8 to start) share ONE seed, so everyone meets the same base
+  aliens; one life each (`MATCH.LIVES`); bots per seat (`Bot.forSeat`).
+  **Placement** = players alive + 1 at the KO; players falling in the same
+  step are ranked by score, then seat. The match only talks to a field
+  through logged messages (`field.receive({type:"standing", alive, total})`)
+  and reads `knockedOut`/`score`/`summary()` (the future protocol), so each
+  field replays from its seed + log alone. **Pressure** `dMatch` =
+  `min(0.99, 0.6·out/(N−2) + overtime)` (overtime +1 per 2 min from 3:00)
+  joins `d = max(dScore, dTime, dMatch)` and the unsolved cap; from 5:00
+  **sudden death** speeds aliens up +100%/min, so even a perfect player (or
+  a script) falls (~6 min) and a match's length is bounded.
 - **Lives** are a playtest constant, `PLAYER.LIVES` (3 by default; 1 = the
   battle-royale knockout rule). With 1 life the hit recovery below never runs:
   the only hit ends the game, so slow time is the sole safety tool.
@@ -524,7 +541,10 @@ alone** so the number of concurrent unsolved sums grows only with points:
 | Strafer patrol | 5000 | 2800 ms | d |
 
 `MIN_BALLS` is fixed at 2. All knobs live in `src/config/constants.ts`; the
-curve is in `src/config/difficulty.ts` (`difficultyAt(elapsedMs, score)`).
+curve is in `src/config/difficulty.ts` (`difficultyAt(elapsedMs, score,
+dMatch)`). In a battle, `dMatch` (`matchPressure`) joins both maxes: `d =
+max(dScore, dTimeFloor, dMatch)` and the unsolved cap uses `max(dScore,
+dMatch)`; it is 0 in solo play.
 
 ## Roadmap
 
@@ -575,8 +595,9 @@ curve is in `src/config/difficulty.ts` (`difficultyAt(elapsedMs, score)`).
        [x] M2b ship/combat/scoring/lives/energy/input into the sim (input log
        + exact replay), [x] M3 bot v1 (solving, 3 skill levels, `?bot=`,
        `npm run bots`; calibrated on playtests), [x] M4 bot powers (FREEZE,
-       fitted to the owner), [ ] M5 match (N fields, KOs, placement),
-       [ ] M6+ send, targeting, battle UI.
+       fitted to the owner), [x] M5 match (N fields, KOs, placement,
+       pressure + sudden death, `npm run match`), [ ] M6+ send, targeting,
+       battle UI.
 
 ## Conventions
 
@@ -600,6 +621,17 @@ curve is in `src/config/difficulty.ts` (`difficultyAt(elapsedMs, score)`).
 ## Decision Log
 
 Newest first. Format: `YYYY-MM-DD — decision — rationale`.
+
+- **2026-09-29 — Battle match: one seed, messages in, sudden death (battle
+  royale M5).** `Match` steps N fields on one seed (same base aliens for all;
+  fair and compressible online) and only talks to them through logged
+  messages (`standing`), so a field still replays from seed + log: the seam
+  the server will use. Measured (`npm run match`): with one life, matches
+  end on their own (8 mixed bots ~2 min; aces win 55–80%; darters cause
+  ~65% of KOs), so `dMatch` rarely binds (aces' own score is higher). But a
+  perfect instant solver survived 20 min at max difficulty: raising the curve
+  can't bound a match, so from 5:00 sudden death speeds aliens up without
+  limit (perfect player out at ~6 min). Same-step KOs rank by score, then seat.
 
 - **2026-09-29 — Bots use FREEZE like the owner (battle royale M4).** From 72
   owner freezes: on when ≥ 2 unanswered aliens are up and the nearest is

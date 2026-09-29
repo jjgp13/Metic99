@@ -33,6 +33,28 @@ export const SIM = {
 } as const;
 
 /**
+ * A battle-royale match (src/sim/Match.ts, docs/MULTIPLAYER_DESIGN.md §6):
+ * N fields on one seed, one life each, the last one standing wins.
+ */
+export const MATCH = {
+  PLAYERS: 8,
+  LIVES: 1,
+  // dMatch = min(MAX, dKO + dOvertime), see config/difficulty.ts matchPressure.
+  PRESSURE: {
+    KO_MAX: 0.6, // pressure from KOs when only two players are left
+    OVERTIME_AT_MS: 180_000, // then the match clock adds pressure too...
+    OVERTIME_RAMP_MS: 120_000, // ...+1 per this long
+    MAX: 0.99,
+  },
+  // The curve tops out at speeds a perfect player (or a script) survives
+  // forever, so from SUDDEN_DEATH_AT_MS the aliens also speed up without
+  // limit: field speed × (1 + minutes past it × PER_MIN). Matches between
+  // people end long before; this bounds a match's length for a server.
+  SUDDEN_DEATH_AT_MS: 300_000,
+  SUDDEN_DEATH_PER_MIN: 1,
+} as const;
+
+/**
  * Bot players (src/sim/Bot.ts, docs/MULTIPLAYER_DESIGN.md §7). A bot solves
  * like a person: notice an alien (REACTION), work out the sum (THINK_BASE +
  * PER_ADD per addition, i.e. balls - 1, + PER_CARRY per carry, spread

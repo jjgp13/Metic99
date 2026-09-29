@@ -42,7 +42,7 @@ function play(field: Swarm, minutes: number): PlayStats {
       thinkLeft = target ? 700 + 200 * target.ballCount : 0;
     }
     const typed = target && thinkLeft <= 0 ? target : null;
-    field.step(STEP, { score, speed: 1, held: typed, locked: typed });
+    field.step(STEP, { score, dMatch: 0, speed: 1, held: typed, locked: typed });
     for (const e of field.takeEvents()) {
       if (e.type === "reachedPlayer") stats.hits++;
       else {
@@ -113,19 +113,19 @@ describe("Swarm", () => {
 
   it("runs the game clock in steps and freezes aliens at speed 0", () => {
     const field = new Swarm({ seed: 5 });
-    for (let i = 0; i < 60; i++) field.step(STEP, { score: 0, speed: 1, held: null, locked: null });
+    for (let i = 0; i < 60; i++) field.step(STEP, { score: 0, dMatch: 0, speed: 1, held: null, locked: null });
     expect(field.elapsedMs).toBeCloseTo(60 * STEP);
     expect(field.aliens.length).toBeGreaterThan(0);
 
     const before = field.aliens.map((a) => [a.x, a.y]);
-    for (let i = 0; i < 60; i++) field.step(STEP, { score: 0, speed: 0, held: null, locked: null });
+    for (let i = 0; i < 60; i++) field.step(STEP, { score: 0, dMatch: 0, speed: 0, held: null, locked: null });
     expect(field.aliens.map((a) => [a.x, a.y])).toEqual(before);
     expect(field.elapsedMs).toBeCloseTo(120 * STEP);
   });
 
   it("frees an alien's answer when it is removed", () => {
     const field = new Swarm({ seed: 6 });
-    field.step(STEP, { score: 0, speed: 1, held: null, locked: null });
+    field.step(STEP, { score: 0, dMatch: 0, speed: 1, held: null, locked: null });
     const [alien] = field.aliens;
     expect(field.alienFor(alien.result)).toBe(alien);
     field.remove(alien);
@@ -135,7 +135,7 @@ describe("Swarm", () => {
 });
 
 describe("Splitter", () => {
-  const ctx = (speed = 1) => ({ score: 0, speed, held: null, locked: null });
+  const ctx = (speed = 1) => ({ score: 0, dMatch: 0, speed, held: null, locked: null });
 
   /** A seed where killing the first splitter on screen hatches both children. */
   function hatchPair() {

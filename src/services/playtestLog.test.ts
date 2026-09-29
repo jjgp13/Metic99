@@ -1,18 +1,19 @@
 import { describe, expect, it } from "vitest";
 import { SIM } from "../config/constants";
 import { Bot } from "../sim/Bot";
-import { Field, replayField, type FieldInput } from "../sim/Field";
+import { Field, replayField, type FieldInput, type MatchMessage } from "../sim/Field";
 import { compact, expand } from "./playtestLog";
 
 describe("playtest log", () => {
   it("compacts every input and expands it back", () => {
-    const inputs: FieldInput[] = [
+    const inputs: (FieldInput | MatchMessage)[] = [
       { type: "digits", digits: "7" },
       { type: "digits", digits: "12" },
       { type: "back" },
       { type: "clear" },
       { type: "power", mode: "slow" },
       { type: "power", mode: "freeze" },
+      { type: "standing", alive: 5, total: 8 },
     ];
     for (const input of inputs) expect(expand(compact(input))).toEqual(input);
   });

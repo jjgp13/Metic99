@@ -1,6 +1,6 @@
 import { SIM } from "../config/constants";
 import type Alien from "../objects/Alien";
-import { Field, type FieldInput, type FieldOptions } from "./Field";
+import { Field, feed, type FieldOptions, type LoggedInput } from "./Field";
 
 /**
  * Answer times by ball count (ms), the measure bots are calibrated with.
@@ -14,7 +14,7 @@ import { Field, type FieldInput, type FieldOptions } from "./Field";
  */
 export function answerTimes(
   options: FieldOptions,
-  log: readonly { step: number; input: FieldInput }[],
+  log: readonly LoggedInput[],
   steps: number,
 ): Map<number, number[]> {
   const field = new Field(options);
@@ -28,7 +28,7 @@ export function answerTimes(
     }
     let applied = false;
     while (next < log.length && log[next].step === i) {
-      field.apply(log[next++].input);
+      feed(field, log[next++].input);
       applied = true;
     }
     if (applied && field.typed !== "" && field.answerView()?.state === "match") {
