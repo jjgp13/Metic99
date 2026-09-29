@@ -143,6 +143,20 @@ the agreed shape.
   forever, so from 5:00 the aliens also speed up without limit (+100% per
   minute). People are out long before; it bounds a match's length, which a
   server needs (a cheating script can't hold a match open).
+- **Built (M7):** strategies are re-picked every 1.5 s (ties at random);
+  "attackers" aims back at whoever last attacked you among those aiming at
+  you; a hand-picked seat is kept until it's out. KO credit also covers the
+  last attacker within 10 s. Bonus (badges + defense) turns into weight: the
+  aliens cost more to cancel and each 25 above the cost adds a darter.
+- **Open: sending must pay (owner's call).** Measured in M7 with mirror
+  matches: aces that never send win as often or more than aces that do, even
+  with attacks ×3 or +50 energy per KO. Sending is a public good in a
+  free-for-all: the sender pays alone, the damage is shared by everyone else.
+  Options: (A) **a separate attack gauge**, like Tetris 99 where attacks are
+  free: kills fill both the power meter and the gauge, SEND spends the
+  gauge, so sending is always right and the skill is when and whom;
+  (B) keep one meter and make SEND a gamble; (C) bigger KO rewards (badges
+  that also refill energy, or a much steeper badge curve).
 - **After your KO:** the results screen, with the option to fast-forward the
   rest of the match (the sim runs without drawing) or to watch.
 - **What you see of the others:** a thin strip of small tiles above the field
@@ -260,7 +274,7 @@ change together, with a version bump). Lock them before phase 1.
 | Player inputs | answer (0–99), clear, POWER, SEND (tier), target (strategy or player) |
 | Loadout | one power (a `POWER_KINDS` key) picked before the match and fixed for it; the ship is a look and never affects the rules. Tiles show each player's power |
 | Attack | `{from, cost, aliens: [{kind, ability}]}` into the target's incoming queue (M6); attacks only ever arrive as aliens; the receiver rolls sums and columns |
-| What others see | the tile summary in §6 |
+| What others see | `PlayerTile` (`match.tiles()`, M7): alive/placement, score, kills, danger, incoming, energy, power + on, alien dots (sent marked), badges, aim, target, aimed-at count, bonus |
 | Time | fixed steps, seeded streams, game clock |
 | KO and placement | §6 |
 
@@ -293,8 +307,8 @@ but marked as such.
 | M4 | Bot energy policy (per power effect; time powers fitted to the owner) | Headless A/B: survival with vs without powers, and between powers | done 2026-09-29 |
 | M5 | `Match` with N fields: KOs, placement, `dMatch`, sudden death, match end | 16 headless bots: the match always ends; `npm run match` | done 2026-09-29 |
 | M6 | SEND + incoming queue + cancel; SEND button + incoming meter | Cancel math; sent aliens pass the readability soak | done 2026-09-29 |
-| M7 | Targeting strategies, badges, defense bonus | Unit tests; bot tournaments | |
-| M8 | Battle UI: opponent strip, KO feed, results, fast-forward; menu entry | Play it | |
+| M7 | Targeting strategies, badges, defense bonus | Unit tests; bot tournaments | done 2026-09-30 |
+| M8 | Battle UI: opponent strip, KO feed, results, fast-forward; menu entry. Split into two chats: desktop opponent board (Tetris 99-style tiles beside the field) and phone feedback; both read only `match.tiles()` and match events | Play it on desktop and phone | |
 | M9 | Playtest and tune; then phase 1 (move `Match` to a Node server) | | |
 
 Sources: [TetrisWiki: Tetris 99](https://tetris.wiki/Tetris_99),

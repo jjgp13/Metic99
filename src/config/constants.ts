@@ -54,7 +54,34 @@ export const MATCH = {
   // people end long before; this bounds a match's length for a server.
   SUDDEN_DEATH_AT_MS: 300_000,
   SUDDEN_DEATH_PER_MIN: 1,
+  // Targeting (M7, Tetris 99): each player aims their attacks by a strategy or
+  // at one opponent picked by hand. Targets are re-picked this often, and at
+  // once when the target is knocked out.
+  RETARGET_MS: 1500,
+  // KO credit: the sender of the alien that did it, else the last player who
+  // attacked the victim within this long.
+  KO_CREDIT_MS: 10_000,
+  // Badges: a KO earns the victim's badge points + 1. Badge levels 1–4 at
+  // these points, each +BADGE_BONUS attack (Tetris 99: up to +100%).
+  BADGE_STEPS: [2, 4, 8, 16],
+  BADGE_BONUS: 0.25,
+  // Defense bonus: each player beyond the first targeting you adds this to
+  // your attacks, up to DEFENSE_MAX.
+  DEFENSE_BONUS: 0.25,
+  DEFENSE_MAX: 0.75,
+  // An attack's weight = cost × (1 + bonus): its aliens' cancel cost, plus one
+  // extra darter per EXTRA_ALIEN_PER of weight above the cost.
+  EXTRA_ALIEN_PER: 25,
+  // Levers so that sending pays (M7 experiments): an attack weighs
+  // ATTACK_MULT × its cost before bonuses, and a KO gives the credited
+  // player KO_ENERGY energy.
+  ATTACK_MULT: 1,
+  KO_ENERGY: 0,
 } as const;
+
+/** How a player aims their attacks (Tetris 99's four strategies). */
+export type TargetStrategy = "random" | "kos" | "attackers" | "badges";
+export const TARGET_STRATEGIES: readonly TargetStrategy[] = ["random", "kos", "attackers", "badges"];
 
 /** What a sent alien is: a plain darter, or an alien with one of the abilities
  * (picked by the sender from all of them, unlocked or not). */
@@ -109,7 +136,9 @@ export const SEND = {
  *
  * SEND (M6): in a battle, press SEND (the strongest affordable tier) once
  * energy reaches SEND_AT while the board is calm (no freeze wanted), after
- * REACTION. A guess to tune with `npm run match`; no human battle runs yet.
+ * REACTION. A guess to tune with `npm run match`. TARGETING (M7): the
+ * strategy a bot aims with, set once at the start (rookies random, pilots
+ * counter their attackers, aces finish off whoever is in danger).
  */
 export const BOT = {
   LEVELS: {
@@ -127,6 +156,7 @@ export const BOT = {
       PANIC_PX: 50,
       FOCUS: 0.6,
       SEND_AT: 100,
+      TARGETING: "random" as TargetStrategy,
     },
     pilot: {
       REACTION: 400,
@@ -142,6 +172,7 @@ export const BOT = {
       PANIC_PX: 70,
       FOCUS: 0.85,
       SEND_AT: 75,
+      TARGETING: "attackers" as TargetStrategy,
     },
     ace: {
       REACTION: 200,
@@ -157,6 +188,7 @@ export const BOT = {
       PANIC_PX: 90,
       FOCUS: 0.98,
       SEND_AT: 60,
+      TARGETING: "kos" as TargetStrategy,
     },
   },
   // A mistake is off by 10 this often (else off by 1).

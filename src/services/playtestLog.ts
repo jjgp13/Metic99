@@ -1,4 +1,4 @@
-import type { AlienKind } from "../config/constants";
+import type { AlienKind, TargetStrategy } from "../config/constants";
 import type Alien from "../objects/Alien";
 import type { AbilityKind } from "../objects/abilities";
 import type { Field, FieldInput, MatchMessage } from "../sim/Field";
@@ -126,7 +126,7 @@ export async function logRun(field: Field, extras: RunExtras): Promise<"saved" |
 }
 
 /** A short form of an input for the log: "d12", "b", "c", "p" (power),
- * "S50" (send); from the match "s5/8" (standing) and
+ * "S50" (send), "tkos" / "t@3" (aim by a strategy / at seat 3); from the match "s5/8" (standing) and
  * "a3:50:lumberer/shielded" (attack from seat 3: aliens as kind[/ability]). */
 export function compact(input: FieldInput | MatchMessage): string {
   switch (input.type) {
@@ -140,8 +140,12 @@ export function compact(input: FieldInput | MatchMessage): string {
       return "p";
     case "send":
       return `S${input.cost}`;
+    case "target":
+      return typeof input.aim === "string" ? `t${input.aim}` : `t@${input.aim.seat}`;
     case "standing":
       return `s${input.alive}/${input.total}`;
+    case "reward":
+      return `r${input.energy}`;
     case "attack": {
       const aliens = input.aliens.map((a) => (a.ability ? `${a.kind}/${a.ability}` : a.kind));
       return `a${input.from}:${input.cost}:${aliens.join(",")}`;
@@ -153,6 +157,8 @@ export function compact(input: FieldInput | MatchMessage): string {
 export function expand(code: string): FieldInput | MatchMessage {
   if (code.startsWith("d")) return { type: "digits", digits: code.slice(1) };
   if (code.startsWith("S")) return { type: "send", cost: Number(code.slice(1)) };
+  if (code.startsWith("t@")) return { type: "target", aim: { seat: Number(code.slice(2)) } };
+  if (code.startsWith("t")) return { type: "target", aim: code.slice(1) as TargetStrategy };
   if (code.startsWith("a")) {
     const [from, cost, aliens] = code.slice(1).split(":");
     return {
@@ -165,6 +171,7 @@ export function expand(code: string): FieldInput | MatchMessage {
       }),
     };
   }
+  if (code.startsWith("r")) return { type: "reward", energy: Number(code.slice(1)) };
   if (code.startsWith("s")) {
     const [alive, total] = code.slice(1).split("/").map(Number);
     return { type: "standing", alive, total };

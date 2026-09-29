@@ -11,6 +11,7 @@ import {
   SEND,
   SIM,
   STORAGE,
+  TARGET_STRATEGIES,
   type InputMode,
 } from "../config/constants";
 import { isLeaderboardEnabled, startMatch } from "../services/leaderboard";
@@ -289,9 +290,34 @@ export default class GameScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * Battle status (a stand-in until the battle UI): players left, your target
+   * and strategy, badges and how many aim at you. Tap it or press T to cycle
+   * the strategy.
+   */
   private updateBattleText(): void {
-    if (!this.match || !this.battleText) return;
-    this.battleText.setText(`${this.match.alive.length}/${this.match.seats.length} LEFT`);
+    const m = this.match;
+    if (!m || !this.battleText) return;
+    const aim = this.field.aim;
+    const target = m.targets[0];
+    const badges = Match.badgeLevel(m.badgePoints[0]);
+    const aimedAt = m.targetedBy(0);
+    this.battleText.setText(
+      `${m.alive.length}/${m.seats.length} LEFT\n` +
+        `→ ${target === null ? "-" : `P${target + 1}`} ${typeof aim === "string" ? aim.toUpperCase() : "PICKED"}` +
+        (badges ? `  ★${badges}` : "") +
+        (aimedAt ? `  ⚠${aimedAt}` : ""),
+    );
+  }
+
+  /** Next targeting strategy (random → KOs → attackers → badges). */
+  private cycleAim(): void {
+    if (!this.match || this.gameOver || this.paused) return;
+    const aim = this.field.aim;
+    const i = typeof aim === "string" ? TARGET_STRATEGIES.indexOf(aim) : -1;
+    this.field.apply({ type: "target", aim: TARGET_STRATEGIES[(i + 1) % TARGET_STRATEGIES.length] });
+    this.sound.play("blip", { volume: 0.4, rate: 1.3 });
+    this.updateBattleText();
   }
 
   /** A one-line battle message under the top HUD that fades out. */
@@ -374,6 +400,7 @@ export default class GameScene extends Phaser.Scene {
   /** Once per frame: HUD and answer feedback, which only show the rules' state. */
   private updateHud(delta: number): void {
     this.diffBar.setSize(this.field.difficulty.d * (GAME.WIDTH - 24), 4); // show ramp progress
+    this.updateBattleText();
 
     // Aliens come and go, so an answer can turn right or wrong without a key.
     this.refreshAnswer();
@@ -616,20 +643,23 @@ export default class GameScene extends Phaser.Scene {
     if (this.match) {
       this.battleText = this.duckable(
         this.add
-          .text(GAME.WIDTH - 12, 62, "", {
+          .text(GAME.WIDTH - 12, 54, "", {
             fontFamily: "monospace",
-            fontSize: "14px",
+            fontSize: "13px",
             color: ATTACK_CSS,
+            align: "right",
           })
-          .setOrigin(1, 0.5),
+          .setOrigin(1, 0)
+          .setInteractive({ useHandCursor: true }),
       );
+      this.battleText.on("pointerdown", () => this.cycleAim());
       this.updateBattleText();
     }
 
     if (this.autopilot) {
       this.duckable(
         this.add
-          .text(GAME.WIDTH - 12, this.match ? 80 : 62, `AUTOPILOT: ${this.autopilot.level.toUpperCase()}`, {
+          .text(GAME.WIDTH - 12, this.match ? 96 : 62, `AUTOPILOT: ${this.autopilot.level.toUpperCase()}`, {
             fontFamily: "monospace",
             fontSize: "12px",
             color: "#5ef0ff",
@@ -865,7 +895,7 @@ export default class GameScene extends Phaser.Scene {
     const g = this.incomingGfx.clear();
     let right = METER_X + METER_W;
     for (const a of this.field.incoming) {
-      const w = Math.max(3, (METER_W * a.left) / this.field.energy.max);
+      const w = Math.min(right - METER_X, Math.max(3, (METER_W * a.left) / this.field.energy.max));
       const soon = a.landsAtMs - this.field.elapsedMs < 1000;
       const alpha = soon ? 0.55 + 0.45 * Math.sin(this.time.now / 60) : 0.9;
       g.fillStyle(ATTACK_COLOR, alpha).fillRect(right - w, METER_Y - 7, w - 1, 14);
@@ -997,6 +1027,10 @@ export default class GameScene extends Phaser.Scene {
       if (e.key === " " || e.key === "f" || e.key === "F") {
         e.preventDefault();
         this.triggerPower();
+        return;
+      }
+      if ((e.key === "t" || e.key === "T") && this.match) {
+        this.cycleAim();
         return;
       }
       if (e.key >= "0" && e.key <= "9") this.handleInput(e.key, "keyboard");

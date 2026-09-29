@@ -110,7 +110,9 @@ src/
                       movement + readability guard, AbilityHost.
     Match.ts          Battle match: N Fields on one seed stepped together, bots
                       per seat, KOs, placement, standing messages (pressure),
-                      attack delivery (random opponent until M7).
+                      targeting, KO credit, badges, attack delivery, and
+                      `tiles()`: what every player shows the others (the UI's
+                      only source for opponents).
     Bot.ts            Bot player: reads only what's on screen, acts only via
                       `field.apply()`; skill levels in `BOT` (rookie/pilot/ace).
     stats.ts          Solve-time summaries.
@@ -548,6 +550,28 @@ Green=multiplication, Yellow=division.
   cancels; Space = send), incoming aliens are orange blocks eating the meter
   from its right end (blinking in their last second), "N/8 LEFT", a one-line
   feed (SENT / INCOMING / Pn OUT), and game over shows the placement.
+- **Targeting, KO credit, badges** (M7, `MATCH`): the `target` input aims a
+  player's attacks by a strategy (`TARGET_STRATEGIES`: random, kos = whoever
+  is closest to falling (danger + incoming), attackers = whoever aims at you,
+  badges = most badge points) or at a seat by hand (`{ seat }`, kept until
+  that seat is out). The match re-picks targets every `RETARGET_MS` and at
+  once when a target falls (ties at random, seeded). **KO credit** goes to
+  the sender of the alien that did it, else the last attacker within
+  `KO_CREDIT_MS`; it earns the victim's badge points + 1. Badge levels at
+  2/4/8/16 points give +25% each; being aimed at by k > 1 players gives
+  +25%·(k−1) defense (max +75%). An attack's weight = cost × `ATTACK_MULT` ×
+  (1 + bonus): the receiver must cancel the weight, and each 25 above the
+  cost adds a darter. `KO_ENERGY` (a `reward` message) and `ATTACK_MULT` are
+  balance levers, off (0 / 1) for now. Bots aim by level (`TARGETING`:
+  rookie random, pilot attackers, ace kos). Stand-in battle HUD: the top-right
+  line shows players left, your target and strategy, badges (★) and how many
+  aim at you (⚠); tap it or press T to cycle the strategy.
+- **What others see = `match.tiles()`** (`PlayerTile`): per seat: who (level
+  or human), alive, placement, score, kills, danger 0–1, incoming, energy
+  0–1, power and whether it's on, alien dots (0–1 x/y, `sent` marked),
+  badge points/level, aim, current target, how many aim at them, attack
+  bonus. The battle UI reads only this (it is also what the phase 1 server
+  will broadcast per player).
 - **Lives** are a playtest constant, `PLAYER.LIVES` (3 by default; 1 = the
   battle-royale knockout rule). With 1 life the hit recovery below never runs:
   the only hit ends the game, so the power is the sole safety tool.
@@ -646,8 +670,9 @@ dMatch)`; it is 0 in solo play.
        `npm run bots`; calibrated on playtests), [x] M4 bot powers (FREEZE,
        fitted to the owner), [x] M5 match (N fields, KOs, placement,
        pressure + sudden death, `npm run match`), [x] M6 SEND + incoming
-       queue + cancel (menu BATTLE beta), [ ] M7 targeting/badges,
-       [ ] M8 battle UI.
+       queue + cancel (menu BATTLE beta), [x] M7 targeting, KO credit,
+       badges, `tiles()`, [ ] M8 battle UI (split: desktop opponent board,
+       phone feedback), [ ] sending must pay (owner's call, see log).
 
 ## Conventions
 
@@ -671,6 +696,27 @@ dMatch)`; it is 0 in solo play.
 ## Decision Log
 
 Newest first. Format: `YYYY-MM-DD — decision — rationale`.
+
+- **2026-09-30 — Targeting, KO credit and badges (battle royale M7); the
+  tile contract for the battle UI.** Tetris 99's four strategies plus a seat
+  picked by hand, re-picked every 1.5 s; KO credit to the sender, else the
+  last attacker within 10 s; badges from KOs, +25% per level; defense bonus
+  when several aim at you; bonus weight = heavier cancel + extra darters.
+  `match.tiles()` is what the UI (and later the server) shows of each
+  player, so the UI chats can build on it without touching the sim.
+  **Finding:** sending still doesn't pay. Mirror matches (8 aces, half never
+  send, 300 matches): non-senders win 60/40; attack ×1.5 55/45, ×2 48/52,
+  ×3 50/50, KO +50 energy 57/43, send only at a full bar 57/43. It's a
+  public good: the sender pays, every opponent (other senders too) shares
+  the damage, and non-senders keep their bar for FREEZE. Levers kept in
+  `MATCH` (off); the fix is a design call for the owner (see §6).
+- **2026-09-30 — Owner's first battles (6 runs, desktop keyboard, M6
+  build).** Placed 6, 1, 4, 2, 5, 5 (an ace bot on the same seeds: 3, 3,
+  1, 1, 2, 1). Answers stay fast (0.9 s / 2.6 s); the KOs came from board
+  management: out of energy in 4 of 5 (once right after a SEND left < 10
+  for FREEZE), a 13 typed for 15, the sent (ringed) alien picked over a
+  closer lumberer, one easy darter reached with a full bar. No KO was a
+  sent alien, but 3 of 5 had attackers on the board.
 
 - **2026-09-30 — Merged the powers rework into the battle branch.** One
   POWER input and the picked power carry into battles (bots play FREEZE).

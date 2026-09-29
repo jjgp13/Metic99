@@ -14,6 +14,8 @@ describe("playtest log", () => {
       { type: "power" },
       { type: "standing", alive: 5, total: 8 },
       { type: "send", cost: 50 },
+      { type: "target", aim: "kos" },
+      { type: "target", aim: { seat: 3 } },
       {
         type: "attack",
         from: 3,

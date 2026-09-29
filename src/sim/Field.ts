@@ -11,6 +11,7 @@ import {
   SEND,
   type AlienKind,
   type PowerKind,
+  type TargetStrategy,
 } from "../config/constants";
 import { difficultyAt, matchPressure, suddenDeathSpeed, type DifficultyParams } from "../config/difficulty";
 import type Alien from "../objects/Alien";
@@ -39,7 +40,12 @@ export type FieldInput =
   /** Press POWER: use the player's picked power (a time power toggles). */
   | { type: "power" }
   /** Battle: spend `cost` energy on the SEND tier with that cost. */
-  | { type: "send"; cost: number };
+  | { type: "send"; cost: number }
+  /** Battle: aim attacks by a strategy, or at one opponent's seat by hand. */
+  | { type: "target"; aim: Aim };
+
+/** Where a player's attacks go: a Tetris 99 strategy, or one seat. */
+export type Aim = TargetStrategy | { seat: number };
 
 /**
  * What the match tells a field (docs/MULTIPLAYER_DESIGN.md §8, the Match ↔
@@ -51,7 +57,9 @@ export type MatchMessage =
   /** Players still in the match (sent at the start and after every KO). */
   | { type: "standing"; alive: number; total: number }
   /** Aliens another player sent (an attack): they join the incoming queue. */
-  | { type: "attack"; from: number; cost: number; aliens: SentAlien[] };
+  | { type: "attack"; from: number; cost: number; aliens: SentAlien[] }
+  /** Energy the match awards (a KO this player was credited with). */
+  | { type: "reward"; energy: number };
 
 /** An attack this field sent; the match picks who gets it. */
 export interface Outgoing {
@@ -87,8 +95,14 @@ export interface FieldSummary {
   danger: number;
   /** Energy of the attacks still waiting to land. */
   incoming: number;
-  /** Aliens on screen, as 0–1 positions on the field (the tile's dots). */
-  aliens: { x: number; y: number }[];
+  /** Energy meter, 0–1. */
+  energy: number;
+  /** The player's power, and whether it is on (time) or armed (shield). */
+  power: PowerKind;
+  powerOn: boolean;
+  /** Aliens on screen, as 0–1 positions on the field (the tile's dots);
+   * `sent` marks an attack from another player. */
+  aliens: { x: number; y: number; sent: boolean }[];
 }
 
 /** match = an alien has this answer; typing = one could still (a longer answer
@@ -206,6 +220,8 @@ export class Field {
   private postHitSlow = false;
   /** Players still in the battle, from the match (null in solo play). */
   standing: { alive: number; total: number } | null = null;
+  /** Battle: where this player's attacks go (the match reads it). */
+  aim: Aim = "random";
   /** Sent aliens waiting to land, soonest first. */
   readonly incoming: Incoming[] = [];
   /** Kill energy spent cancelling attacks, this run. */
@@ -315,6 +331,10 @@ export class Field {
       case "send":
         changed = this.send(input.cost);
         break;
+      case "target":
+        changed = this.standing !== null;
+        if (changed) this.aim = input.aim;
+        break;
     }
     this.checkTyped();
     return changed;
@@ -327,6 +347,9 @@ export class Field {
     switch (message.type) {
       case "standing":
         this.standing = { alive: message.alive, total: message.total };
+        break;
+      case "reward":
+        this.energy.charge(message.energy);
         break;
       case "attack": {
         const cost = message.cost / message.aliens.length;
@@ -348,7 +371,7 @@ export class Field {
     const aliens = [];
     for (const a of this.aliens) {
       if (!a.active) continue;
-      aliens.push({ x: a.x / GAME.WIDTH, y: Math.max(0, a.y) / PLAYER.Y });
+      aliens.push({ x: a.x / GAME.WIDTH, y: Math.max(0, a.y) / PLAYER.Y, sent: a.sentBy !== null });
       if (a.lethal && a !== this.lockedTarget) danger = Math.max(danger, a.y / PLAYER.Y);
     }
     return {
@@ -357,6 +380,9 @@ export class Field {
       knockedOut: this.knockedOut,
       danger: Math.min(1, Math.max(0, danger)),
       incoming: this.incoming.reduce((t, a) => t + a.left, 0),
+      energy: this.energy.fraction,
+      power: this.power.kind,
+      powerOn: this.power.running || this.power.shieldArmed,
       aliens,
     };
   }
@@ -667,6 +693,6 @@ export function replayField(
 
 /** Hand a logged entry back to the field the way it first arrived. */
 export function feed(field: Field, input: FieldInput | MatchMessage): void {
-  if (input.type === "standing" || input.type === "attack") field.receive(input);
+  if (input.type === "standing" || input.type === "attack" || input.type === "reward") field.receive(input);
   else field.apply(input);
 }

@@ -36,7 +36,8 @@ interface Plan {
  * power (FREEZE, SLOW) goes on when two or more unanswered aliens are on
  * screen and the nearest is getting close (or one is about to land), and off
  * once the board is clear — the owner's own FREEZE pattern.
- * In a battle it also SENDs when its energy is high and the board is calm.
+ * In a battle it also SENDs when its energy is high and the board is calm,
+ * aiming by its level's strategy (TARGETING).
  *
  * Call `update()` once per sim step, before `field.step()`. Its randomness
  * comes from its own seeded stream, so a match with bots replays exactly.
@@ -59,18 +60,23 @@ export class Bot {
   sends = 0;
   /** False: never press POWER (the "no powers" baseline in `npm run bots`). */
   usesPower = true;
+  /** Energy at which it SENDs (its level's SEND_AT; Infinity = never). */
+  sendAt: number;
   /** Since when the power decision it is about to make has held (REACTION). */
   private powerSince: number | null = null;
   /** This dangerous moment went unnoticed (MISS_DANGER): no power until it passes. */
   private missed = false;
   /** Since when it has been ready to SEND (REACTION). */
   private sendSince: number | null = null;
+  /** Set its targeting strategy (battle). */
+  private aimed = false;
 
   constructor(
     readonly level: BotLevel,
     private readonly rng: Rng,
   ) {
     this.skill = BOT.LEVELS[level];
+    this.sendAt = this.skill.SEND_AT;
   }
 
   /** The bot in `seat` of a match (or run) with this seed. */
@@ -86,6 +92,11 @@ export class Bot {
     this.clock += dt;
     if (field.knockedOut) return;
     if (this.usesPower) this.usePower(field);
+    // Battle: pick its targeting strategy once, like a player before the start.
+    if (field.standing && !this.aimed) {
+      field.apply({ type: "target", aim: this.skill.TARGETING });
+      this.aimed = true;
+    }
     this.decideSend(field);
 
     // Waiting on an entered answer: a right one fires (and clears the typed
@@ -212,7 +223,7 @@ export class Bot {
       .reduce((d, a) => Math.min(d, PLAYER.Y - a.y), Infinity);
     const ready =
       tier !== null &&
-      field.energy.value >= this.skill.SEND_AT &&
+      field.energy.value >= this.sendAt &&
       !field.power.running &&
       nearest > this.skill.FREEZE_AT_PX;
     if (!ready) {
