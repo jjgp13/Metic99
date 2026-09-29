@@ -1,12 +1,12 @@
-import { ENERGY, SCORE, SLOW_TIME, type SlowMode } from "../config/constants";
+import { ENERGY, POWERS, SCORE, type PowerDef, type PowerKind } from "../config/constants";
 
 /**
  * Energy rules, kept free of Phaser and rendering so the same code can run in a
  * future shared sim / match server (docs/MULTIPLAYER_DESIGN.md §5, phase 2).
  *
  * The meter only knows how to charge and spend. Each way of spending is its own
- * small controller (SlowTime below for slow/freeze; "send" later) that asks the
- * meter for energy, so adding a spender doesn't touch the others.
+ * small controller (Power below for the player's picked power; "send" later)
+ * that asks the meter for energy, so adding a spender doesn't touch the others.
  */
 
 /** Everything about a kill that energy cares about. */
@@ -34,13 +34,19 @@ export function energyForKill(k: KillInfo): number {
 }
 
 /** Where energy can go. "send" (attack an opponent) arrives with multiplayer. */
-export type EnergySpender = SlowMode | "send";
+export type EnergySpender = PowerKind | "send";
 
 export class EnergyMeter {
   public value = 0;
   /** Per-run totals, shown on game over to compare playtest settings. */
   public earned = 0;
-  public readonly spent: Record<EnergySpender, number> = { slow: 0, freeze: 0, send: 0 };
+  public readonly spent: Record<EnergySpender, number> = {
+    freeze: 0,
+    slow: 0,
+    blast: 0,
+    shield: 0,
+    send: 0,
+  };
 
   constructor(public readonly max: number = ENERGY.MAX) {}
 
@@ -81,35 +87,64 @@ export class EnergyMeter {
   }
 }
 
+/** What pressing the power did. */
+export type PowerUse = "on" | "off" | "blast" | "armed";
+
 /**
- * Time powers: SLOW (field at 30%) and FREEZE (field stopped). Each is a toggle
- * that drains energy while on; only one runs at a time. Pressing the running
- * one turns it off, pressing the other switches over, and it turns off by
- * itself when the meter runs dry.
+ * The player's one power (POWERS in constants), picked before the run and fixed
+ * for it. What it does depends on its EFFECT:
+ * - time: a toggle that drains energy while on and slows the field; it turns
+ *   off by itself when the meter runs dry.
+ * - blast: a one-shot that pays its cost; the Field destroys every alien.
+ * - shield: pays its cost to arm; the Field asks `absorbHit()` when an alien
+ *   reaches the ship. Only one shield can be armed.
  */
-export class SlowTime {
-  private running: SlowMode | null = null;
+export class Power {
+  readonly def: PowerDef;
+  private on = false;
+  private armed = false;
 
-  get mode(): SlowMode | null {
-    return this.running;
+  constructor(readonly kind: PowerKind) {
+    this.def = POWERS[kind];
   }
 
-  /** Energy needed before a power can be switched on. */
-  get threshold(): number {
-    return SLOW_TIME.MIN_START;
+  /** A time power is running: the field is slowed and kills charge nothing. */
+  get running(): boolean {
+    return this.on;
   }
 
-  /** Whether pressing a power would do something: once one runs, switching
-   * over or off is always allowed; starting needs `threshold` energy. */
+  get shieldArmed(): boolean {
+    return this.armed;
+  }
+
+  /** Energy needed to press it (the meter's mark). */
+  get cost(): number {
+    return this.def.EFFECT === "time" ? this.def.MIN_START : this.def.COST;
+  }
+
+  /** Whether pressing it now would do something. A running time power can
+   * always be switched off; an armed shield can't be bought twice. */
   canTrigger(meter: EnergyMeter): boolean {
-    return this.running !== null || meter.canSpend(this.threshold);
+    if (this.on) return true;
+    if (this.armed) return false;
+    return meter.canSpend(this.cost);
   }
 
-  /** The player pressed SLOW or FREEZE. Returns true if something changed. */
-  trigger(mode: SlowMode, meter: EnergyMeter): boolean {
-    if (!this.canTrigger(meter)) return false;
-    this.running = this.running === mode ? null : mode;
-    return true;
+  /** The player pressed POWER. Returns what happened, or null if nothing. */
+  trigger(meter: EnergyMeter): PowerUse | null {
+    if (!this.canTrigger(meter)) return null;
+    switch (this.def.EFFECT) {
+      case "time":
+        this.on = !this.on;
+        return this.on ? "on" : "off";
+      case "blast":
+        meter.spend(this.def.COST, this.kind);
+        return "blast";
+      case "shield":
+        meter.spend(this.def.COST, this.kind);
+        this.armed = true;
+        return "armed";
+    }
   }
 
   /**
@@ -118,11 +153,17 @@ export class SlowTime {
    * field) nothing drains, so energy isn't wasted.
    */
   update(deltaMs: number, meter: EnergyMeter, held: boolean): number {
-    if (this.running === null) return 1;
-    const { FACTOR, PER_SEC } = SLOW_TIME.MODES[this.running];
-    if (!held) meter.drain((PER_SEC * deltaMs) / 1000, this.running);
-    if (meter.value <= 0) this.running = null;
-    return this.running === null ? 1 : FACTOR;
+    if (!this.on || this.def.EFFECT !== "time") return 1;
+    if (!held) meter.drain((this.def.PER_SEC * deltaMs) / 1000, this.kind);
+    if (meter.value <= 0) this.on = false;
+    return this.on ? this.def.FACTOR : 1;
+  }
+
+  /** An alien reached the ship: true if an armed shield took it (and is spent). */
+  absorbHit(): boolean {
+    if (!this.armed) return false;
+    this.armed = false;
+    return true;
   }
 }
 

@@ -49,9 +49,10 @@ export default class HowToPlayScene extends Phaser.Scene {
       {
         heading: "ENERGY",
         body:
-          "Kills charge the EN meter. Spend it on SLOW\n" +
-          "(30% speed, lasts longer) or FREEZE (full\n" +
-          "stop, burns energy twice as fast).",
+          "Kills charge the EN meter. Spend it on the\n" +
+          "POWER you picked on the menu (FREEZE, SLOW,\n" +
+          "BLAST or SHIELD). Powers never pay for\n" +
+          "themselves: their kills charge nothing.",
       },
       {
         heading: "MONSTERS",
@@ -63,7 +64,7 @@ export default class HowToPlayScene extends Phaser.Scene {
       },
       {
         heading: "CONTROLS",
-        body: "0-9 · Esc clear · Space slow · F freeze · P pause",
+        body: "0-9 · Esc clear · Space / F power · P pause",
       },
     ];
 

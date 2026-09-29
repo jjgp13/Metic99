@@ -31,6 +31,9 @@ interface Plan {
  * the next alien while its shot is still flying, and it drops a sum it is
  * still thinking about when a clearly worse threat appears.
  *
+ * It uses whatever power its field has, by the power's EFFECT (not its name),
+ * so a new power that reuses an effect needs no bot code (`usePower`).
+ *
  * Call `update()` once per sim step, before `field.step()`. Its randomness
  * comes from its own seeded stream, so a match with bots replays exactly.
  */
@@ -47,6 +50,8 @@ export class Bot {
   answers = 0;
   slips = 0;
   switches = 0;
+  /** False: never press POWER (the "no powers" baseline in `npm run bots`). */
+  usesPower = true;
 
   constructor(
     readonly level: BotLevel,
@@ -67,6 +72,7 @@ export class Bot {
   update(field: Field, dt: number): void {
     this.clock += dt;
     if (field.knockedOut) return;
+    if (this.usesPower) this.usePower(field);
 
     // Waiting on an entered answer: a right one fires (and clears the typed
     // answer); a slip stays wrong, or dangles as the start of another answer.
@@ -101,6 +107,44 @@ export class Bot {
 
     const alien = this.pickTarget(field);
     if (alien) this.plan = this.read(alien);
+  }
+
+  /**
+   * Energy policy (docs/MULTIPLAYER_DESIGN.md §7), one rule per effect:
+   * - time: on when an unanswered alien gets close, off once none is near
+   *   (the gap between the two lines stops it flickering); also on when the
+   *   bar is nearly full, so energy isn't lost to overflow;
+   * - blast: with a full bar, when several unanswered aliens are close or one
+   *   is about to land;
+   * - shield: arm it as soon as it's affordable (buy it in the calm).
+   */
+  private usePower(field: Field): void {
+    const p = BOT.POWER;
+    const open = field.aliens.filter(
+      (a) => a.active && a.lethal && a !== field.lockedTarget && a !== field.target,
+    );
+    const danger = open.reduce((y, a) => Math.max(y, a.y), -Infinity);
+    const power = field.power;
+    let press = false;
+    switch (power.def.EFFECT) {
+      case "time": {
+        const energy = field.energy.value;
+        const spending = open.length > 0 && energy >= (power.running ? p.SPEND_TO : p.SPEND_ABOVE);
+        press = power.running
+          ? danger < p.TIME_OFF_Y && !spending
+          : danger > p.TIME_ON_Y || spending;
+        break;
+      }
+      case "blast": {
+        const close = open.filter((a) => a.y > p.BLAST_Y).length;
+        press = close >= 2 || danger > p.BLAST_LAST_Y;
+        break;
+      }
+      case "shield":
+        press = true;
+        break;
+    }
+    if (press && power.canTrigger(field.energy)) field.apply({ type: "power" });
   }
 
   /**
