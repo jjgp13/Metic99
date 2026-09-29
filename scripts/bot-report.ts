@@ -2,7 +2,8 @@
  * Bot report: plays every bot level on several seeds, headless, and prints how
  * they did. Run with `npm run bots` (add `-- --lives 1` for the battle rule,
  * `-- --minutes 5` to cap runs, `-- --seeds 20` for more runs,
- * `-- --ability splitter` to make every allowed spawn that ability).
+ * `-- --ability splitter` to make every allowed spawn that ability,
+ * `-- --no-powers` to compare with bots that never use SLOW/FREEZE).
  *
  * This is "balancing by simulation": change a number in BOT or DIFFICULTY,
  * re-run, and compare, instead of playing dozens of games by hand. Compare the
@@ -25,6 +26,7 @@ const arg = (name: string, fallback: number) => {
 const SEEDS = arg("seeds", 8);
 const MINUTES = arg("minutes", 10);
 const LIVES = arg("lives", 3);
+const POWERS = !process.argv.includes("--no-powers");
 const abilityArg = process.argv.indexOf("--ability");
 const FORCED = abilityArg >= 0 ? (process.argv[abilityArg + 1].split(",") as AbilityKind[]) : null;
 
@@ -37,15 +39,19 @@ for (const level of Object.keys(BOT.LEVELS) as BotLevel[]) {
   let slips = 0;
   const solves = [];
   const hitsBy = new Map<string, number>();
+  let frozenSteps = 0;
+  let steps = 0;
   const paces = new Map<number, number[]>();
   let hits = 0;
   for (let seed = 1; seed <= SEEDS; seed++) {
     const field = new Field({ seed, lives: LIVES, forcedAbilities: FORCED });
     const bot = Bot.forSeat(level, seed);
+    bot.usePowers = POWERS;
     const maxSteps = Math.round((MINUTES * 60_000) / SIM.STEP_MS);
     while (!field.knockedOut && field.steps < maxSteps) {
       bot.update(field, SIM.STEP_MS);
       field.step(SIM.STEP_MS);
+      if (field.slowTime.mode === "freeze") frozenSteps++;
       for (const e of field.takeEvents()) {
         if (e.type !== "hit") continue;
         const by = e.alien.model?.replace("alien_", "") ?? e.alien.kind;
@@ -54,6 +60,7 @@ for (const level of Object.keys(BOT.LEVELS) as BotLevel[]) {
       }
     }
     mergeTimes(paces, answerTimes({ seed, lives: LIVES, forcedAbilities: FORCED }, field.inputLog, field.steps));
+    steps += field.steps;
     survived.push(field.elapsedMs / 1000);
     scores.push(field.score);
     kills += field.kills;
@@ -74,6 +81,7 @@ for (const level of Object.keys(BOT.LEVELS) as BotLevel[]) {
     "kills/run": Math.round(kills / SEEDS),
     slips: `${((100 * slips) / Math.max(1, answers)).toFixed(0)}%`,
     "answer time": formatTimes(paces),
+    "frozen": `${Math.round((100 * frozenSteps) / Math.max(1, steps))}%`,
     "solve time (median)": bySize,
     "hit by": [...hitsBy.entries()]
       .sort((a, b) => b[1] - a[1])
@@ -84,6 +92,7 @@ for (const level of Object.keys(BOT.LEVELS) as BotLevel[]) {
 }
 console.log(
   `${SEEDS} seeds per level, ${LIVES} ${LIVES === 1 ? "life" : "lives"}, runs capped at ${MINUTES} min` +
-    (FORCED ? `, every allowed spawn: ${FORCED.join(", ")}` : ""),
+    (FORCED ? `, every allowed spawn: ${FORCED.join(", ")}` : "") +
+    (POWERS ? "" : ", no powers"),
 );
 console.table(rows);

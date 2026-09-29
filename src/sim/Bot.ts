@@ -1,4 +1,4 @@
-import { BOT, type BotLevel } from "../config/constants";
+import { BOT, PLAYER, type BotLevel } from "../config/constants";
 import type Alien from "../objects/Alien";
 import type { Field } from "./Field";
 import { Rng } from "./rng";
@@ -24,12 +24,16 @@ interface Plan {
  * can't cheat, a new monster mostly just works, and later the same bot can
  * fill empty seats on a server.
  *
- * Solving model per answer: notice (REACTION) → think (base + per ball + per
- * carry, spread log-normally) → type the whole answer at once (PER_KEY per
+ * Solving model per answer: notice (REACTION) → think (base + per addition +
+ * per carry, spread log-normally) → type the whole answer at once (PER_KEY per
  * digit; like the drawing pad, so "23" never passes through "2") → sometimes a
  * slip (off by 1 or 10) that it notices and clears. Like a person it reads the
  * next alien while the ship lines up its shot, and it drops a sum it is
  * still thinking about when a clearly worse threat appears.
+ *
+ * Powers: FREEZE when two or more unanswered aliens are on screen and the
+ * nearest is getting close (or one is about to land), keep answering while
+ * frozen, and unfreeze once the board is clear — the owner's own pattern.
  *
  * Call `update()` once per sim step, before `field.step()`. Its randomness
  * comes from its own seeded stream, so a match with bots replays exactly.
@@ -47,6 +51,14 @@ export class Bot {
   answers = 0;
   slips = 0;
   switches = 0;
+  /** Times it switched FREEZE on. */
+  freezes = 0;
+  /** Off for A/B tests (`npm run bots -- --no-powers`). */
+  usePowers = true;
+  /** Since when the power decision it is about to make has held (REACTION). */
+  private powerSince: number | null = null;
+  /** This dangerous moment went unnoticed (MISS_DANGER): no FREEZE until it passes. */
+  private missed = false;
 
   constructor(
     readonly level: BotLevel,
@@ -67,6 +79,7 @@ export class Bot {
   update(field: Field, dt: number): void {
     this.clock += dt;
     if (field.knockedOut) return;
+    if (this.usePowers) this.decidePower(field);
 
     // Waiting on an entered answer: a right one fires (and clears the typed
     // answer); a slip stays wrong, or dangles as the start of another answer.
@@ -122,6 +135,37 @@ export class Bot {
     this.answers--; // the dropped answer was never entered
     if (plan.answer !== sumOf(plan.alien)) this.slips--;
     this.plan = this.read(worst);
+  }
+
+  /**
+   * FREEZE when the board gets dangerous; unfreeze once every alien on
+   * screen is answered. A decision is made only after it has held for
+   * REACTION, like a person noticing.
+   */
+  private decidePower(field: Field): void {
+    const open = this.readable(field).filter((a) => a.lethal);
+    const nearest = open.reduce((d, a) => Math.min(d, PLAYER.Y - a.y), Infinity);
+    const frozen = field.slowTime.mode === "freeze";
+    const want = frozen
+      ? open.length > 0 // stay frozen until the board is clear
+      : (open.length >= BOT.FREEZE_MIN_OPEN && nearest <= this.skill.FREEZE_AT_PX) ||
+        nearest <= this.skill.PANIC_PX;
+    // Nothing to change (or the hit-recovery freeze already holds the field).
+    if (want === frozen || field.freezeLeftMs > 0 || (!frozen && !field.slowTime.canTrigger(field.energy))) {
+      this.powerSince = null;
+      this.missed = false; // the moment passed
+      return;
+    }
+    if (this.powerSince === null && !frozen) {
+      // A new dangerous moment: people sometimes don't notice one in time.
+      this.missed = this.rng.chance(this.skill.MISS_DANGER);
+    }
+    this.powerSince ??= this.clock;
+    if (this.missed) return;
+    if (this.clock - this.powerSince < this.skill.REACTION) return;
+    field.apply({ type: "power", mode: "freeze" }); // toggles it on or off
+    if (!frozen) this.freezes++;
+    this.powerSince = null;
   }
 
   /** Aliens whose balls a person could read right now. */

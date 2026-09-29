@@ -141,10 +141,14 @@ the agreed shape.
   never locks onto another alien.
 - **Skill levels** are tables of those numbers (Rookie / Pilot / Ace),
   calibrated against the owner's own solve times.
-- **Energy policy:** simple utility rules. Danger (how close the lowest
-  unsolved alien is + unsolved count + incoming) → FREEZE when very high, SLOW
-  when high, off when it passes; otherwise bank energy and SEND above a
-  personality threshold (aggressive vs turtle).
+- **Energy policy:** simple rules. Built (M4) from the owner's 72 logged
+  freezes: FREEZE when ≥ 2 unanswered aliens are on screen and the nearest
+  is within reach (ace ~170 px ≈ the owner), or one is about to land; keep
+  answering; unfreeze once the board is clear. Each dangerous moment goes
+  unnoticed with a per-level chance (`MISS_DANGER`), because people get hit
+  with energy to spare. No SLOW for now. SEND (M6): bank energy and send
+  above a personality threshold (aggressive vs turtle); incoming aliens
+  will count as danger.
 - Each bot draws from its own seeded stream, so a match replays exactly.
 - **Built (M3):** `src/sim/Bot.ts`, levels in `BOT` (constants). Beyond the
   table: a strafer about to dive counts as more dangerous, drifters come
@@ -239,7 +243,7 @@ but marked as such.
 | M2a | Extract `Field` (spawning, movement, readability) + fixed timestep | Solo unchanged; headless soak: no box overlaps | done 2026-09-27 |
 | M2b | Combat, energy, abilities, input into `Field`; events out | Same seed + inputs → same state hash | done 2026-09-27 |
 | M3 | Bot v1 (solving) + dev autopilot `?bot=ace` on your own field | Survival per skill level; calibrate vs your solve times | done 2026-09-27 |
-| M4 | Bot energy policy (SLOW/FREEZE) | Headless A/B: survival with vs without powers | |
+| M4 | Bot energy policy (SLOW/FREEZE) | Headless A/B: survival with vs without powers | done 2026-09-29 |
 | M5 | `Match` with N fields: KOs, placement, `dMatch`, match end | 16 headless bots: the match always ends | |
 | M6 | SEND + incoming queue + cancel; SEND button + incoming meter | Cancel math; sent aliens pass the readability soak | |
 | M7 | Targeting strategies, badges, defense bonus | Unit tests; bot tournaments | |

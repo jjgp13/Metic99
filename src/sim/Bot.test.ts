@@ -112,3 +112,42 @@ describe("Bot", () => {
     expect(bot.answers).toBe(1);
   });
 });
+
+describe("Bot powers (FREEZE)", () => {
+  const play = (seed: number, powers: boolean, onStep?: (f: Field) => void) => {
+    const field = new Field({ seed });
+    const bot = Bot.forSeat("ace", seed);
+    bot.usePowers = powers;
+    run(field, bot, 10, () => onStep?.(field));
+    return { field, bot };
+  };
+
+  it("survives longer with FREEZE than without (A/B)", () => {
+    const seeds = [1, 2, 3, 4, 5];
+    const median = (xs: number[]) => [...xs].sort((a, b) => a - b)[2];
+    const without = median(seeds.map((s) => play(s, false).field.elapsedMs));
+    const withPowers = median(seeds.map((s) => play(s, true).field.elapsedMs));
+    expect(withPowers).toBeGreaterThan(without * 1.5);
+  });
+
+  it("freezes only when the board is dangerous, and unfreezes once it's clear", () => {
+    let freezeSteps = 0;
+    let frozenWithNothingOpen = 0;
+    const { bot } = play(2, true, (f) => {
+      if (f.slowTime.mode !== "freeze") return;
+      freezeSteps++;
+      const open = f.aliens.filter((a) => a.active && a.lethal && a !== f.lockedTarget && a.y - a.top >= 0);
+      if (open.length === 0) frozenWithNothingOpen++;
+    });
+    expect(bot.freezes).toBeGreaterThan(5);
+    // A clear board is noticed within REACTION (plus the step the last kill lands).
+    expect(frozenWithNothingOpen / bot.freezes).toBeLessThan((BOT.LEVELS.ace.REACTION + 100) / STEP);
+    expect(freezeSteps).toBeGreaterThan(0);
+  });
+
+  it("never uses SLOW", () => {
+    const { field } = play(3, true);
+    expect(field.energy.spent.slow).toBe(0);
+    expect(field.energy.spent.freeze).toBeGreaterThan(0);
+  });
+});

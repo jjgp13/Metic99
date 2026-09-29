@@ -415,7 +415,12 @@ Green=multiplication, Yellow=division.
   appears. Calibrated on the owner's runs by **answer time** (`sim/pace.ts`:
   readable or previous answer → matching answer): owner 1.15 s (2 balls) /
   2.27 s (3 balls); ace ≈ owner, pilot ≈ 1.5× slower, rookie a guess.
-  Seeded per seat (`Bot.forSeat`). No powers yet (M4). Dev: `?bot=ace` puts a
+  **Powers (M4):** FREEZE when ≥ `FREEZE_MIN_OPEN` (2) unanswered aliens are
+  on screen and the nearest is within `FREEZE_AT_PX` of the ship (or one is
+  within `PANIC_PX`), keep answering, unfreeze once the board is clear — the
+  owner's own pattern; each dangerous moment goes unnoticed with chance
+  `MISS_DANGER` (humans got hit with energy to spare). Bots never use SLOW
+  (neither does the owner). Seeded per seat (`Bot.forSeat`). Dev: `?bot=ace` puts a
   bot on autopilot on your field; at game over the console prints your (or
   the bot's) solve times by ball count to compare with `npm run bots`.
   The GAME OVER screen also shows the run's survival time and median solve
@@ -569,8 +574,9 @@ curve is in `src/config/difficulty.ts` (`difficultyAt(elapsedMs, score)`).
        Phaser-free `Field` (aliens, spawning, readability) + fixed timestep,
        [x] M2b ship/combat/scoring/lives/energy/input into the sim (input log
        + exact replay), [x] M3 bot v1 (solving, 3 skill levels, `?bot=`,
-       `npm run bots`; calibrated on playtests), [ ] M4 bot powers,
-       [ ] M5+ match, send.
+       `npm run bots`; calibrated on playtests), [x] M4 bot powers (FREEZE,
+       fitted to the owner), [ ] M5 match (N fields, KOs, placement),
+       [ ] M6+ send, targeting, battle UI.
 
 ## Conventions
 
@@ -594,6 +600,16 @@ curve is in `src/config/difficulty.ts` (`difficultyAt(elapsedMs, score)`).
 ## Decision Log
 
 Newest first. Format: `YYYY-MM-DD — decision — rationale`.
+
+- **2026-09-29 — Bots use FREEZE like the owner (battle royale M4).** From 72
+  owner freezes: on when ≥ 2 unanswered aliens are up and the nearest is
+  ~170 px away (energy usually ~full), off once the board is clear (~3.2 s).
+  Bots copy that rule per level. A perfect freezer outlived the owner 2×
+  (ace 600 s cap, 179k): 6 of the owner's 9 hits came with energy to spare,
+  so each dangerous moment now goes unnoticed with `MISS_DANGER` (ace 0.2 →
+  293 s, 80k, 25% frozen vs owner 266 s, 74k, 27%). A/B: FREEZE lifts
+  survival ~1.3× (rookie), 1.5× (pilot), 2.6× (ace). No SLOW: unused by the
+  owner and under redesign in the powers chat.
 
 - **2026-09-29 — Bots think per addition and are fitted to the owner.**
   Measured by answer time (not solve time, which mixes in entry time, slow

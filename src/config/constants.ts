@@ -47,6 +47,16 @@ export const SIM = {
  * typed answer matching it): the owner answers 2-ball sums in 1.15 s and
  * 3-ball sums in 2.27 s, so each addition costs about the same. ACE ≈ the
  * owner, PILOT ≈ 1.5× slower. ROOKIE is a guess (no beginner runs yet).
+ *
+ * Powers (M4), also from the owner's runs: FREEZE when at least
+ * FREEZE_MIN_OPEN unanswered aliens are on screen and the nearest is within
+ * FREEZE_AT_PX of the ship (owner: 2 aliens, ~170 px), or a single one is
+ * within PANIC_PX; keep answering while frozen and unfreeze once the board is
+ * clear (owner: ~3.2 s later). Both after REACTION, like any decision.
+ * MISS_DANGER: chance a bot doesn't notice a dangerous moment at all and
+ * plays on without freezing (6 of the owner's 9 hits came with energy to
+ * spare and FREEZE off; a bot that never misses outlived the owner 2×; at
+ * 0.2 the ace matches the owner: ~290 s, ~80k points, frozen 25% of the time).
  */
 export const BOT = {
   LEVELS: {
@@ -59,6 +69,9 @@ export const BOT = {
       PER_KEY: 220,
       ERROR_RATE: 0.12,
       NOTICE_WRONG: 700,
+      FREEZE_AT_PX: 100,
+      MISS_DANGER: 0.3,
+      PANIC_PX: 50,
       FOCUS: 0.6,
     },
     pilot: {
@@ -70,6 +83,9 @@ export const BOT = {
       PER_KEY: 150,
       ERROR_RATE: 0.06,
       NOTICE_WRONG: 500,
+      FREEZE_AT_PX: 140,
+      MISS_DANGER: 0.15,
+      PANIC_PX: 70,
       FOCUS: 0.85,
     },
     ace: {
@@ -81,6 +97,9 @@ export const BOT = {
       PER_KEY: 100,
       ERROR_RATE: 0.02,
       NOTICE_WRONG: 300,
+      FREEZE_AT_PX: 170,
+      MISS_DANGER: 0.2,
+      PANIC_PX: 90,
       FOCUS: 0.98,
     },
   },
@@ -93,6 +112,8 @@ export const BOT = {
   SWITCH_MARGIN_PX: 120,
   // Balls hidden more than this (Blinker lids) can't be read.
   MAX_READ_COVER: 0.5,
+  // Unanswered aliens on screen that make a bot consider FREEZE.
+  FREEZE_MIN_OPEN: 2,
 } as const;
 
 export type BotLevel = keyof typeof BOT.LEVELS;
