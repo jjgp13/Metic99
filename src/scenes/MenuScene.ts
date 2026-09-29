@@ -5,7 +5,7 @@ import { onKeyDown } from "../ui/keyboard";
 
 /**
  * Title / main menu. The first scene the player sees: a ship picker, then PLAY,
- * HOW TO PLAY and SCORES. Buttons are large pointer targets (mobile-friendly);
+ * BATTLE, HOW TO PLAY and SCORES. Buttons are large pointer targets (mobile-friendly);
  * ←/→ change ship and Enter plays.
  */
 export default class MenuScene extends Phaser.Scene {
@@ -54,9 +54,11 @@ export default class MenuScene extends Phaser.Scene {
 
     this.makeShipPicker(cx, 330);
 
-    this.makeButton(cx, 450, "PLAY", () => this.scene.start("GameScene"));
-    this.makeButton(cx, 520, "HOW TO PLAY", () => this.scene.start("HowToPlayScene"));
-    this.makeButton(cx, 590, "SCORES", () =>
+    this.makeButton(cx, 432, "PLAY", () => this.scene.start("GameScene"));
+    // Battle royale vs bots (docs/MULTIPLAYER_DESIGN.md): you + 7 bots, one life.
+    this.makeButton(cx, 496, "BATTLE (beta)", () => this.scene.start("GameScene", { battle: true }));
+    this.makeButton(cx, 560, "HOW TO PLAY", () => this.scene.start("HowToPlayScene"));
+    this.makeButton(cx, 624, "SCORES", () =>
       this.scene.start("LeaderboardScene", { browse: true }),
     );
 

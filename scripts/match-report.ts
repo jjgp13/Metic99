@@ -30,8 +30,13 @@ const MAX_STEPS = Math.round((30 * 60_000) / SIM.STEP_MS);
 
 const lengths: number[] = [];
 const koTimes: number[][] = SEATS.map(() => []);
-const byLevel = new Map<BotLevel, { places: number[]; wins: number; survived: number[]; scores: number[] }>();
+const byLevel = new Map<
+  BotLevel,
+  { places: number[]; wins: number; survived: number[]; scores: number[]; sent: number; cancelled: number }
+>();
 const koBy = new Map<string, number>();
+let koByAttack = 0;
+let attacks = 0;
 let unfinished = 0;
 
 for (let seed = 1; seed <= MATCHES; seed++) {
@@ -40,7 +45,9 @@ for (let seed = 1; seed <= MATCHES; seed++) {
   while (!match.over && match.steps < MAX_STEPS) {
     match.step(SIM.STEP_MS);
     for (const e of match.takeEvents()) {
+      if (e.type === "attack") attacks++;
       if (e.type !== "ko") continue;
+      if (e.by !== null) koByAttack++;
       koAt[e.seat] = match.elapsedMs;
       const alien = match.fields[e.seat].knockedOutBy;
       const by = alien?.model?.replace("alien_", "") ?? alien?.kind ?? "?";
@@ -52,7 +59,9 @@ for (let seed = 1; seed <= MATCHES; seed++) {
   match.koOrder.forEach((seat, i) => koTimes[i]?.push(koAt[seat] / 1000));
   SEATS.forEach((level, seat) => {
     if (level === "human") return;
-    const row = byLevel.get(level) ?? { places: [], wins: 0, survived: [], scores: [] };
+    const row = byLevel.get(level) ?? { places: [], wins: 0, survived: [], scores: [], sent: 0, cancelled: 0 };
+    row.sent += match.fields[seat].energy.spent.send;
+    row.cancelled += match.fields[seat].cancelledTotal;
     row.places.push(match.placements[seat]);
     if (match.placements[seat] === 1) row.wins++;
     row.survived.push(match.fields[seat].elapsedMs / 1000);
@@ -78,6 +87,8 @@ console.table(
     "place (median)": median(r.places),
     "survived (median)": `${Math.round(median(r.survived))} s`,
     "score (median)": Math.round(median(r.scores)),
+    "energy sent/run": Math.round(r.sent / r.places.length),
+    "cancelled/run": Math.round(r.cancelled / r.places.length),
   })),
 );
 console.log(
@@ -88,6 +99,10 @@ console.log(
       .join("  "),
 );
 const kos = [...koBy.values()].reduce((a, b) => a + b, 0);
+console.log(
+  `attacks: ${(attacks / MATCHES).toFixed(1)} per match; ` +
+    `${Math.round((100 * koByAttack) / Math.max(1, kos))}% of KOs by a sent alien`,
+);
 console.log(
   "knocked out by: " +
     [...koBy.entries()]

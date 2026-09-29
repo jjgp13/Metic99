@@ -39,6 +39,8 @@ export interface AlienConfig {
   model?: string;
   /** Special rule layered on top of the movement (objects/abilities.ts). */
   ability?: Ability;
+  /** Battle: the seat that sent this alien (an attack), else unset. */
+  sentBy?: number;
 }
 
 /** A scripted move (knockback, splitting apart) that overrides the pattern. */
@@ -85,6 +87,8 @@ export default class Alien {
   /** Model worn instead of the kind's (ability aliens), else null. */
   public readonly model: string | null;
   public readonly ability: Ability | null;
+  /** Battle: the seat that sent this alien, or null for the field's own. */
+  public readonly sentBy: number | null;
 
   // Readability box around the ball row and body, relative to (x, y).
   public readonly halfW: number;
@@ -122,6 +126,7 @@ export default class Alien {
     this.spawnedAt = config.spawnedAt;
     this.model = config.model ?? null;
     this.ability = config.ability ?? null;
+    this.sentBy = config.sentBy ?? null;
     this.fallSpeed = config.fallSpeed;
     this.homeSpeed = config.homeSpeed;
     this.laneX = config.x;

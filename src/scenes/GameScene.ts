@@ -4,9 +4,11 @@ import {
   FEEDBACK,
   GAME,
   KEYPAD_AREA,
+  MATCH,
   PLAYER,
   RANKS,
   SCORE,
+  SEND,
   SIM,
   STORAGE,
   type InputMode,
@@ -32,6 +34,7 @@ import {
   type FieldInput,
 } from "../sim/Field";
 import { Bot } from "../sim/Bot";
+import { Match, type MatchEvent } from "../sim/Match";
 import { randomSeed } from "../sim/rng";
 import { summarizeSolves } from "../sim/stats";
 import { inputMode, setInputMode } from "../config/inputMode";
@@ -49,6 +52,10 @@ const METER_X = GAME.WIDTH / 2 - 180; // under the keypad, same width
 const METER_W = 360;
 const METER_Y = KEYPAD_BOTTOM + 22;
 const POWER_COLOR: Record<SlowMode, number> = { slow: ENERGY_COLOR, freeze: 0xb8d8ff };
+// Battle: attacks (the SEND button, incoming aliens on the meter). Not red:
+// red is reserved for subtraction balls.
+const ATTACK_COLOR = 0xff8c42;
+const ATTACK_CSS = "#ff8c42";
 const POWER_ON_FILL: Record<SlowMode, number> = { slow: 0x1f6f7a, freeze: 0x3a5a8c };
 // The answer display's row, between the ship and the keypad: the input-mode
 // switch sits on its right, the drawing pad's C button on its left.
@@ -68,6 +75,9 @@ const ANSWER_Y = PLAYER.Y + 36;
 export default class GameScene extends Phaser.Scene {
   private world!: World3D;
   private field!: Field;
+  /** Battle mode: the match; the player plays `match.fields[0]`. Null in solo. */
+  private match: Match | null = null;
+  private battleText: Phaser.GameObjects.Text | null = null;
   /** Dev only (`?bot=ace`): a bot plays this field through the same inputs. */
   private autopilot: Bot | null = null;
   /** What the playtest log records beyond the field (services/playtestLog.ts). */
@@ -97,10 +107,14 @@ export default class GameScene extends Phaser.Scene {
   // Energy HUD: the meter under the keypad, SLOW / FREEZE in the gutters.
   private energyFill!: Phaser.GameObjects.Rectangle;
   private energyText!: Phaser.GameObjects.Text;
-  private powerButtons = {} as Record<
-    SlowMode,
-    { bg: Phaser.GameObjects.Rectangle; text: Phaser.GameObjects.Text }
-  >;
+  private powerButtons: Partial<
+    Record<SlowMode, { bg: Phaser.GameObjects.Rectangle; text: Phaser.GameObjects.Text }>
+  > = {};
+  // Battle: the SEND button (in SLOW's gutter), its hold-to-step-down state,
+  // and the incoming attacks drawn over the right end of the meter.
+  private sendButton: { bg: Phaser.GameObjects.Rectangle; text: Phaser.GameObjects.Text } | null = null;
+  private sendHeldSince: number | null = null;
+  private incomingGfx!: Phaser.GameObjects.Graphics;
   private slowTint!: Phaser.GameObjects.Rectangle;
 
   // Pause: while paused the field is frozen and aliens are hidden so the
@@ -122,8 +136,8 @@ export default class GameScene extends Phaser.Scene {
     super("GameScene");
   }
 
-  create(): void {
-    this.resetState();
+  create(data?: { battle?: boolean }): void {
+    this.resetState(data?.battle ?? false);
 
     // The 3D playfield (starfield, ship, aliens, bullets, explosions) renders on
     // its own canvas under Phaser's; stop drawing it when we leave this scene.
@@ -140,11 +154,12 @@ export default class GameScene extends Phaser.Scene {
 
     // Open a server-gated match so this run's score can be submitted later.
     // Fire-and-forget: if it fails the player just gets an unsaved score.
-    void startMatch();
+    // Battles don't go on the (solo) leaderboard.
+    if (!this.match) void startMatch();
     initPlaytestLog();
   }
 
-  private resetState(): void {
+  private resetState(battle: boolean): void {
     this.stepAccMs = 0;
     this.answer = null;
     this.reticleTarget = null;
@@ -176,10 +191,23 @@ export default class GameScene extends Phaser.Scene {
         .filter((k): k is AbilityKind => (ABILITY_KINDS as string[]).includes(k));
       if (kinds?.length) forcedAbilities = kinds;
     }
-    this.field = new Field({ seed, forcedAbilities });
+    // Battle: you (seat 0) and the bots share the seed, one life each.
+    if (battle) {
+      this.match = new Match({ seed, seats: ["human", ...MATCH.OPPONENTS] });
+      this.field = this.match.fields[0];
+      forcedAbilities = null;
+    } else {
+      this.match = null;
+      this.field = new Field({ seed, forcedAbilities });
+    }
+    this.battleText = null;
+    this.sendButton = null;
+    this.sendHeldSince = null;
+    this.powerButtons = {};
     this.runExtras = {
       lives: this.field.lives,
       forcedAbilities,
+      battle: battle ? { players: MATCH.OPPONENTS.length + 1, opponents: [...MATCH.OPPONENTS], placement: null } : null,
       inputMode: inputMode(),
       sources: { keypad: 0, keyboard: 0, pad: 0 },
       ink: { reads: 0, unknown: 0, scratch: 0 },
@@ -236,8 +264,56 @@ export default class GameScene extends Phaser.Scene {
   /** One fixed sim step, then show what happened in it. */
   private step(dt: number): void {
     this.autopilot?.update(this.field, dt);
-    this.field.step(dt);
+    if (this.match) this.match.step(dt);
+    else this.field.step(dt);
     for (const e of this.field.takeEvents()) this.show(e);
+    for (const e of this.match?.takeEvents() ?? []) this.showMatch(e);
+  }
+
+  /** Battle: other players' KOs, attacks, the end of the match. */
+  private showMatch(e: MatchEvent): void {
+    const name = (seat: number) => (seat === 0 ? "YOU" : `P${seat + 1}`);
+    switch (e.type) {
+      case "ko":
+        this.updateBattleText();
+        if (e.seat !== 0) this.flashBattle(`${name(e.seat)} OUT`, "#8893b5");
+        break;
+      case "attack":
+        if (e.from === 0) this.flashBattle(`SENT ${e.cost} → ${name(e.to)}`, ATTACK_CSS);
+        else if (e.to === 0) this.flashBattle(`INCOMING ${e.cost} FROM ${name(e.from)}`, ATTACK_CSS);
+        break;
+      case "over":
+        if (e.winner === 0) this.endGame();
+        break;
+    }
+  }
+
+  private updateBattleText(): void {
+    if (!this.match || !this.battleText) return;
+    this.battleText.setText(`${this.match.alive.length}/${this.match.seats.length} LEFT`);
+  }
+
+  /** A one-line battle message under the top HUD that fades out. */
+  private flashBattle(message: string, color: string): void {
+    const text = this.duckable(
+      this.add
+        .text(GAME.WIDTH / 2, 112, message, {
+          fontFamily: "monospace",
+          fontSize: "14px",
+          color,
+          stroke: "#05060f",
+          strokeThickness: 3,
+        })
+        .setOrigin(0.5),
+    );
+    this.tweens.add({
+      targets: text,
+      y: text.y - 12,
+      alpha: 0,
+      delay: 700,
+      duration: 600,
+      onComplete: () => text.destroy(),
+    });
   }
 
   /** Turn a field event into sound, pops and HUD changes. */
@@ -257,6 +333,13 @@ export default class GameScene extends Phaser.Scene {
         this.showEnergyGain(e.energy);
         this.popEquation(e.digits, e.alien);
         if (e.burst > 0) this.popBurst(e.burst, e.alien.x, e.alien.y);
+        if (e.cancelled >= 0.5) this.showCancel(e.cancelled);
+        break;
+      case "sent":
+        this.sound.play("shoot", { volume: 0.5, rate: 0.5 });
+        break;
+      case "incoming":
+        this.sound.play("hurt", { volume: 0.25, rate: 1.6 });
         break;
       case "hit":
         this.runExtras.hits.push(hitRecord(e.alien, this.field));
@@ -515,10 +598,23 @@ export default class GameScene extends Phaser.Scene {
       }),
     );
 
+    if (this.match) {
+      this.battleText = this.duckable(
+        this.add
+          .text(GAME.WIDTH - 12, 62, "", {
+            fontFamily: "monospace",
+            fontSize: "14px",
+            color: ATTACK_CSS,
+          })
+          .setOrigin(1, 0.5),
+      );
+      this.updateBattleText();
+    }
+
     if (this.autopilot) {
       this.duckable(
         this.add
-          .text(GAME.WIDTH - 12, 62, `AUTOPILOT: ${this.autopilot.level.toUpperCase()}`, {
+          .text(GAME.WIDTH - 12, this.match ? 80 : 62, `AUTOPILOT: ${this.autopilot.level.toUpperCase()}`, {
             fontFamily: "monospace",
             fontSize: "12px",
             color: "#5ef0ff",
@@ -563,6 +659,48 @@ export default class GameScene extends Phaser.Scene {
     });
   }
 
+  /** Kill energy that cancelled incoming attacks, popped at the meter's end. */
+  private showCancel(amount: number): void {
+    const pop = this.add
+      .text(METER_X + METER_W, METER_Y - 8, `-${Math.round(amount)} incoming`, {
+        fontFamily: "monospace",
+        fontSize: "13px",
+        color: ATTACK_CSS,
+      })
+      .setOrigin(1, 1)
+      .setDepth(6);
+    this.tweens.add({
+      targets: pop,
+      y: pop.y - 20,
+      alpha: 0,
+      duration: 800,
+      onComplete: () => pop.destroy(),
+    });
+  }
+
+  /**
+   * SEND tiers the player can pick now, strongest first. A tap sends the first;
+   * holding the button steps down one tier per HOLD_STEP_MS after HOLD_MS.
+   */
+  private sendChoice(): number | null {
+    const affordable = SEND.TIERS.filter((t) => this.field.energy.canSpend(t.COST))
+      .map((t) => t.COST)
+      .reverse();
+    if (!this.match || !affordable.length) return null;
+    if (this.sendHeldSince === null) return affordable[0];
+    const held = this.time.now - this.sendHeldSince;
+    const steps = held < SEND.HOLD_MS ? 0 : 1 + Math.floor((held - SEND.HOLD_MS) / SEND.HOLD_STEP_MS);
+    return affordable[Math.min(steps, affordable.length - 1)];
+  }
+
+  private triggerSend(): void {
+    const cost = this.sendChoice();
+    this.sendHeldSince = null;
+    if (this.gameOver || this.paused || cost === null) return;
+    this.field.apply({ type: "send", cost });
+    this.updateEnergyHud();
+  }
+
   private triggerPower(mode: SlowMode): void {
     if (this.gameOver || this.paused) return;
     if (this.field.apply({ type: "power", mode })) {
@@ -603,7 +741,33 @@ export default class GameScene extends Phaser.Scene {
       bg.on("pointerdown", () => this.triggerPower(mode));
       this.powerButtons[mode] = { bg, text };
     };
-    makeButton("slow", 30, "SLOW");
+    // Battle: SEND takes SLOW's gutter (SLOW is unused by players and bots so
+    // far, and ship powers are being redesigned). Tap = strongest tier;
+    // hold to step down; slide off to cancel.
+    if (this.match) {
+      const bg = this.add
+        .rectangle(30, KEYPAD_TOP + GUTTER_H / 2, 48, GUTTER_H, 0x1b2340)
+        .setStrokeStyle(2, ATTACK_COLOR)
+        .setDepth(HUD_DEPTH)
+        .setInteractive({ useHandCursor: true });
+      const text = this.add
+        .text(30, KEYPAD_TOP + GUTTER_H / 2, "", {
+          fontFamily: "monospace",
+          fontSize: "18px",
+          color: "#ffffff",
+          align: "center",
+        })
+        .setOrigin(0.5)
+        .setDepth(HUD_DEPTH);
+      bg.on("pointerdown", () => {
+        if (this.sendChoice() !== null) this.sendHeldSince = this.time.now;
+      });
+      bg.on("pointerup", () => this.sendHeldSince !== null && this.triggerSend());
+      bg.on("pointerout", () => (this.sendHeldSince = null));
+      this.sendButton = { bg, text };
+    } else {
+      makeButton("slow", 30, "SLOW");
+    }
     makeButton("freeze", GAME.WIDTH - 30, "FREEZE");
 
     // Horizontal energy meter under the keypad.
@@ -624,12 +788,15 @@ export default class GameScene extends Phaser.Scene {
     this.add
       .rectangle(METER_X + METER_W * (this.field.slowTime.threshold / this.field.energy.max), METER_Y, 2, 18, 0xffd166)
       .setDepth(HUD_DEPTH);
+    // Battle: incoming attacks eat into the meter from its right end (kills
+    // pay them off first).
+    this.incomingGfx = this.add.graphics().setDepth(HUD_DEPTH);
     this.energyText = this.add
       .text(GAME.WIDTH - 30, METER_Y, "0", { fontFamily: "monospace", fontSize: "12px", color: "#ffffff" })
       .setOrigin(0.5)
       .setDepth(HUD_DEPTH);
     this.add
-      .text(GAME.WIDTH / 2, METER_Y + 22, "SPACE slow  ·  F freeze", {
+      .text(GAME.WIDTH / 2, METER_Y + 22, this.match ? "SPACE send  ·  F freeze" : "SPACE slow  ·  F freeze", {
         fontFamily: "monospace",
         fontSize: "11px",
         color: "#8892b0",
@@ -648,17 +815,43 @@ export default class GameScene extends Phaser.Scene {
     const running = this.field.slowTime.mode;
     const usable = this.field.slowTime.canTrigger(e);
     for (const mode of ["slow", "freeze"] as const) {
-      const { bg, text } = this.powerButtons[mode];
+      const button = this.powerButtons[mode];
+      if (!button) continue;
+      const { bg, text } = button;
       const on = running === mode;
       bg.setFillStyle(on ? POWER_ON_FILL[mode] : 0x1b2340).setAlpha(on || usable ? 1 : 0.35);
       text.setAlpha(on || usable ? 1 : 0.35);
     }
+    this.updateSendHud();
     if (running) {
       this.slowTint
         .setVisible(true)
         .setFillStyle(POWER_COLOR[running], running === "freeze" ? 0.22 : 0.1);
     } else {
       this.slowTint.setVisible(false);
+    }
+  }
+
+  /** Battle: the SEND button's tier and the incoming segments on the meter. */
+  private updateSendHud(): void {
+    if (!this.sendButton) return;
+    const tier = this.sendChoice();
+    const { bg, text } = this.sendButton;
+    const held = this.sendHeldSince !== null;
+    text.setText(`S\nE\nN\nD\n\n${tier ?? "--"}`).setAlpha(tier === null ? 0.35 : 1);
+    bg.setFillStyle(held ? 0x5a3418 : 0x1b2340).setAlpha(tier === null ? 0.35 : 1);
+
+    // One segment per sent alien still to land, soonest at the right; it
+    // blinks in its last second.
+    const g = this.incomingGfx.clear();
+    let right = METER_X + METER_W;
+    for (const a of this.field.incoming) {
+      const w = Math.max(3, (METER_W * a.left) / this.field.energy.max);
+      const soon = a.landsAtMs - this.field.elapsedMs < 1000;
+      const alpha = soon ? 0.55 + 0.45 * Math.sin(this.time.now / 60) : 0.9;
+      g.fillStyle(ATTACK_COLOR, alpha).fillRect(right - w, METER_Y - 7, w - 1, 14);
+      right -= w;
+      if (right <= METER_X) break;
     }
   }
 
@@ -778,7 +971,8 @@ export default class GameScene extends Phaser.Scene {
       }
       if (e.key === " ") {
         e.preventDefault();
-        this.triggerPower("slow");
+        if (this.match) this.triggerSend();
+        else this.triggerPower("slow");
         return;
       }
       if (e.key === "f" || e.key === "F") {
@@ -916,6 +1110,7 @@ export default class GameScene extends Phaser.Scene {
   // Game over
   // ---------------------------------------------------------------------------
   private endGame(): void {
+    if (this.gameOver) return;
     this.gameOver = true;
     this.reticle.clear();
     this.pad.setEnabled(false);
@@ -956,16 +1151,23 @@ export default class GameScene extends Phaser.Scene {
     this.add
       .rectangle(GAME.WIDTH / 2, GAME.HEIGHT / 2, GAME.WIDTH, GAME.HEIGHT, 0x05060f, 0.8)
       .setDepth(10);
+    // Battle: where you placed (final at your KO, or 1st if you outlasted all).
+    const placement = this.match ? this.match.placements[0] : null;
+    const won = placement === 1;
+    if (this.runExtras.battle) this.runExtras.battle.placement = placement;
     this.add
-      .text(GAME.WIDTH / 2, GAME.HEIGHT / 2 - 110, "GAME OVER", {
+      .text(GAME.WIDTH / 2, GAME.HEIGHT / 2 - 110, won ? "WINNER!" : this.match ? "KNOCKED OUT" : "GAME OVER", {
         fontFamily: "monospace",
-        fontSize: "40px",
-        color: "#ef476f",
+        fontSize: won ? "40px" : this.match ? "34px" : "40px",
+        color: won ? "#ffd166" : "#ef476f",
       })
       .setOrigin(0.5)
       .setDepth(11);
+    const subtitle = this.match
+      ? `Place #${placement} of ${this.match.seats.length}`
+      : `Rank: ${rank}`;
     this.add
-      .text(GAME.WIDTH / 2, GAME.HEIGHT / 2 - 60, `Rank: ${rank}`, {
+      .text(GAME.WIDTH / 2, GAME.HEIGHT / 2 - 60, subtitle, {
         fontFamily: "monospace",
         fontSize: "24px",
         color: "#ffd166",
@@ -986,13 +1188,18 @@ export default class GameScene extends Phaser.Scene {
           `Best combo: ${bestCombo}    Kills: ${totalKills}\n` +
           `Survived ${survived}    Fastest solve: ${fastestStr}\n` +
           `Median solve: ${medians || "—"}\n` +
-          `Energy earned ${Math.round(f.energy.earned)} · used ` +
-          `${Math.round(f.energy.spent.slow)} slow, ${Math.round(f.energy.spent.freeze)} freeze`,
+          (this.match
+            ? `Energy sent ${Math.round(f.energy.spent.send)} · froze ${Math.round(f.energy.spent.freeze)}` +
+              ` · cancelled ${Math.round(f.cancelledTotal)}`
+            : `Energy earned ${Math.round(f.energy.earned)} · used ` +
+              `${Math.round(f.energy.spent.slow)} slow, ${Math.round(f.energy.spent.freeze)} freeze`),
         { fontFamily: "monospace", fontSize: "16px", color: "#ffffff", align: "center", lineSpacing: 8 },
       )
       .setOrigin(0.5)
       .setDepth(11);
-    const continueText = isLeaderboardEnabled()
+    const continueText = this.match
+      ? "tap / Enter for the menu"
+      : isLeaderboardEnabled()
       ? "tap / Enter to enter initials"
       : "tap / Enter to play again";
     this.add
@@ -1026,7 +1233,7 @@ export default class GameScene extends Phaser.Scene {
   private proceedAfterGameOver(): void {
     if (this.proceeding) return;
     this.proceeding = true;
-    if (isLeaderboardEnabled()) {
+    if (isLeaderboardEnabled() && !this.match) {
       this.scene.start("NameEntryScene", {
         score: this.field.score,
         personalBest: this.newHighScore,

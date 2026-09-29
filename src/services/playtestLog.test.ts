@@ -14,6 +14,16 @@ describe("playtest log", () => {
       { type: "power", mode: "slow" },
       { type: "power", mode: "freeze" },
       { type: "standing", alive: 5, total: 8 },
+      { type: "send", cost: 50 },
+      {
+        type: "attack",
+        from: 3,
+        cost: 100,
+        aliens: [
+          { kind: "lumberer", ability: "shielded" },
+          { kind: "darter", ability: null },
+        ],
+      },
     ];
     for (const input of inputs) expect(expand(compact(input))).toEqual(input);
   });

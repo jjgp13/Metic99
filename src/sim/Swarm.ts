@@ -19,7 +19,15 @@ import {
 import { Rng, SpawnStreams } from "./rng";
 
 // Keys of the run's seeded random streams (sim/rng.ts), one per purpose.
-const STREAM = { FIELD: 1, SPAWN: 2, DRIFTER: 3 } as const;
+// SEND is the Field's (what its attacks carry).
+export const STREAM = { FIELD: 1, SPAWN: 2, DRIFTER: 3, SEND: 4 } as const;
+
+/** One alien of an attack: how it moves and its ability (if any). The
+ * receiver rolls its sum and column. */
+export interface SentAlien {
+  kind: AlienKind;
+  ability: AbilityKind | null;
+}
 
 /** What happened to the aliens; `Field` drains them after each step. */
 export type SwarmEvent =
@@ -118,7 +126,7 @@ export class Swarm implements AbilityHost {
     this.spawnCountdown -= fieldDt;
     if (this.spawnCountdown <= 0) {
       const spawned =
-        this.unsolved().length < diff.maxUnsolved &&
+        this.ownUnsolved().length < diff.maxUnsolved &&
         this.currentThreat() < diff.threatBudget &&
         this.spawnAlien(diff);
       this.spawnCountdown = spawned ? diff.spawnInterval : ENEMY.SPAWN_RETRY_MS;
@@ -253,10 +261,16 @@ export class Swarm implements AbilityHost {
     return this.aliens.filter((a) => a.active && a.lethal && a !== this.locked);
   }
 
+  /** Unsolved aliens of the field's own: sent aliens (attacks) come on top,
+   * so they don't hold back the field's own spawns. */
+  private ownUnsolved(): Alien[] {
+    return this.unsolved().filter((a) => a.sentBy === null);
+  }
+
   /** Weighted cognitive load of the unsolved aliens (secondary spawn gate). An
    * ability adds to its alien's weight. */
   private currentThreat(): number {
-    return this.unsolved().reduce(
+    return this.ownUnsolved().reduce(
       (t, a) => t + (ENEMY.THREAT_BY_BALLS[a.ballCount] ?? 1) + (a.ability ? ABILITY.THREAT : 0),
       0,
     );
@@ -316,6 +330,7 @@ export class Swarm implements AbilityHost {
     bandY?: number,
     ability?: AbilityKind | null,
     model?: string,
+    sentBy?: number,
   ): Alien {
     const speed = ability ? ABILITY.SPEED[ability] : 1;
     const patrol = ability === "blinker" ? ABILITY.PATROL_MULT : 1;
@@ -335,6 +350,7 @@ export class Swarm implements AbilityHost {
       bandY,
       model: ability ? ABILITY.MODEL[ability] : model,
       ability: ability ? createAbility(ability) : undefined,
+      sentBy,
     });
   }
 
@@ -370,23 +386,59 @@ export class Swarm implements AbilityHost {
         ? rng.int(MONSTERS.strafer.BAND_Y.min, MONSTERS.strafer.BAND_Y.max)
         : undefined;
 
-    // Enter just above the top edge, in a column whose whole sweep (zig-zag or
-    // patrol span) clears every alien still near the top and whose box clears
-    // everyone, so ball rows start apart; advanceReadable keeps them apart.
-    const probe = this.makeAlien(rng, kind, sum, 0, 0, diff, bandY, ability);
+    if (!this.enterFromTop(rng, kind, sum, diff, bandY, ability)) return false;
+    this.spawnStreams.succeeded();
+    return true;
+  }
+
+  /**
+   * Land an alien sent by another player (an attack). It skips the unsolved
+   * cap and the threat budget (that is what makes it an attack) but obeys the
+   * on-screen cap and the readability rule; false means no room yet, and the
+   * incoming queue tries again. Its sum and column come from this field's
+   * own stream, so the attack message only says what kind of alien it is.
+   */
+  spawnSent(sent: SentAlien, from: number): boolean {
+    const diff = this.difficulty;
+    if (this.aliens.filter((a) => a.active && a.lethal).length >= diff.maxOnScreen) return false;
+    const balls = sent.ability ? ABILITY.BALLS : DIFFICULTY.MIN_BALLS;
+    const sum = this.rollSum(this.rng, balls, balls, diff.maxDigit);
+    if (!sum) return false;
+    const bandY =
+      sent.kind === "strafer"
+        ? this.rng.int(MONSTERS.strafer.BAND_Y.min, MONSTERS.strafer.BAND_Y.max)
+        : undefined;
+    return this.enterFromTop(this.rng, sent.kind, sum, diff, bandY, sent.ability, from);
+  }
+
+  /**
+   * Enter just above the top edge, in a column whose whole sweep (zig-zag or
+   * patrol span) clears every alien still near the top and whose box clears
+   * everyone, so ball rows start apart; advanceReadable keeps them apart.
+   * False if no clear column was found (the caller retries soon).
+   */
+  private enterFromTop(
+    rng: Rng,
+    kind: AlienKind,
+    sum: { digits: number[]; result: number },
+    diff: DifficultyParams,
+    bandY: number | undefined,
+    ability: AbilityKind | null,
+    sentBy?: number,
+  ): boolean {
+    const probe = this.makeAlien(rng, kind, sum, 0, 0, diff, bandY, ability, undefined, sentBy);
     const y = -probe.bottom - 2;
     const lo = probe.sweepHalf + ENEMY.SPAWN_EDGE;
     const hi = GAME.WIDTH - lo;
     for (let attempt = 0; attempt < 12; attempt++) {
       const x = rng.int(lo, hi);
-      const alien = this.makeAlien(rng, kind, sum, x, y, diff, bandY, ability);
+      const alien = this.makeAlien(rng, kind, sum, x, y, diff, bandY, ability, undefined, sentBy);
       if (this.hasRoomFor(alien)) {
         this.addAlien(alien);
-        this.spawnStreams.succeeded();
         return true;
       }
     }
-    return false; // no clear column right now; the spawner retries soon
+    return false;
   }
 
   private pickTwoBallKind(rng: Rng): AlienKind {

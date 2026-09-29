@@ -106,12 +106,21 @@ the agreed shape.
   hand. Being targeted by 2+ players adds a defense bonus to your sends.
 - **Incoming queue.** Sent aliens wait in a visible incoming meter for a delay
   (~3 s, shorter late in the match) before landing. The delay is the warning,
-  and online it also hides network lag.
+  and online it also hides network lag. (M6: 3 s → 1.5 s as `dMatch` rises,
+  aliens of one attack 0.6 s apart; the meter shows them as orange blocks
+  eating the energy bar from its right end.)
+- **What a tier buys (M6, content):** 25 = a darter, 50 = one ability alien
+  (the sender's stream picks shielded / blinker / splitter, unlocked or not),
+  100 = two ability aliens. Each alien's share of the cost is what the
+  receiver's kills must pay to cancel it. Sums come from the receiver's own
+  difficulty (so early attacks carry small digits).
 - **A kill cancels incoming first**; only the rest of its energy charges the
   meter.
 - **Sent aliens skip the unsolved-alien cap** (that is what makes them an
   attack) but obey the readability rule and the on-screen cap; the extra ones
-  wait in the queue.
+  wait in the queue. They also don't count toward the field's own unsolved
+  cap or threat budget, so an attack comes on top instead of replacing a
+  normal spawn. They wear an orange ring (not red: red is subtraction).
 - **KO credit** goes to the sender of the alien that knocked you out, else to
   your last attacker within ~10 s. The KO takes your badges + 1; 2/4/8/16
   badges = +25/50/75/100% attack.
@@ -152,9 +161,19 @@ the agreed shape.
   is within reach (ace ~170 px ≈ the owner), or one is about to land; keep
   answering; unfreeze once the board is clear. Each dangerous moment goes
   unnoticed with a per-level chance (`MISS_DANGER`), because people get hit
-  with energy to spare. No SLOW for now. SEND (M6): bank energy and send
-  above a personality threshold (aggressive vs turtle); incoming aliens
-  will count as danger.
+  with energy to spare. No SLOW for now. **SEND (built M6):** tap SEND
+  once energy reaches `SEND_AT` (rookie 100, pilot 75, ace 60) while the
+  board is calm, so enough stays for a freeze. Incoming aliens count as
+  danger once they land (bots read the screen, not the queue).
+- **What M6's simulations showed** (`npm run match`, 100 matches, 8 mixed
+  bots): ~25 attacks per match; they shorten matches (94 → 73 s median) but
+  land only ~9% of KOs directly (the rest is added load). Aces win 84%
+  whether they send or never send: with random targets, energy sent costs
+  the sender about as much safety as it takes from one opponent, so SEND is
+  neutral for the sender. In Tetris 99 the reward is KO credit → badges →
+  stronger attacks, plus the KOs strategy aiming at players about to fall:
+  that is M7. A tried lever (killing a sent alien gives no energy, so
+  attacks don't refund the receiver) was also ≈ neutral in 30 matches.
 - Each bot draws from its own seeded stream, so a match replays exactly.
 - **Built (M3):** `src/sim/Bot.ts`, levels in `BOT` (constants). Beyond the
   table: a strafer about to dive counts as more dangerous, drifters come
@@ -222,7 +241,7 @@ change together, with a version bump). Lock them before phase 1.
 | Contract | Rule |
 | --- | --- |
 | Player inputs | answer (0–99), clear, SLOW, FREEZE, SEND (tier), target (strategy or player) |
-| Attack | `{kind, level, from}` into the target's incoming queue; attacks only ever arrive as aliens |
+| Attack | `{from, cost, aliens: [{kind, ability}]}` into the target's incoming queue (M6); attacks only ever arrive as aliens; the receiver rolls sums and columns |
 | What others see | the tile summary in §6 |
 | Time | fixed steps, seeded streams, game clock |
 | KO and placement | §6 |
@@ -255,7 +274,7 @@ but marked as such.
 | M3 | Bot v1 (solving) + dev autopilot `?bot=ace` on your own field | Survival per skill level; calibrate vs your solve times | done 2026-09-27 |
 | M4 | Bot energy policy (SLOW/FREEZE) | Headless A/B: survival with vs without powers | done 2026-09-29 |
 | M5 | `Match` with N fields: KOs, placement, `dMatch`, sudden death, match end | 16 headless bots: the match always ends; `npm run match` | done 2026-09-29 |
-| M6 | SEND + incoming queue + cancel; SEND button + incoming meter | Cancel math; sent aliens pass the readability soak | |
+| M6 | SEND + incoming queue + cancel; SEND button + incoming meter | Cancel math; sent aliens pass the readability soak | done 2026-09-29 |
 | M7 | Targeting strategies, badges, defense bonus | Unit tests; bot tournaments | |
 | M8 | Battle UI: opponent strip, KO feed, results, fast-forward; menu entry | Play it | |
 | M9 | Playtest and tune; then phase 1 (move `Match` to a Node server) | | |

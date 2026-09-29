@@ -64,11 +64,12 @@ src/
     inputMode.ts      On-screen input choice: keypad or drawing pad (localStorage)
   scenes/
     BootScene.ts      Preloads assets; defers animations (static frames for now)
-    MenuScene.ts      Title screen: ship picker + PLAY / HOW TO PLAY / SCORES
+    MenuScene.ts      Title screen: ship picker + PLAY / BATTLE / HOW TO PLAY / SCORES
     HowToPlayScene.ts Static rules screen reached from the menu
     GameScene.ts      Turns keypad/keyboard/pad into Field inputs, steps the
-                      Field at a fixed 60 Hz, and shows its events (sounds,
-                      HUD, pops). Hands World3D a snapshot every frame.
+                      Field (or, in battle mode, the Match) at a fixed 60 Hz,
+                      and shows its events (sounds, HUD, pops). Hands World3D
+                      a snapshot every frame.
     NameEntryScene.ts Arcade 5-char initials entry shown at game over
     LeaderboardScene.ts Global top-N board; dual-mode (post-run / menu browse)
     HandwritingLabScene.ts `?lab=draw`: records real handwriting, exports JSON
@@ -105,7 +106,8 @@ src/
     Swarm.ts          The aliens inside a Field: game clock, seeded spawners,
                       movement + readability guard, AbilityHost.
     Match.ts          Battle match: N Fields on one seed stepped together, bots
-                      per seat, KOs, placement, standing messages (pressure).
+                      per seat, KOs, placement, standing messages (pressure),
+                      attack delivery (random opponent until M7).
     Bot.ts            Bot player: reads only what's on screen, acts only via
                       `field.apply()`; skill levels in `BOT` (rookie/pilot/ace).
     stats.ts          Solve-time summaries.
@@ -170,8 +172,8 @@ docs/MULTIPLAYER_DESIGN.md  Battle-royale design: energy, attacks, backend plan
   when both are present, so the game **builds and runs locally without them** —
   game over just returns to the menu instead of routing to name entry.
 - **Navigation:** `BootScene` → `MenuScene` (ship picker ◀ ▶ / ←→, then PLAY /
-  HOW TO PLAY / SCORES). PLAY →
-  `GameScene`; HOW TO PLAY → `HowToPlayScene`; SCORES → `LeaderboardScene` in
+  BATTLE (beta) / HOW TO PLAY / SCORES). PLAY →
+  `GameScene`; BATTLE → `GameScene` with `{ battle: true }` (no leaderboard); HOW TO PLAY → `HowToPlayScene`; SCORES → `LeaderboardScene` in
   **browse** mode (fetches `getTop()` itself, BACK → menu).
 - Game-over flow (when enabled): GAME OVER overlay → `NameEntryScene` (3–6 char
   length selector + initials) → `submitScore` (via the match gate) →
@@ -377,8 +379,8 @@ Green=multiplication, Yellow=division.
   `BASE × ballBonus × digitBonus × speedBonus × comboBonus` (more balls, bigger
   average digit, faster solve, longer streak = more; ~8 for an easy early kill,
   30+ for a fast 3-ball streak kill). Overflow is lost. The meter only charges
-  and spends; each use is a separate spender (`"slow"` and `"freeze"` now,
-  `"send"` reserved for the battle royale). Per-run earned/spent totals show on game over.
+  and spends; each use is a separate spender (`"slow"`, `"freeze"`, and
+  `"send"` in a battle). Per-run earned/spent totals show on game over.
 - **Time powers** (`SLOW_TIME`): the player spends energy on their OWN field
   (alien movement + spawn clock); the ship, bullets and difficulty clock keep
   full speed. Two powers, each with its own button, sharing the one meter:
@@ -425,7 +427,10 @@ Green=multiplication, Yellow=division.
   within `PANIC_PX`), keep answering, unfreeze once the board is clear — the
   owner's own pattern; each dangerous moment goes unnoticed with chance
   `MISS_DANGER` (humans got hit with energy to spare). Bots never use SLOW
-  (neither does the owner). Seeded per seat (`Bot.forSeat`). Dev: `?bot=ace` puts a
+  (neither does the owner). **SEND (M6):** in a battle, a bot taps SEND once
+  energy reaches `SEND_AT` (rookie 100, pilot 75, ace 60, a guess) while the
+  board is calm (not frozen, nothing within `FREEZE_AT_PX`), after REACTION.
+  Seeded per seat (`Bot.forSeat`). Dev: `?bot=ace` puts a
   bot on autopilot on your field; at game over the console prints your (or
   the bot's) solve times by ball count to compare with `npm run bots`.
   The GAME OVER screen also shows the run's survival time and median solve
@@ -500,6 +505,21 @@ Green=multiplication, Yellow=division.
   joins `d = max(dScore, dTime, dMatch)` and the unsolved cap; from 5:00
   **sudden death** speeds aliens up +100%/min, so even a perfect player (or
   a script) falls (~6 min) and a match's length is bounded.
+- **SEND and incoming** (`SEND`, M6; menu **BATTLE (beta)**: you + 7 bots,
+  `MATCH.OPPONENTS`): the `send` input spends a tier's cost (25 = darter,
+  50 = one ability alien, 100 = two; the sender's `SEND` stream picks which
+  ability) and the match delivers the attack `{from, cost, aliens: [{kind,
+  ability}]}` to a random opponent (M7: targeting). The receiver queues each
+  alien for `DELAY_MS` (3 s → 1.5 s with `dMatch`, `STAGGER_MS` apart); then
+  it enters from the top with an orange ring (`sentBy`), skipping the unsolved
+  cap and threat budget and not holding back the field's own spawns, but
+  obeying the on-screen cap and readability (no room → it waits). **A kill's
+  energy pays off incoming first** (soonest first; each alien's share of the
+  cost); only the rest charges the meter. Battle HUD: SEND replaces SLOW in
+  the left gutter (tap = strongest affordable tier, hold steps down, slide off
+  cancels; Space = send), incoming aliens are orange blocks eating the meter
+  from its right end (blinking in their last second), "N/8 LEFT", a one-line
+  feed (SENT / INCOMING / Pn OUT), and game over shows the placement.
 - **Lives** are a playtest constant, `PLAYER.LIVES` (3 by default; 1 = the
   battle-royale knockout rule). With 1 life the hit recovery below never runs:
   the only hit ends the game, so slow time is the sole safety tool.
@@ -596,8 +616,9 @@ dMatch)`; it is 0 in solo play.
        + exact replay), [x] M3 bot v1 (solving, 3 skill levels, `?bot=`,
        `npm run bots`; calibrated on playtests), [x] M4 bot powers (FREEZE,
        fitted to the owner), [x] M5 match (N fields, KOs, placement,
-       pressure + sudden death, `npm run match`), [ ] M6+ send, targeting,
-       battle UI.
+       pressure + sudden death, `npm run match`), [x] M6 SEND + incoming
+       queue + cancel (menu BATTLE beta), [ ] M7 targeting/badges,
+       [ ] M8 battle UI.
 
 ## Conventions
 
@@ -621,6 +642,19 @@ dMatch)`; it is 0 in solo play.
 ## Decision Log
 
 Newest first. Format: `YYYY-MM-DD — decision — rationale`.
+
+- **2026-09-29 — SEND, incoming queue and cancel; battle playable (battle
+  royale M6).** An attack is a message `{from, cost, aliens: [{kind,
+  ability}]}`: the sender's field decides what the tier buys, the receiver
+  rolls sums and columns, so it replays from each field's own log. Sent
+  aliens are added on top (they don't hold back the field's own spawns) but
+  obey readability and the on-screen cap; kills pay off incoming first.
+  Menu BATTLE (beta): you + 7 bots, SEND in SLOW's gutter (unused by owner
+  and bots; ship powers are being redesigned). Measured (100 matches):
+  attacks shorten matches 94 → 73 s, but sending is **neutral for the
+  sender** (aces win 84% sending or not): random targets give no reward.
+  Badges/KO targeting (M7) are meant to fix that; making sent kills give no
+  energy was tried (≈ neutral too) and left for the owner.
 
 - **2026-09-29 — Battle match: one seed, messages in, sudden death (battle
   royale M5).** `Match` steps N fields on one seed (same base aliens for all;

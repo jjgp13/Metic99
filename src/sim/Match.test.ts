@@ -55,10 +55,12 @@ describe("Match", () => {
     expect(play(b)).toEqual(eventsA);
     expect(b.placements).toEqual(a.placements);
 
+    let sentOrReceived = 0;
     // A field only hears from the match through logged messages, so its
     // seed + log rebuild it without the match (what a server will check).
     a.fields.forEach((field) => {
       expect(field.inputLog.some((e) => e.input.type === "standing")).toBe(true);
+      sentOrReceived += field.inputLog.filter((e) => e.input.type === "attack" || e.input.type === "send").length;
       const replay = replayField({ seed: 4, lives: MATCH.LIVES }, field.inputLog, field.steps, STEP);
       expect([replay.score, replay.kills, replay.knockedOut, replay.elapsedMs]).toEqual([
         field.score,
@@ -67,6 +69,8 @@ describe("Match", () => {
         field.elapsedMs,
       ]);
     });
+
+    expect(sentOrReceived).toBeGreaterThan(10); // attacks replay too
 
     const c = new Match({ seed: 5, seats: LINEUP.slice(0, 8) });
     expect(play(c)).not.toEqual(eventsA);

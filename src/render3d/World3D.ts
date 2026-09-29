@@ -53,6 +53,8 @@ interface AlienView {
   popLeft: number;
   /** Shield bubble while a Shielded alien's shield is up. */
   shield: THREE.Group | null;
+  /** Battle: the glow ring marking an alien another player sent. */
+  attackRing: THREE.Mesh | null;
 }
 
 interface Debris {
@@ -104,6 +106,8 @@ export default class World3D {
   private shipFlames: THREE.Object3D[] = [];
   private bank = 0;
   private readonly alienViews = new Map<Alien, AlienView>();
+  /** Shared attack-ring geometry/material, built on first use. */
+  private attackRingParts: { geo: THREE.TorusGeometry; mat: THREE.MeshBasicMaterial } | null = null;
   /** Shared shield geometry/materials, built on first use. */
   private shieldParts: {
     dome: THREE.IcosahedronGeometry;
@@ -455,6 +459,7 @@ export default class World3D {
       this.burst(a.x, a.y, [RENDER3D.SHIELD_COLOR, 0xf5d0ff], RENDER3D.SHIELD_SHARDS);
     }
     if (v.shield) v.shield.scale.setScalar(1 + 0.04 * Math.sin(time * 0.005 + v.phase));
+    if (v.attackRing) v.attackRing.scale.setScalar(1 + 0.1 * Math.sin(time * 0.008 + v.phase));
   }
 
   /**
@@ -573,7 +578,16 @@ export default class World3D {
       popLeft: 0,
       parts,
       shield: null,
+      attackRing: null,
     };
+    if (a.sentBy !== null) {
+      this.attackRingParts ??= {
+        geo: new THREE.TorusGeometry(RENDER3D.ATTACK_RING.RADIUS, 1.6, 6, 28),
+        mat: new THREE.MeshBasicMaterial({ color: RENDER3D.ATTACK_RING.COLOR, transparent: true, opacity: 0.85 }),
+      };
+      v.attackRing = new THREE.Mesh(this.attackRingParts.geo, this.attackRingParts.mat);
+      root.add(v.attackRing);
+    }
     this.buildBalls(a, v);
     this.scene.add(root);
     return v;

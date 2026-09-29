@@ -34,6 +34,7 @@ interface Plan {
  * Powers: FREEZE when two or more unanswered aliens are on screen and the
  * nearest is getting close (or one is about to land), keep answering while
  * frozen, and unfreeze once the board is clear — the owner's own pattern.
+ * In a battle it also SENDs when its energy is high and the board is calm.
  *
  * Call `update()` once per sim step, before `field.step()`. Its randomness
  * comes from its own seeded stream, so a match with bots replays exactly.
@@ -51,14 +52,17 @@ export class Bot {
   answers = 0;
   slips = 0;
   switches = 0;
-  /** Times it switched FREEZE on. */
+  /** Times it switched FREEZE on, and attacks it sent (battle). */
   freezes = 0;
+  sends = 0;
   /** Off for A/B tests (`npm run bots -- --no-powers`). */
   usePowers = true;
   /** Since when the power decision it is about to make has held (REACTION). */
   private powerSince: number | null = null;
   /** This dangerous moment went unnoticed (MISS_DANGER): no FREEZE until it passes. */
   private missed = false;
+  /** Since when it has been ready to SEND (REACTION). */
+  private sendSince: number | null = null;
 
   constructor(
     readonly level: BotLevel,
@@ -80,6 +84,7 @@ export class Bot {
     this.clock += dt;
     if (field.knockedOut) return;
     if (this.usePowers) this.decidePower(field);
+    this.decideSend(field);
 
     // Waiting on an entered answer: a right one fires (and clears the typed
     // answer); a slip stays wrong, or dangles as the start of another answer.
@@ -166,6 +171,31 @@ export class Bot {
     field.apply({ type: "power", mode: "freeze" }); // toggles it on or off
     if (!frozen) this.freezes++;
     this.powerSince = null;
+  }
+
+  /**
+   * Battle: SEND (the strongest tier the energy buys) once energy reaches
+   * SEND_AT and the board is calm (not frozen, nothing close enough to want
+   * a freeze), so it keeps enough to save itself when it matters.
+   */
+  private decideSend(field: Field): void {
+    const tier = field.sendTier();
+    const nearest = this.readable(field)
+      .filter((a) => a.lethal)
+      .reduce((d, a) => Math.min(d, PLAYER.Y - a.y), Infinity);
+    const ready =
+      tier !== null &&
+      field.energy.value >= this.skill.SEND_AT &&
+      field.slowTime.mode === null &&
+      nearest > this.skill.FREEZE_AT_PX;
+    if (!ready) {
+      this.sendSince = null;
+      return;
+    }
+    this.sendSince ??= this.clock;
+    if (this.clock - this.sendSince < this.skill.REACTION) return;
+    if (field.apply({ type: "send", cost: tier })) this.sends++;
+    this.sendSince = null;
   }
 
   /** Aliens whose balls a person could read right now. */

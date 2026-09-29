@@ -46,12 +46,39 @@ export const MATCH = {
     OVERTIME_RAMP_MS: 120_000, // ...+1 per this long
     MAX: 0.99,
   },
+  // Bots in the seats beside the player (GameScene battle mode).
+  OPPONENTS: ["ace", "ace", "pilot", "pilot", "pilot", "rookie", "rookie"] as const,
   // The curve tops out at speeds a perfect player (or a script) survives
   // forever, so from SUDDEN_DEATH_AT_MS the aliens also speed up without
   // limit: field speed × (1 + minutes past it × PER_MIN). Matches between
   // people end long before; this bounds a match's length for a server.
   SUDDEN_DEATH_AT_MS: 300_000,
   SUDDEN_DEATH_PER_MIN: 1,
+} as const;
+
+/** What a sent alien is: a plain darter, or an alien with one of the abilities
+ * (picked by the sender from all of them, unlocked or not). */
+export type SentKind = "darter" | "ability";
+
+/**
+ * SEND (docs/MULTIPLAYER_DESIGN.md §6): energy spent on aliens for an
+ * opponent's field. One button; a tap sends the strongest tier the energy
+ * buys, holding it steps down to cheaper ones. The table is content: new
+ * monsters add rows. A tier's cost is split evenly over its aliens (that is
+ * how much of the receiver's kill energy cancels each one).
+ */
+export const SEND = {
+  TIERS: [
+    { COST: 25, ALIENS: ["darter"] },
+    { COST: 50, ALIENS: ["ability"] },
+    { COST: 100, ALIENS: ["ability", "ability"] },
+  ] as { COST: number; ALIENS: SentKind[] }[],
+  // Time in the receiver's incoming queue before landing (the warning, and
+  // online it hides lag); shorter as match pressure rises (lerped on dMatch).
+  DELAY_MS: { easy: 3000, hard: 1500 },
+  STAGGER_MS: 600, // between the aliens of one attack
+  HOLD_MS: 350, // holding the button this long starts stepping down tiers...
+  HOLD_STEP_MS: 450, // ...one tier per this long
 } as const;
 
 /**
@@ -79,6 +106,10 @@ export const MATCH = {
  * plays on without freezing (6 of the owner's 9 hits came with energy to
  * spare and FREEZE off; a bot that never misses outlived the owner 2×; at
  * 0.2 the ace matches the owner: ~290 s, ~80k points, frozen 25% of the time).
+ *
+ * SEND (M6): in a battle, press SEND (the strongest affordable tier) once
+ * energy reaches SEND_AT while the board is calm (no freeze wanted), after
+ * REACTION. A guess to tune with `npm run match`; no human battle runs yet.
  */
 export const BOT = {
   LEVELS: {
@@ -95,6 +126,7 @@ export const BOT = {
       MISS_DANGER: 0.3,
       PANIC_PX: 50,
       FOCUS: 0.6,
+      SEND_AT: 100,
     },
     pilot: {
       REACTION: 400,
@@ -109,6 +141,7 @@ export const BOT = {
       MISS_DANGER: 0.15,
       PANIC_PX: 70,
       FOCUS: 0.85,
+      SEND_AT: 75,
     },
     ace: {
       REACTION: 200,
@@ -123,6 +156,7 @@ export const BOT = {
       MISS_DANGER: 0.2,
       PANIC_PX: 90,
       FOCUS: 0.98,
+      SEND_AT: 60,
     },
   },
   // A mistake is off by 10 this often (else off by 1).
@@ -688,6 +722,9 @@ export const RENDER3D = {
   BALL_LID_COLOR: 0xd63fa6,
   BALL_LID_OPEN_ANGLE: 1.2,
   // Shield bubble (never a ball color): radius clears the ball row above.
+  // Battle: a glow ring around aliens another player sent (orange: red is
+  // reserved for subtraction balls). Per-attacker colors come with the battle UI.
+  ATTACK_RING: { COLOR: 0xff8c42, RADIUS: 17 },
   SHIELD_COLOR: 0xff6be6,
   SHIELD_RADIUS: 21,
   SHIELD_SHARDS: 16,

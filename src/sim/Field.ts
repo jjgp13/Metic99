@@ -7,14 +7,16 @@ import {
   PLAYER,
   RECOVERY,
   SCORE,
+  SEND,
   type SlowMode,
 } from "../config/constants";
 import { difficultyAt, matchPressure, suddenDeathSpeed, type DifficultyParams } from "../config/difficulty";
 import type Alien from "../objects/Alien";
-import type { AbilityKind } from "../objects/abilities";
+import { ABILITY_KINDS, type AbilityKind } from "../objects/abilities";
 import type { Bullet } from "../objects/Bullet";
 import { EnergyMeter, SlowTime, energyForKill } from "./energy";
-import { Swarm } from "./Swarm";
+import { Rng } from "./rng";
+import { STREAM, Swarm, type SentAlien } from "./Swarm";
 
 const PLAYER_START_X = GAME.WIDTH / 2;
 
@@ -33,7 +35,9 @@ export type FieldInput =
   | { type: "back" }
   | { type: "clear" }
   /** Press SLOW or FREEZE: start it, switch to it, or turn it off. */
-  | { type: "power"; mode: SlowMode };
+  | { type: "power"; mode: SlowMode }
+  /** Battle: spend `cost` energy on the SEND tier with that cost. */
+  | { type: "send"; cost: number };
 
 /**
  * What the match tells a field (docs/MULTIPLAYER_DESIGN.md §8, the Match ↔
@@ -43,7 +47,25 @@ export type FieldInput =
  */
 export type MatchMessage =
   /** Players still in the match (sent at the start and after every KO). */
-  { type: "standing"; alive: number; total: number };
+  | { type: "standing"; alive: number; total: number }
+  /** Aliens another player sent (an attack): they join the incoming queue. */
+  | { type: "attack"; from: number; cost: number; aliens: SentAlien[] };
+
+/** An attack this field sent; the match picks who gets it. */
+export interface Outgoing {
+  cost: number;
+  aliens: SentAlien[];
+}
+
+/** One sent alien waiting to land. Kill energy pays off `left` first; at 0
+ * it is cancelled. */
+export interface Incoming {
+  from: number;
+  alien: SentAlien;
+  cost: number;
+  left: number;
+  landsAtMs: number;
+}
 
 /** One entry of a field's log: a player input or a message from the match. */
 export interface LoggedInput {
@@ -61,6 +83,8 @@ export interface FieldSummary {
   knockedOut: boolean;
   /** 0 = calm, 1 = an unanswered alien is at the player line. */
   danger: number;
+  /** Energy of the attacks still waiting to land. */
+  incoming: number;
   /** Aliens on screen, as 0–1 positions on the field (the tile's dots). */
   aliens: { x: number; y: number }[];
 }
@@ -94,7 +118,13 @@ export type FieldEvent =
       /** Drifter bonus energy included in `energy`'s gain (0 otherwise). */
       burst: number;
       absorbed: boolean;
+      /** Kill energy that paid off incoming attacks instead (battle). */
+      cancelled: number;
     }
+  /** This field sent an attack (the match delivers it). */
+  | { type: "sent"; cost: number; aliens: SentAlien[] }
+  /** An attack arrived in the incoming queue. */
+  | { type: "incoming"; from: number; cost: number }
   /** A lethal alien reached the player line (it is already removed). */
   | { type: "hit"; alien: Alien; livesLeft: number }
   | { type: "knockedOut" };
@@ -163,6 +193,13 @@ export class Field {
   private postHitSlow = false;
   /** Players still in the battle, from the match (null in solo play). */
   standing: { alive: number; total: number } | null = null;
+  /** Sent aliens waiting to land, soonest first. */
+  readonly incoming: Incoming[] = [];
+  /** Kill energy spent cancelling attacks, this run. */
+  cancelledTotal = 0;
+  private outgoing: Outgoing[] = [];
+  /** What this field's attacks carry (which ability a 50 sends). */
+  private readonly sendRng: Rng;
 
   private readonly swarm: Swarm;
   /** The in-flight bullet aimed at lockedTarget: no second shot while one is on
@@ -179,6 +216,21 @@ export class Field {
     this.seed = options.seed;
     this.lives = options.lives ?? PLAYER.LIVES;
     this.swarm = new Swarm({ seed: options.seed, forcedAbilities: options.forcedAbilities });
+    this.sendRng = Rng.derive(options.seed, STREAM.SEND);
+  }
+
+  /** The SEND tier a tap buys now: the strongest affordable, else null. */
+  sendTier(): number | null {
+    if (!this.standing) return null;
+    const tiers = SEND.TIERS.filter((t) => this.energy.canSpend(t.COST));
+    return tiers.length ? tiers[tiers.length - 1].COST : null;
+  }
+
+  /** Attacks sent since the last call (the match delivers them). */
+  takeOutgoing(): Outgoing[] {
+    const out = this.outgoing;
+    this.outgoing = [];
+    return out;
   }
 
   get aliens(): readonly Alien[] {
@@ -238,6 +290,9 @@ export class Field {
       case "power":
         changed = this.slowTime.trigger(input.mode, this.energy);
         break;
+      case "send":
+        changed = this.send(input.cost);
+        break;
     }
     this.checkTyped();
     return changed;
@@ -251,6 +306,17 @@ export class Field {
       case "standing":
         this.standing = { alive: message.alive, total: message.total };
         break;
+      case "attack": {
+        const cost = message.cost / message.aliens.length;
+        const delay = SEND.DELAY_MS.easy + (SEND.DELAY_MS.hard - SEND.DELAY_MS.easy) * this.dMatch;
+        message.aliens.forEach((alien, i) => {
+          const landsAtMs = this.elapsedMs + delay + i * SEND.STAGGER_MS;
+          this.incoming.push({ from: message.from, alien, cost, left: cost, landsAtMs });
+        });
+        this.incoming.sort((a, b) => a.landsAtMs - b.landsAtMs);
+        this.events.push({ type: "incoming", from: message.from, cost: message.cost });
+        break;
+      }
     }
   }
 
@@ -268,6 +334,7 @@ export class Field {
       kills: this.kills,
       knockedOut: this.knockedOut,
       danger: Math.min(1, Math.max(0, danger)),
+      incoming: this.incoming.reduce((t, a) => t + a.left, 0),
       aliens,
     };
   }
@@ -295,6 +362,8 @@ export class Field {
       this.lockedTarget = null;
       this.target = this.typed === "" ? null : (this.alienFor(parseInt(this.typed, 10)) ?? null);
     }
+
+    this.landIncoming();
 
     // Spawn, run ability clocks and move the aliens. The target holds still.
     this.swarm.step(dt, {
@@ -350,6 +419,47 @@ export class Field {
     const events = this.events;
     this.events = [];
     return events;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Battle: sending and receiving attacks
+  // ---------------------------------------------------------------------------
+  /** Spend energy on a SEND tier: its aliens go out through takeOutgoing(). */
+  private send(cost: number): boolean {
+    const tier = SEND.TIERS.find((t) => t.COST === cost);
+    if (!this.standing || !tier || !this.energy.spend(cost, "send")) return false;
+    const aliens = tier.ALIENS.map((k): SentAlien => {
+      if (k === "darter") return { kind: "darter", ability: null };
+      const ability = this.sendRng.pick(ABILITY_KINDS);
+      return { kind: ABILITY.KIND[ability], ability };
+    });
+    this.outgoing.push({ cost, aliens });
+    this.events.push({ type: "sent", cost, aliens });
+    return true;
+  }
+
+  /** Sent aliens whose time is up enter the field; one without room waits. */
+  private landIncoming(): void {
+    for (let i = 0; i < this.incoming.length; ) {
+      const a = this.incoming[i];
+      if (a.landsAtMs > this.elapsedMs) break; // sorted: the rest land later
+      if (this.swarm.spawnSent(a.alien, a.from)) this.incoming.splice(i, 1);
+      else i++;
+    }
+  }
+
+  /** Kill energy pays off incoming attacks first, soonest first; returns
+   * what is left for the meter. */
+  private cancelIncoming(energy: number): number {
+    while (energy > 0 && this.incoming.length) {
+      const next = this.incoming[0];
+      const paid = Math.min(energy, next.left);
+      next.left -= paid;
+      energy -= paid;
+      this.cancelledTotal += paid;
+      if (next.left <= 1e-9) this.incoming.shift();
+    }
+    return energy;
   }
 
   // ---------------------------------------------------------------------------
@@ -444,7 +554,9 @@ export class Field {
     this.score += points;
     // The bonus drifter adds its burst on top of the normal kill energy.
     const burst = alien.lethal ? 0 : MONSTERS.drifter.ENERGY_BURST;
-    const energy = this.energy.charge(energyForKill({ digits, solveMs, combo: this.combo }) + burst);
+    const gain = energyForKill({ digits, solveMs, combo: this.combo }) + burst;
+    const left = this.cancelIncoming(gain);
+    const energy = left > 0 ? this.energy.charge(left) : 0;
 
     if (this.lockedTarget === alien) {
       this.lockedTarget = null;
@@ -455,7 +567,7 @@ export class Field {
       // After remove() so the dead alien doesn't block its own splitlings' lanes.
       alien.ability?.onKilled(alien, this.swarm);
     }
-    this.events.push({ type: "solved", alien, digits, points, energy, burst, absorbed });
+    this.events.push({ type: "solved", alien, digits, points, energy, burst, absorbed, cancelled: gain - left });
   }
 
   /** points = BASE * ballCountBonus * speedBonus * difficultyMult * comboMult. */
@@ -513,6 +625,6 @@ export function replayField(
 
 /** Hand a logged entry back to the field the way it first arrived. */
 export function feed(field: Field, input: FieldInput | MatchMessage): void {
-  if (input.type === "standing") field.receive(input);
+  if (input.type === "standing" || input.type === "attack") field.receive(input);
   else field.apply(input);
 }

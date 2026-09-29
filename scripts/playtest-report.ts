@@ -25,13 +25,20 @@ interface RunDoc {
   at: string;
   device: { ua: string; screen: string; touch: boolean };
   replay: { seed: number; lives: number; forcedAbilities: string[] | null; steps: number; inputs: [number, string][] };
-  summary: { survivedMs: number; score: number; kills: number; energy: { earned: number; slow: number; freeze: number } };
+  summary: {
+    survivedMs: number;
+    score: number;
+    kills: number;
+    energy: { earned: number; slow: number; freeze: number; send?: number; cancelled?: number };
+  };
   solves: [number, number][];
   hits: { atMs: number; kind: string; model: string | null; ability: string | null; digits: number[]; d: number }[];
   inputMode: string;
   sources: Record<string, number>;
   ink: { reads: number; unknown: number; scratch: number };
   pauses: number;
+  /** Battle runs (from M6). */
+  battle?: { players: number; opponents: string[]; placement: number | null } | null;
 }
 
 const path = process.argv[2];
@@ -62,12 +69,14 @@ const rows = runs
     return {
       when: run.at.slice(5, 16).replace("T", " "),
       device: `${phone} ${run.inputMode}`,
+      mode: run.battle ? `battle #${run.battle.placement}/${run.battle.players}` : "solo",
       survived: `${Math.round(run.summary.survivedMs / 1000)} s`,
       score: run.summary.score,
       kills: run.summary.kills,
       "answer time": matches ? formatTimes(paces) : "-",
       "solve 2b / 3b": solves.map((s) => `${s.median.toFixed(1)}s`).join(" / "),
       "slow/freeze used": `${run.summary.energy.slow}/${run.summary.energy.freeze} of ${run.summary.energy.earned}`,
+      "sent/cancelled": run.battle ? `${run.summary.energy.send ?? 0}/${run.summary.energy.cancelled ?? 0}` : "-",
       "killed by": run.hits.map((h) => h.model?.replace("alien_", "") ?? h.kind).join(", "),
       "pad ?": run.ink.reads + run.ink.unknown ? `${run.ink.unknown}/${run.ink.reads + run.ink.unknown}` : "-",
       replay: matches ? "exact" : `DIFFERS (${replay.score} pts)`,

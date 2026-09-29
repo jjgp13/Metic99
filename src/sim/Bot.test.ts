@@ -145,9 +145,10 @@ describe("Bot powers (FREEZE)", () => {
     expect(freezeSteps).toBeGreaterThan(0);
   });
 
-  it("never uses SLOW", () => {
+  it("never uses SLOW (and never SENDs outside a battle)", () => {
     const { field } = play(3, true);
     expect(field.energy.spent.slow).toBe(0);
     expect(field.energy.spent.freeze).toBeGreaterThan(0);
+    expect(field.energy.spent.send).toBe(0); // no battle, nothing to send
   });
 });
