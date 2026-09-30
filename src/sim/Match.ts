@@ -19,6 +19,9 @@ export interface MatchOptions {
   lives?: number;
   /** The power a person picked (bots play the default power for now). */
   humanPower?: PowerKind;
+  /** Per seat, the power that seat plays (overrides the above; balancing runs
+   * give bots different powers). */
+  powers?: readonly (PowerKind | undefined)[];
 }
 
 /** What happened in the match, drained with `takeEvents()`. */
@@ -111,7 +114,12 @@ export class Match {
     this.seats = options.seats;
     const lives = options.lives ?? MATCH.LIVES;
     this.fields = this.seats.map(
-      (s) => new Field({ seed: this.seed, lives, power: s === "human" ? options.humanPower : undefined }),
+      (s, seat) =>
+        new Field({
+          seed: this.seed,
+          lives,
+          power: options.powers?.[seat] ?? (s === "human" ? options.humanPower : undefined),
+        }),
     );
     this.bots = this.seats.map((s, seat) => (s === "human" ? null : Bot.forSeat(s, this.seed, seat)));
     this.placements = this.seats.map(() => 0);

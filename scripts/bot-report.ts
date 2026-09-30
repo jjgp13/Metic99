@@ -5,7 +5,8 @@
  * `-- --ability splitter` to make every allowed spawn that ability,
  * `-- --kind swooper` to make every 2-ball spawn that kind,
  * `-- --power slow` or `-- --power none,freeze` to pick powers (default: every
- * power plus "none", the no-power baseline), `-- --level ace` for one level).
+ * power plus "none", the no-power baseline), `-- --level ace` for one level,
+ * `-- --sharp` for flawless power use (a power's ceiling, see Bot.powerStyle).
  *
  * This is "balancing by simulation": change a number in BOT or DIFFICULTY,
  * re-run, and compare, instead of playing dozens of games by hand. Compare the
@@ -38,6 +39,7 @@ const list = (name: string) => {
 };
 type PowerChoice = PowerKind | "none";
 const POWERS_RUN = (list("power") ?? ["none", ...POWER_KINDS]) as PowerChoice[];
+const SHARP = process.argv.includes("--sharp");
 const LEVELS = (list("level") ?? Object.keys(BOT.LEVELS)) as BotLevel[];
 
 const rows = [];
@@ -69,6 +71,7 @@ for (const power of POWERS_RUN) {
     });
     const bot = Bot.forSeat(level, seed);
     bot.usesPower = power !== "none";
+    if (SHARP) bot.powerStyle = "sharp";
     const maxSteps = Math.round((MINUTES * 60_000) / SIM.STEP_MS);
     while (!field.knockedOut && field.steps < maxSteps) {
       bot.update(field, SIM.STEP_MS);
@@ -123,6 +126,7 @@ for (const power of POWERS_RUN) {
 console.log(
   `${SEEDS} seeds per level, ${LIVES} ${LIVES === 1 ? "life" : "lives"}, runs capped at ${MINUTES} min` +
     (FORCED ? `, every allowed spawn: ${FORCED.join(", ")}` : "") +
-    (KINDS ? `, every 2-ball spawn: ${KINDS.join(", ")}` : ""),
+    (KINDS ? `, every 2-ball spawn: ${KINDS.join(", ")}` : "") +
+    (SHARP ? ", sharp power use" : ""),
 );
 console.table(rows);

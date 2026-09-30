@@ -6,11 +6,24 @@
  * `-- --no-send ace` stops that level from ever sending, `-- --no-send-seats
  * 0,2,4,6` those seats (a mirror match: same level, half send, half don't),
  * `-- --send-at 100` makes every bot send only at that much attack gauge.
+ * Powers: `-- --powers freeze,slow,blast,shield` gives the seats those powers
+ * in turn (rotated every match, so each power plays every seat equally) and
+ * splits the table by power; `-- --sharp` makes bots use powers flawlessly
+ * (never miss a dangerous moment, BLAST at the last moment).
  *
  * The default lineup mixes levels, so the table shows how often each level
  * wins and where it usually places, and how long matches last.
  */
-import { BOT, MATCH, SIM, TARGET_STRATEGIES, type BotLevel, type TargetStrategy } from "../src/config/constants";
+import {
+  BOT,
+  MATCH,
+  POWER_KINDS,
+  SIM,
+  TARGET_STRATEGIES,
+  type BotLevel,
+  type PowerKind,
+  type TargetStrategy,
+} from "../src/config/constants";
 import { Match, type Seat } from "../src/sim/Match";
 import { quantile } from "../src/sim/stats";
 
@@ -45,6 +58,13 @@ const NO_SEND_SEATS = (argOf("no-send-seats") ?? "").split(",").filter(Boolean).
 const SEND_AT = argOf("send-at");
 if (SEND_AT) for (const l of Object.values(levels)) l.SEND_AT = Number(SEND_AT);
 
+const POWERS_ARG = argOf("powers");
+const POWERS = POWERS_ARG ? (POWERS_ARG.split(",") as PowerKind[]) : null;
+if (POWERS?.some((p) => !POWER_KINDS.includes(p))) throw new Error(`--powers: from ${POWER_KINDS.join(", ")}`);
+const SHARP = process.argv.includes("--sharp");
+/** The power seat `seat` plays in match `seed` (null: the default). */
+const powerOf = (seed: number, seat: number) => (POWERS ? POWERS[(seat + seed) % POWERS.length] : undefined);
+
 // A safety net for the report only: the pressure should end every match long before.
 const MAX_STEPS = Math.round((30 * 60_000) / SIM.STEP_MS);
 
@@ -69,7 +89,8 @@ let attacks = 0;
 let unfinished = 0;
 
 for (let seed = 1; seed <= MATCHES; seed++) {
-  const match = new Match({ seed, seats: SEATS });
+  const match = new Match({ seed, seats: SEATS, powers: SEATS.map((_, seat) => powerOf(seed, seat)) });
+  for (const bot of match.bots) if (bot && SHARP) bot.powerStyle = "sharp";
   for (const seat of NO_SEND_SEATS) match.bots[seat]!.sendAt = Infinity;
   const koAt = SEATS.map(() => 0);
   const kosBy = SEATS.map(() => 0);
@@ -93,7 +114,9 @@ for (let seed = 1; seed <= MATCHES; seed++) {
   match.koOrder.forEach((seat, i) => koTimes[i]?.push(koAt[seat] / 1000));
   SEATS.forEach((seatLevel, seat) => {
     if (seatLevel === "human") return;
-    const level = (NO_SEND_SEATS.includes(seat) ? `${seatLevel} (no send)` : seatLevel) as BotLevel;
+    const power = powerOf(seed, seat);
+    const level = ((NO_SEND_SEATS.includes(seat) ? `${seatLevel} (no send)` : seatLevel) +
+      (power ? ` ${power}` : "")) as BotLevel;
     const row = byLevel.get(level) ?? {
       places: [],
       wins: 0,
@@ -121,6 +144,8 @@ console.log(
   `${MATCHES} matches, ${SEATS.length} players (${SEATS.join(", ")}), ${MATCH.LIVES} life` +
     (AIM ? `, everyone aims ${AIM}` : "") +
     (NO_SEND ? `, ${NO_SEND} never sends` : "") +
+    (POWERS ? `, powers ${POWERS.join("/")} in turn` : "") +
+    (SHARP ? ", sharp power use" : "") +
     (unfinished ? `, ${unfinished} NOT FINISHED in 30 min` : ""),
 );
 console.log(
@@ -132,6 +157,9 @@ console.table(
     level,
     seats: r.places.length / MATCHES,
     "win rate": `${Math.round((100 * r.wins) / MATCHES)}%`,
+    // Wins per seat played: comparable across rows with different seat counts
+    // (fair share = 100 / players).
+    "wins/seat": `${((100 * r.wins) / r.places.length).toFixed(1)}%`,
     "place (median)": median(r.places),
     "place (mean)": (r.places.reduce((a, b) => a + b, 0) / r.places.length).toFixed(2),
     "survived (median)": `${Math.round(median(r.survived))} s`,

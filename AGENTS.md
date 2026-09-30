@@ -466,13 +466,20 @@ Green=multiplication, Yellow=division.
   the nearest is within `FREEZE_AT_PX` of the ship (or one is within
   `PANIC_PX`), and off once the board is clear — the owner's own FREEZE
   pattern; each dangerous moment goes unnoticed with chance `MISS_DANGER`
-  (humans got hit with energy to spare). **BLAST** (`BOT.POWER`) fires with
-  2+ unanswered aliens past y 340 or one past 385; **SHIELD** is armed as
-  soon as it's affordable. `npm run bots` compares every power plus a
-  no-power baseline (`--power`, `--level`). **SEND (M6):** in a battle, a
+  (humans got hit with energy to spare). **BLAST** fires in the same
+  dangerous moment (the owner blasts at 2–4 unanswered aliens, nearest
+  ~100–300 px away), with the same REACTION and MISS_DANGER; **SHIELD** is
+  armed as soon as it's affordable. `bot.powerStyle = "sharp"` (`--sharp` in
+  `npm run bots` / `npm run match`) is flawless power use instead (no missed
+  moments, BLAST saved until 2+ aliens pass y 340 or one passes 385): a
+  power's ceiling. `npm run bots` compares every power plus a no-power
+  baseline (`--power`, `--level`); `npm run match -- --powers
+  freeze,slow,blast,shield` gives the seats those powers in turn (`wins/seat`,
+  fair share = 100 / players). **SEND (M6):** in a battle, a
   bot taps SEND once its attack gauge reaches `SEND_AT` (rookie 100, pilot
   75, ace 60; the moment barely matters, see log) while the board is calm (no time power on, nothing within
-  `FREEZE_AT_PX`), after REACTION. Bots in a match play FREEZE for now.
+  `FREEZE_AT_PX`), after REACTION. Bots in a match play FREEZE unless
+  `MatchOptions.powers` gives a seat another power.
   Seeded per seat (`Bot.forSeat`). Dev: `?bot=ace` puts a
   bot on autopilot on your field; at game over the console prints your (or
   the bot's) solve times by ball count to compare with `npm run bots`.
@@ -780,6 +787,24 @@ Newest first. Format: `YYYY-MM-DD — decision — rationale`.
   frames; watch draws another player's field in the 3D view (the renderer
   already takes any field's snapshot, so spectating is free). Tiles gained
   `kos` and `koBy`.
+
+- **2026-09-30 — Power balance by simulation (no numbers changed yet).**
+  Owner's 28 runs: presses a power almost only at a full bar, sits full
+  40–73% of the time, loses 55–80% of energy to overflow, and half the
+  lives lost in v2 runs went with the bar full; SHIELD blocked 3 and 5 hits
+  in two battles. Bots now blast when the owner does (not at the last
+  moment), so powers compare fairly; "sharp" bots give each power's
+  ceiling. Played like the owner (ace), powers are even: solo 3 lives
+  220/231/222/222 s (FREEZE/SLOW/BLAST/SHIELD), ace mirror battles 13/14/14/9%
+  wins per seat (fair 12.5%). Outliers: flawless BLAST (solo 457 s, battle
+  30% vs 2–10%), and SHIELD at low skill (rookie mirror 27% vs SLOW 2%).
+  In the real lineup an ace wins 36% with BLAST, 35% SHIELD, 25% FREEZE/SLOW.
+  Cost changes can't fix a ceiling or a floor (BLAST 65–75 weakens it for
+  owner-like play first; SHIELD 60 hurts aces more than rookies); SLOW's
+  FACTOR is the touchiest knob (0.40 → ace 19%, 0.30 → dominant). Open for
+  the owner: BLAST limit (e.g. the 3 lowest aliens: flawless 30 → 23%),
+  SHIELD as the beginner pick, a "use your power" cue. Rookie/pilot power
+  use is guessed, not fitted.
 
 - **2026-09-30 — Desktop opponent board = a DOM overlay beside the canvas
   (M8).** Rejected a wider Phaser layout (moves every HUD position, breaks
