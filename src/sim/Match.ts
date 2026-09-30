@@ -19,6 +19,9 @@ export interface MatchOptions {
   lives?: number;
   /** The power a person picked (bots play the default power for now). */
   humanPower?: PowerKind;
+  /** Per seat, the power that seat plays (overrides the above; balancing runs
+   * give bots different powers). */
+  powers?: readonly (PowerKind | undefined)[];
 }
 
 /** What happened in the match, drained with `takeEvents()`. */
@@ -101,7 +104,12 @@ export class Match {
     this.seats = options.seats;
     const lives = options.lives ?? MATCH.LIVES;
     this.fields = this.seats.map(
-      (s) => new Field({ seed: this.seed, lives, power: s === "human" ? options.humanPower : undefined }),
+      (s, seat) =>
+        new Field({
+          seed: this.seed,
+          lives,
+          power: options.powers?.[seat] ?? (s === "human" ? options.humanPower : undefined),
+        }),
     );
     this.bots = this.seats.map((s, seat) => (s === "human" ? null : Bot.forSeat(s, this.seed, seat)));
     this.placements = this.seats.map(() => 0);
@@ -196,12 +204,7 @@ export class Match {
       this.koOrder.push(seat);
       const by = this.koCredit(seat, out);
       const badges = by === null ? 0 : this.badgePoints[seat] + 1;
-      if (by !== null) {
-        this.badgePoints[by] += badges;
-        if (MATCH.KO_ENERGY > 0 && this.placements[by] === 0) {
-          this.fields[by].receive({ type: "reward", energy: MATCH.KO_ENERGY });
-        }
-      }
+      if (by !== null) this.badgePoints[by] += badges;
       this.events.push({ type: "ko", seat, placement, by, badges, step: this.steps });
     });
 

@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { BATTLE_HUD, GAME, PLAYER, TARGET_STRATEGIES, type TargetStrategy } from "../config/constants";
 import type { Match, MatchEvent, PlayerTile } from "../sim/Match";
+import { OpponentBoard, boardWanted } from "./OpponentBoard";
 
 /**
  * A way of showing the other players in a battle (docs/MULTIPLAYER_DESIGN.md
@@ -41,7 +42,20 @@ export interface BattleActions {
  * board when the window is wide enough and a compact strip on phones.
  */
 export function createBattleViews(scene: Phaser.Scene, match: Match, actions: BattleActions): BattleView[] {
-  return [new PhoneBattleDock(scene, match.tiles().length, actions)];
+  // Every screen: the dock under the energy meter and the edge glow (inside
+  // the canvas, so it fits phones and desktops alike).
+  const views: BattleView[] = [new PhoneBattleDock(scene, match.tiles().length, actions)];
+  // Desktop: the other players' tiles beside the canvas (shown while there is room).
+  if (boardWanted(scene.game.canvas)) {
+    // Read the box's new size before refitting: refresh() alone uses the
+    // cached size (and then caches the new one without refitting).
+    const refit = () => {
+      scene.scale.getParentBounds();
+      scene.scale.refresh();
+    };
+    views.push(new OpponentBoard(scene.game.canvas, actions, refit));
+  }
+  return views;
 }
 
 const H = BATTLE_HUD;
@@ -95,7 +109,7 @@ interface Slot {
  *
  * - **Tiles**, one per opponent in seat order (a tile never moves, so the
  *   thumb learns where P3 is): filled from the bottom by the player's danger,
- *   with their incoming attacks stacked on top in orange. An orange frame =
+ *   with their incoming attacks stacked on top in pink. An orange frame =
  *   they aim at you; white brackets = where your attacks go (blinking while a
  *   player you picked by hand isn't your target yet; the match re-picks every
  *   1.5 s); gold pips = badges; knocked out = dark with the final place.
@@ -313,7 +327,10 @@ export class PhoneBattleDock implements BattleView {
         g.fillStyle(dangerColor(t.danger), critical ? 0.55 + 0.45 * blink : 0.85);
         g.fillRect(x, BOTTOM - dangerH, w, dangerH);
         const incomingH = Math.min(h - dangerH, Math.round((Math.min(1, t.incoming / H.INCOMING_FULL) * h) / 2));
-        if (incomingH > 0) g.fillStyle(H.ATTACK, 0.9).fillRect(x, BOTTOM - dangerH - incomingH, w, incomingH);
+        if (incomingH > 0) {
+          g.fillStyle(H.INCOMING, 0.95).fillRect(x, BOTTOM - dangerH - incomingH, w, incomingH);
+          if (dangerH > 0) g.fillStyle(0x05060f, 1).fillRect(x, BOTTOM - dangerH - 1, w, 1);
+        }
         // Badges: gold pips down the right edge.
         g.fillStyle(H.BADGE, 1);
         for (let b = 0; b < t.badges; b++) g.fillRect(x + w - 6, TOP + 4 + b * 6, 4, 4);
@@ -381,7 +398,7 @@ export class PhoneBattleDock implements BattleView {
         for (let i = 0; i < strips; i++) {
           const w = G.W / strips;
           const x = side ? GAME.WIDTH - (i + 1) * w : i * w;
-          g.fillStyle(H.ATTACK, alpha * (1 - i / strips) ** 1.5).fillRect(x, y, w, Math.min(band, G.BOTTOM - y));
+          g.fillStyle(H.INCOMING, alpha * (1 - i / strips) ** 1.5).fillRect(x, y, w, Math.min(band, G.BOTTOM - y));
         }
       }
     }

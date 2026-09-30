@@ -105,7 +105,8 @@ when a match ends.
 Numbers are first guesses to tune by playtesting against bots; the rules are
 the agreed shape.
 
-- **Send (tier button).** One SEND button lights up at 25 / 50 / 100 energy.
+- **Send (tier button).** One SEND button lights up at 25 / 50 / 100 of the
+  attack gauge (see "Two gauges" below).
   A tap sends the strongest monster the energy buys; holding it lets the
   player pick a smaller tier. Harder monsters cost more (e.g. 25 = a 2-ball
   darter, 50 = an ability alien, 100 = two aliens); the table of what each
@@ -148,25 +149,27 @@ the agreed shape.
   you; a hand-picked seat is kept until it's out. KO credit also covers the
   last attacker within 10 s. Bonus (badges + defense) turns into weight: the
   aliens cost more to cancel and each 25 above the cost adds a darter.
-- **Open: sending must pay (owner's call).** Measured in M7 with mirror
-  matches: aces that never send win as often or more than aces that do, even
-  with attacks ×3 or +50 energy per KO. Sending is a public good in a
-  free-for-all: the sender pays alone, the damage is shared by everyone else.
-  Options: (A) **a separate attack gauge**, like Tetris 99 where attacks are
-  free: kills fill both the power meter and the gauge, SEND spends the
-  gauge, so sending is always right and the skill is when and whom;
-  (B) keep one meter and make SEND a gamble; (C) bigger KO rewards (badges
-  that also refill energy, or a much steeper badge curve).
+- **Two gauges (decided 2026-09-30, owner picked A).** M7 mirror matches
+  showed that with one shared meter sending never paid: the sender pays
+  alone and every opponent shares the damage, so non-senders won as often
+  or more, even with attacks ×3. Now a kill charges the power meter in full,
+  and its value pays off incoming first; the rest fills an **attack gauge**
+  (max 100) that only SEND spends. Measured: senders win 61/39 (aces) and
+  67/33 (pilots) in mirror matches. Kills during a time power charge
+  neither gauge.
 - **After your KO:** the results screen, with the option to fast-forward the
   rest of the match (the sim runs without drawing) or to watch.
-- **What you see of the others:** a thin strip of small tiles above the field
-  (danger color, alien dots, your target marked, attackers edged red), an
-  incoming meter by the energy bar and a KO feed. Full fields are never drawn.
-  A tile shows exactly what the future server broadcasts per player.
-  **Phone (built M8):** portrait has no room above the field, so the tiles
-  sit in a dock under the energy meter (never over the field), with an aim
-  chip and players left + KO feed; attacks queued for you glow on the
-  field's side edges and vibrate the phone (AGENTS.md → Phone battle HUD).
+- **What you see of the others:** small tiles (danger color, alien dots, your
+  target marked, attackers edged in attack orange, since red is for
+  subtraction balls), an incoming meter by the energy bar and a KO feed. On a
+  wide screen the tiles stand in two columns beside the field (Tetris 99,
+  built: `OpponentBoard`). **Phones (built):** portrait has no room above
+  the field, so the tiles sit in a dock under the energy meter (never over
+  the field) with an aim chip, players left and a KO feed; attacks queued
+  for you glow on the field's side edges and vibrate the phone
+  (`PhoneBattleDock`, AGENTS.md → Phone battle HUD). Full fields
+  are never drawn. A tile shows exactly what the future server broadcasts
+  per player.
 
 ## 7. Bots (phase 0)
 
@@ -312,7 +315,7 @@ but marked as such.
 | M5 | `Match` with N fields: KOs, placement, `dMatch`, sudden death, match end | 16 headless bots: the match always ends; `npm run match` | done 2026-09-29 |
 | M6 | SEND + incoming queue + cancel; SEND button + incoming meter | Cancel math; sent aliens pass the readability soak | done 2026-09-29 |
 | M7 | Targeting strategies, badges, defense bonus | Unit tests; bot tournaments | done 2026-09-30 |
-| M8 | Battle UI: opponent strip, KO feed, results, fast-forward; menu entry. Split into two chats: desktop opponent board (Tetris 99-style tiles beside the field) and phone feedback; both read only `match.tiles()` and match events | Play it on desktop and phone | phone: done 2026-09-30 (dock, edge glow, haptics); desktop: open |
+| M8 | Battle UI: opponent strip, KO feed, results, fast-forward; menu entry. Split into two chats: desktop opponent board (Tetris 99-style tiles beside the field) and phone feedback; both read only `match.tiles()` and match events | Play it on desktop and phone | desktop board done 2026-09-30 (`src/ui/OpponentBoard.ts`); phone done 2026-09-30 (`PhoneBattleDock`: dock, edge glow, haptics); results + fast-forward open |
 | M9 | Playtest and tune; then phase 1 (move `Match` to a Node server) | | |
 
 Sources: [TetrisWiki: Tetris 99](https://tetris.wiki/Tetris_99),

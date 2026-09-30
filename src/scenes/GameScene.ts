@@ -60,7 +60,9 @@ const BUTTON_FILL = 0x1b2340;
 // Battle: attacks (the SEND button, incoming aliens on the meter). Not red:
 // red is reserved for subtraction balls.
 const ATTACK_COLOR = 0xff8c42;
-const ATTACK_CSS = "#ff8c42";
+// Incoming attacks waiting to land (pink: warning, but not a ball color).
+const INCOMING_COLOR = 0xff5c8a;
+const INCOMING_CSS = "#ff5c8a";
 // The answer display's row, between the ship and the keypad: the input-mode
 // switch sits on its right, the drawing pad's C button on its left.
 const ANSWER_Y = PLAYER.Y + 36;
@@ -677,12 +679,12 @@ export default class GameScene extends Phaser.Scene {
   /** Kill energy that cancelled incoming attacks, popped at the meter's end. */
   private showCancel(amount: number): void {
     const pop = this.add
-      .text(METER_X + METER_W, METER_Y - 8, `-${Math.round(amount)} incoming`, {
+      .text(30, KEYPAD_TOP - 4, `-${Math.round(amount)}`, {
         fontFamily: "monospace",
         fontSize: "13px",
-        color: ATTACK_CSS,
+        color: INCOMING_CSS,
       })
-      .setOrigin(1, 1)
+      .setOrigin(0.5, 1)
       .setDepth(6);
     this.tweens.add({
       targets: pop,
@@ -694,11 +696,11 @@ export default class GameScene extends Phaser.Scene {
   }
 
   /**
-   * SEND tiers the player can pick now, strongest first. A tap sends the first;
+   * SEND tiers the attack gauge buys now, strongest first. A tap sends the first;
    * holding the button steps down one tier per HOLD_STEP_MS after HOLD_MS.
    */
   private sendChoice(): number | null {
-    const affordable = SEND.TIERS.filter((t) => this.field.energy.canSpend(t.COST))
+    const affordable = SEND.TIERS.filter((t) => this.field.attack.canSpend(t.COST))
       .map((t) => t.COST)
       .reverse();
     if (!this.match || !affordable.length) return null;
@@ -778,9 +780,11 @@ export default class GameScene extends Phaser.Scene {
           fontSize: "18px",
           color: "#ffffff",
           align: "center",
+          stroke: "#05060f",
+          strokeThickness: 3,
         })
         .setOrigin(0.5)
-        .setDepth(HUD_DEPTH);
+        .setDepth(HUD_DEPTH + 0.2);
       bg.on("pointerdown", () => {
         if (this.sendChoice() !== null) this.sendHeldSince = this.time.now;
       });
@@ -810,9 +814,9 @@ export default class GameScene extends Phaser.Scene {
     this.add
       .rectangle(METER_X + METER_W * (this.field.power.cost / this.field.energy.max), METER_Y, 2, 18, 0xffd166)
       .setDepth(HUD_DEPTH);
-    // Battle: incoming attacks eat into the meter from its right end (kills
-    // pay them off first).
-    this.incomingGfx = this.add.graphics().setDepth(HUD_DEPTH);
+    // Battle: the attack gauge and incoming attacks, drawn in the SEND column
+    // over its background and under its label.
+    this.incomingGfx = this.add.graphics().setDepth(HUD_DEPTH + 0.1);
     this.energyText = this.add
       .text(GAME.WIDTH - 30, METER_Y, "0", { fontFamily: "monospace", fontSize: "12px", color: "#ffffff" })
       .setOrigin(0.5)
@@ -860,20 +864,31 @@ export default class GameScene extends Phaser.Scene {
     const tier = this.sendChoice();
     const { bg, text } = this.sendButton;
     const held = this.sendHeldSince !== null;
-    text.setText(`S\nE\nN\nD\n\n${tier ?? "--"}`).setAlpha(tier === null ? 0.35 : 1);
-    bg.setFillStyle(held ? 0x5a3418 : 0x1b2340).setAlpha(tier === null ? 0.35 : 1);
+    text.setText(`S\nE\nN\nD\n\n${tier ?? "--"}`).setAlpha(tier === null ? 0.5 : 1);
+    bg.setFillStyle(held ? 0x5a3418 : 0x1b2340);
 
     // One segment per sent alien still to land, soonest at the right; it
     // blinks in its last second.
+    // The SEND column is the attack gauge: it fills from the bottom (marks at
+    // each tier), and incoming attacks hang from the top, one block per sent
+    // alien, soonest at the top, blinking in their last second. A kill pays
+    // the blocks off first; only the rest fills the gauge.
     const g = this.incomingGfx.clear();
-    let right = METER_X + METER_W;
+    const x = 30 - 22;
+    const unit = GUTTER_H / this.field.attack.max;
+    const fill = GUTTER_H * this.field.attack.fraction;
+    g.fillStyle(ATTACK_COLOR, 0.4).fillRect(x, KEYPAD_BOTTOM - fill, 44, fill);
+    for (const t of SEND.TIERS) {
+      if (t.COST < this.field.attack.max) g.fillStyle(ATTACK_COLOR, 0.8).fillRect(x, KEYPAD_BOTTOM - t.COST * unit, 44, 1);
+    }
+    let top = KEYPAD_TOP;
     for (const a of this.field.incoming) {
-      const w = Math.min(right - METER_X, Math.max(3, (METER_W * a.left) / this.field.energy.max));
+      const h = Math.min(KEYPAD_BOTTOM - top, Math.max(4, a.left * unit));
       const soon = a.landsAtMs - this.field.elapsedMs < 1000;
       const alpha = soon ? 0.55 + 0.45 * Math.sin(this.time.now / 60) : 0.9;
-      g.fillStyle(ATTACK_COLOR, alpha).fillRect(right - w, METER_Y - 7, w - 1, 14);
-      right -= w;
-      if (right <= METER_X) break;
+      g.fillStyle(INCOMING_COLOR, alpha).fillRect(x, top, 44, h - 1);
+      top += h;
+      if (top >= KEYPAD_BOTTOM) break;
     }
   }
 
@@ -1216,7 +1231,7 @@ export default class GameScene extends Phaser.Scene {
           `Survived ${survived}    Fastest solve: ${fastestStr}\n` +
           `Median solve: ${medians || "—"}\n` +
           (this.match
-            ? `Energy sent ${Math.round(f.energy.spent.send)} · ${f.power.def.NAME} ` +
+            ? `Attack sent ${Math.round(f.attack.spent.send)} · ${f.power.def.NAME} ` +
               `${Math.round(f.energy.spent[f.power.kind])} · cancelled ${Math.round(f.cancelledTotal)}`
             : `Energy earned ${Math.round(f.energy.earned)} · ` +
               `${Math.round(f.energy.spent[f.power.kind])} on ${f.power.def.NAME}`),
