@@ -60,6 +60,10 @@ export class Bot {
   sends = 0;
   /** False: never press POWER (the "no powers" baseline in `npm run bots`). */
   usesPower = true;
+  /** "owner": uses its power the way the owner does (fitted to playtests);
+   * "sharp": never misses a dangerous moment and saves BLAST for the last
+   * moment (a power's ceiling, for balancing). */
+  powerStyle: "owner" | "sharp" = "owner";
   /** Attack gauge at which it SENDs (its level's SEND_AT; Infinity = never). */
   sendAt: number;
   /** Since when the power decision it is about to make has held (REACTION). */
@@ -137,27 +141,43 @@ export class Bot {
 
   /**
    * Energy policy (docs/MULTIPLAYER_DESIGN.md §7), one rule per effect:
-   * - time: see `useTimePower` (fitted to the owner's FREEZE);
-   * - blast: with a full bar, when several unanswered aliens are close or one
-   *   is about to land;
+   * - time: on in a dangerous moment (`dangerous`), off once the board is
+   *   clear (fitted to the owner's FREEZE);
+   * - blast: in a dangerous moment too, which is when the owner blasts (2+
+   *   unanswered aliens up, one getting close); "sharp" bots instead wait
+   *   until several are about to land, which gets the most out of each blast;
    * - shield: arm it as soon as it's affordable (buy it in the calm).
+   * Owner-style bots act on a dangerous moment only after REACTION and miss
+   * one with MISS_DANGER, whatever the power, so powers compare fairly.
    */
   private usePower(field: Field): void {
     const power = field.power;
-    if (power.def.EFFECT === "time") {
-      this.useTimePower(field);
+    if (power.def.EFFECT === "shield") {
+      if (power.canTrigger(field.energy)) field.apply({ type: "power" });
       return;
     }
-    const p = BOT.POWER;
-    const open = field.aliens.filter(
-      (a) => a.active && a.lethal && a !== field.lockedTarget && a !== field.target,
-    );
-    const danger = open.reduce((y, a) => Math.max(y, a.y), -Infinity);
-    const press =
-      power.def.EFFECT === "shield" ||
-      open.filter((a) => a.y > p.BLAST_Y).length >= 2 ||
-      danger > p.BLAST_LAST_Y;
-    if (press && power.canTrigger(field.energy)) field.apply({ type: "power" });
+    if (power.def.EFFECT === "blast" && this.powerStyle === "sharp") {
+      const p = BOT.POWER;
+      const open = field.aliens.filter(
+        (a) => a.active && a.lethal && a !== field.lockedTarget && a !== field.target,
+      );
+      const danger = open.reduce((y, a) => Math.max(y, a.y), -Infinity);
+      const press = open.filter((a) => a.y > p.BLAST_Y).length >= 2 || danger > p.BLAST_LAST_Y;
+      if (press && power.canTrigger(field.energy)) field.apply({ type: "power" });
+      return;
+    }
+    this.useMomentPower(field);
+  }
+
+  /** The owner's "this is getting dangerous" moment: 2+ unanswered aliens up
+   * and the nearest within FREEZE_AT_PX of the ship, or any within PANIC_PX. */
+  private dangerous(field: Field): { open: number; moment: boolean } {
+    const open = this.readable(field).filter((a) => a.lethal);
+    const nearest = open.reduce((d, a) => Math.min(d, PLAYER.Y - a.y), Infinity);
+    const moment =
+      (open.length >= BOT.FREEZE_MIN_OPEN && nearest <= this.skill.FREEZE_AT_PX) ||
+      nearest <= this.skill.PANIC_PX;
+    return { open: open.length, moment };
   }
 
   /**
@@ -181,32 +201,29 @@ export class Bot {
   }
 
   /**
-   * A time power (FREEZE, SLOW) on when the board gets dangerous, off once
-   * every alien on screen is answered. A decision is made only after it has
-   * held for REACTION, like a person noticing.
+   * A time power (FREEZE, SLOW) on in a dangerous moment, off once every
+   * alien on screen is answered; BLAST fired in a dangerous moment. A
+   * decision is made only after it has held for REACTION, like a person
+   * noticing, and owner-style bots miss some moments (MISS_DANGER).
    */
-  private useTimePower(field: Field): void {
-    const open = this.readable(field).filter((a) => a.lethal);
-    const nearest = open.reduce((d, a) => Math.min(d, PLAYER.Y - a.y), Infinity);
+  private useMomentPower(field: Field): void {
+    const { open, moment } = this.dangerous(field);
     const frozen = field.power.running;
-    const want = frozen
-      ? open.length > 0 // stay frozen until the board is clear
-      : (open.length >= BOT.FREEZE_MIN_OPEN && nearest <= this.skill.FREEZE_AT_PX) ||
-        nearest <= this.skill.PANIC_PX;
+    const want = frozen ? open > 0 : moment; // stay on until the board is clear
     // Nothing to change (or the hit-recovery freeze already holds the field).
     if (want === frozen || field.freezeLeftMs > 0 || (!frozen && !field.power.canTrigger(field.energy))) {
       this.powerSince = null;
       this.missed = false; // the moment passed
       return;
     }
-    if (this.powerSince === null && !frozen) {
+    if (this.powerSince === null && !frozen && this.powerStyle === "owner") {
       // A new dangerous moment: people sometimes don't notice one in time.
       this.missed = this.rng.chance(this.skill.MISS_DANGER);
     }
     this.powerSince ??= this.clock;
     if (this.missed) return;
     if (this.clock - this.powerSince < this.skill.REACTION) return;
-    field.apply({ type: "power" }); // toggles it on or off
+    field.apply({ type: "power" }); // toggles a time power, or fires a blast
     if (!frozen) this.freezes++;
     this.powerSince = null;
   }
