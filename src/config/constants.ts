@@ -85,13 +85,18 @@ export const MATCH = {
  * 10–15 s) and most KOs came with power energy to spare. "Dangerous" is the
  * bots' time-power rule (sim/danger.ts) at the owner's own distances: 2+
  * unanswered aliens with the nearest within NEAR_PX of the ship, or one
- * within PANIC_PX. A press within ANSWER_MS counts as answering it (logged).
+ * within PANIC_PX, held for SHOW_AFTER_MS. A press within ANSWER_MS counts
+ * as answering it (logged).
  */
 export const POWER_NUDGE = {
   NEAR_PX: 170,
   PANIC_PX: 90,
   PULSE_MS: 260, // half a pulse
   ANSWER_MS: 2000,
+  // Shown only once the danger has held this long (game clock): in the first
+  // nudge playtest most dangerous moments ended within 0.0–0.3 s because the
+  // owner typed an answer, and the nudge just flickered and ticked.
+  SHOW_AFTER_MS: 250,
 } as const;
 
 /** How a player aims their attacks (Tetris 99's four strategies). */

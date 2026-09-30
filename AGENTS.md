@@ -574,8 +574,9 @@ Green=multiplication, Yellow=division.
   dangerous and the power can be used: the bots' time-power rule
   (`sim/danger.ts` `isDangerous`: 2+ unanswered aliens with the nearest
   within 170 px of the ship, or one within 90 px, the owner's own FREEZE
-  distance). The run log counts nudges shown, answered (a press within 2 s)
-  and whether one was showing at the KO.
+  distance), once it has held for `SHOW_AFTER_MS` (250). The run log counts
+  nudges shown, answered (a press within 2 s) and whether one was showing
+  at the KO.
 - **After your KO** (M8, `ui/BattleResults.ts`): the results panel opens
   and the match keeps running behind it at real speed, so the standings are
   live (still playing first, then by place; your row gold): your place, who
@@ -754,6 +755,17 @@ dMatch)`; it is 0 in solo play.
 ## Decision Log
 
 Newest first. Format: `YYYY-MM-DD — decision — rationale`.
+
+- **2026-09-30 — Owner's battles with the board + attack gauge (4, desktop):
+  placed 1, 3, 4, 1** (an ace bot in the same seat and seeds: 1, 3, 1, 7) —
+  level with the ace for the first time (the M6 batch was 6, 1, 4, 2, 5, 5
+  vs the ace's 3, 3, 1, 1, 2, 1). Survived 75–88 s, sent 300–375 attack,
+  pressed POWER 2–8 times (was 0–5). Replaying the two nudge-build runs:
+  most nudges lasted 0.0–0.3 s (the owner typed an answer and the danger
+  ended), so the nudge now waits 250 ms before showing; the long ones
+  (0.5–1.4 s) got pressed. The one loss there: a SHIELD absorbed a
+  splitling and its twin landed 0.8 s later (the splitling pair still beats
+  one shield). Fixed: a win logged `atKo: true`.
 
 - **2026-09-30 — Battle power nudge.** In 8 battles the owner pressed POWER
   0–5 times per match (solo: every 10–15 s) and most KOs came with energy to

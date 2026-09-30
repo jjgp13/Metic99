@@ -136,6 +136,7 @@ export default class GameScene extends Phaser.Scene {
    * (game clock) the current nudge has gone unanswered. */
   private nudging = false;
   private nudgeAtMs: number | null = null;
+  private dangerSinceMs: number | null = null;
   private incomingGfx!: Phaser.GameObjects.Graphics;
   private slowTint!: Phaser.GameObjects.Rectangle;
 
@@ -242,6 +243,7 @@ export default class GameScene extends Phaser.Scene {
     this.sendHeldSince = null;
     this.nudging = false;
     this.nudgeAtMs = null;
+    this.dangerSinceMs = null;
     this.powerButtons = [];
     this.runExtras = {
       lives: this.field.lives,
@@ -969,7 +971,7 @@ export default class GameScene extends Phaser.Scene {
    * soft tick when a moment starts; counted for the playtest log.
    */
   private updateNudge(on: boolean, usable: boolean): boolean {
-    const nudge =
+    const danger =
       this.match !== null &&
       !this.gameOver &&
       !this.paused &&
@@ -980,6 +982,11 @@ export default class GameScene extends Phaser.Scene {
         nearPx: POWER_NUDGE.NEAR_PX,
         panicPx: POWER_NUDGE.PANIC_PX,
       });
+    // Only a danger that holds for a moment: most end within a fraction of a
+    // second because the player types an answer.
+    if (!danger) this.dangerSinceMs = null;
+    else this.dangerSinceMs ??= this.field.elapsedMs;
+    const nudge = danger && this.field.elapsedMs - this.dangerSinceMs! >= POWER_NUDGE.SHOW_AFTER_MS;
     if (nudge && !this.nudging) {
       this.sound.play("blip", { volume: 0.25, rate: 2 });
       this.runExtras.nudges.shown++;
@@ -1324,7 +1331,8 @@ export default class GameScene extends Phaser.Scene {
 
     if (this.match) {
       this.runExtras.battle!.placement = this.match.placements[0];
-      this.runExtras.nudges.atKo = this.nudging;
+      // Only a KO counts (a win also ends the run here).
+      this.runExtras.nudges.atKo = this.field.knockedOut && this.nudging;
       this.saveRun(GAME.HEIGHT - 12);
       this.openResults();
       return;
