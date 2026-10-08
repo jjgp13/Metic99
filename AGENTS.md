@@ -13,6 +13,16 @@ design decisions.
 > Keep entries terse (1–3 lines). This keeps context portable across machines
 > and sessions.
 
+> **Working agreement (IMPORTANT): readable code, explained changes.** This is
+> a learning project: the owner must be able to read, understand and change
+> any code without help. Before writing code, read
+> [`docs/ENGINEERING.md`](docs/ENGINEERING.md) (readability rules, layers,
+> testing, how a change is made). The patterns the code uses are explained in
+> [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). **Every change ends with an
+> explanation** of the pattern used, why, the alternatives that lost, and how
+> to change it later (template in ENGINEERING.md §6; Claude: the
+> `explain-change` skill). Bigger changes get a note in `docs/learning/`.
+
 ---
 
 ## What Metic99 is
@@ -31,7 +41,7 @@ loop. See the Decision Log.
 
 - **Phaser 3** — scenes, menus, HUD, keypad, input, audio and the asset loader.
   Its canvas is **transparent** and stacked above the 3D canvas. Arcade physics
-  is no longer used (hits are a swept test in `GameScene.moveBullets`).
+  is no longer used (hits are a swept test in `Field.moveBullets`).
 - **Three.js** — renders the gameplay playfield in 3D (`src/render3d/`). Chosen
   over Babylon.js / Unity WebGL for desktop + phone browsers: small bundle
   (~150 kB gz), fast mobile load, and plain TS that a future Node game server can
@@ -58,7 +68,11 @@ public/assets/        Game art/audio/fonts (reused verbatim from the Unity repo)
 src/
   main.ts             Phaser.Game config + scene registration
   config/
-    constants.ts      All tunable gameplay/layout values
+    constants.ts      Re-exports every tuning file (import constants from here)
+    tuning/           Tuning numbers, one file per domain: game, monsters,
+                      difficulty, scoring, powers, answer, battle, bots,
+                      storage, render3d
+    palette.ts        Named UI colors (PALETTE.GOLD, .ATTACK…) + css()
     difficulty.ts     Logistic difficulty curve
     ships.ts          Player's ship choice (menu picker, saved in localStorage)
     powers.ts         Player's power choice (menu picker, saved in localStorage)
@@ -67,14 +81,17 @@ src/
     BootScene.ts      Preloads assets; defers animations (static frames for now)
     MenuScene.ts      Title screen: ship picker + PLAY / BATTLE / HOW TO PLAY / SCORES
     HowToPlayScene.ts Static rules screen reached from the menu
-    GameScene.ts      Turns keypad/keyboard/pad into Field inputs, steps the
-                      Field (or, in battle mode, the Match) at a fixed 60 Hz,
-                      and shows its events (sounds, HUD, pops). Hands World3D
-                      a snapshot every frame.
+    GameScene.ts      Composition root: builds the run and the HUD parts,
+                      maps keypad/keyboard/pad to Field inputs, steps the
+                      Field (or the battle Match) at a fixed 60 Hz (SimClock),
+                      turns its events into sound and HUD calls, and hands
+                      World3D a snapshot every frame.
+    runSetup.ts       A run's seed + Field or Match (+ dev URL params)
     NameEntryScene.ts Arcade 5-char initials entry shown at game over
     LeaderboardScene.ts Global top-N board; dual-mode (post-run / menu browse)
     HandwritingLabScene.ts `?lab=draw`: records real handwriting, exports JSON
   services/
+    masteryStats.ts   Personal bests in localStorage (pure mergeRun + shell)
     leaderboard.ts    Supabase global high scores: startMatch + match-gated
                       submitScore, plus getTop/getRank reads
     playtestLog.ts    Playtest logger: in the claude.ai playtest Artifact,
@@ -91,6 +108,11 @@ src/
     handwriting.test.ts
     realSamples.test.ts Replays samples/*.json through InkReader, prints a report
   ui/
+    theme.ts          textStyle(size, color) / outline(): the one text style
+    hud/              In-game HUD components, one job each: TopHud, Popups,
+                      AnswerDisplay, Reticle, EnergyHud, SendButton,
+                      InputPanel, PauseOverlay, GameOverScreen, Ducker
+                      (fades HUD under aliens); positions in layout.ts
     DrawPad.ts        The drawing pad: pointer capture, glowing ink, "?" flash
     keyboard.ts       `onKeyDown`: each key press delivered once (Phaser bug)
     battleViews.ts    `BattleView` seam for the battle UI (M8): views of the
@@ -122,7 +144,10 @@ src/
                       only source for opponents).
     Bot.ts            Bot player: reads only what's on screen, acts only via
                       `field.apply()`; skill levels in `BOT` (rookie/pilot/ace).
+    SimClock.ts       Fixed timestep: real time → whole rule steps + alpha.
     stats.ts          Solve-time summaries.
+    golden.test.ts    Golden master: fixed-seed bot runs + a match vs a
+                      saved snapshot (refactors must keep it green).
     pace.ts           Answer times by ball count (replayed from an input
                       log): the measure bots are calibrated with.
   objects/
@@ -149,6 +174,10 @@ art/                  3D art source (docs/ART_SPEC.md)
   previews/           Rendered top-down + 3/4 previews per model
 public/assets/models/ Built .glb models loaded by World3D
 public/assets/icons/  Transparent top-down model renders for 2D menus (build output)
+docs/ENGINEERING.md   How code is written, verified and explained (read first)
+docs/ARCHITECTURE.md  Guided tour of the design patterns used, and why
+docs/learning/        Explanations of bigger changes, for the owner to learn from
+.claude/skills/explain-change/  How Claude explains every change
 docs/ART_SPEC.md      3D art style, budgets, axes, pipeline
 docs/MULTIPLAYER_DESIGN.md  Battle-royale design: energy, attacks, backend plan
   env.d.ts            Types for Vite `import.meta.env` (Supabase env vars)
@@ -190,7 +219,7 @@ docs/MULTIPLAYER_DESIGN.md  Battle-royale design: energy, attacks, backend plan
 - Game-over flow (when enabled): GAME OVER overlay → `NameEntryScene` (3–6 char
   length selector + initials) → `submitScore` (via the match gate) →
   `LeaderboardScene` (post-run mode, shows world rank) → `MenuScene`. All restart
-  triggers route through one idempotent `proceedAfterGameOver()`; when the
+  triggers route through one idempotent `GameScene.leaveGameOver()`; when the
   leaderboard is disabled it goes straight to `MenuScene`.
 - **Hosting: GitHub Pages** via `.github/workflows/deploy.yml` (build on push to
   `main`, deploy `dist`). Supabase env injected from repo **secrets**. Vite
@@ -318,7 +347,7 @@ Green=multiplication, Yellow=division.
      a side only if its flight path is clear of every alien in it or above
      it (anything that could come down into it). No room → the spawn retries
      in `SPAWN_RETRY_MS`.
-  2. **Runtime guard** (`GameScene.advanceReadable`): a move that would bring
+  2. **Runtime guard** (`Swarm.advanceReadable`): a move that would bring
      two boxes within `ENEMY.READ_GAP` is not made. It is retried one axis at a
      time; the refused axis holds still, and a refused sideways move turns
      zig-zags/patrols around (the drifter waits). Aliens queue behind each
@@ -437,7 +466,7 @@ Green=multiplication, Yellow=division.
   (`depth 5`), so entering aliens never obscure it. **The numbers win over
   the HUD:** every top-HUD piece, ability banner and score/equation/energy
   pop sits in its own container that fades to `FEEDBACK.DUCK.ALPHA` while
-  any alien's box is under it (`GameScene.duckHud`); its own alpha (a lost
+  any alien's box is under it (`ui/hud/Ducker`); its own alpha (a lost
   life, a pop's fade) multiplies on top.
 - High score persisted in `localStorage` (`metic-highscore`).
 - **Seeded runs + game clock** (`src/sim/rng.ts`): each run has a seed; the
@@ -674,7 +703,7 @@ alone** so the number of concurrent unsolved sums grows only with points:
 | Max digit      | 3    | 9    | d |
 | Strafer patrol | 5000 | 2800 ms | d |
 
-`MIN_BALLS` is fixed at 2. All knobs live in `src/config/constants.ts`; the
+`MIN_BALLS` is fixed at 2. All knobs live in `src/config/tuning/difficulty.ts`; the
 curve is in `src/config/difficulty.ts` (`difficultyAt(elapsedMs, score,
 dMatch)`). In a battle, `dMatch` (`matchPressure`) joins both maxes: `d =
 max(dScore, dTimeFloor, dMatch)` and the unsolved cap uses `max(dScore,
@@ -739,9 +768,17 @@ dMatch)`; it is 0 in solo play.
 
 ## Conventions
 
-- Keep all tunables in `config/constants.ts`; avoid magic numbers in scenes.
-- Comment only non-obvious intent (per repo style).
+- Follow `docs/ENGINEERING.md` (readability rules, layers, verification) and
+  explain every change (§6 there; Claude: the `explain-change` skill).
+- Keep all tunables in `config/tuning/<domain>.ts` (imported through
+  `config/constants.ts`), UI colors in `config/palette.ts`, text styles via
+  `ui/theme.ts`; avoid magic numbers in scenes.
+- Comment only non-obvious intent (per repo style); history goes in the
+  Decision Log, not in code comments.
 - Verify changes: `npx tsc --noEmit`, `npm test` and `npm run build` must pass.
+  **Never mix a refactor and a behavior change in one commit**: a refactor
+  keeps the golden master (`src/sim/golden.test.ts`) green; an intended rule
+  change updates it (`npx vitest run -u`) and says why.
 - **Game rules never use `Math.random()` or the wall clock** (`this.time.now`):
   draw from the run's seeded streams and read the game clock. Visual-only
   randomness (stars, debris) may use `Math.random()`. New monsters and
@@ -759,6 +796,18 @@ dMatch)`; it is 0 in solo play.
 ## Decision Log
 
 Newest first. Format: `YYYY-MM-DD — decision — rationale`.
+
+- **2026-10-08 — Engineering practices + readability refactor (no
+  behavior change).** Owner's ask: readable, self-explaining code and every
+  change explained, for learning. Wrote `docs/ENGINEERING.md`,
+  `docs/ARCHITECTURE.md` (patterns tour) and the `explain-change` skill;
+  `AGENTS.md` now requires an explanation per change. Refactored the four
+  hotspots instead of a rewrite (the architecture was sound; a rewrite
+  can't be reviewed or learned from): GameScene 1287 → ~470 lines with HUD
+  components in `ui/hud/`, constants split into `config/tuning/` behind a
+  barrel, named palette + `textStyle()`, Swarm's 11-parameter `makeAlien`
+  → an `AlienSpec`. A golden-master test (fixed-seed bots + a match) proved
+  every step kept the game identical. Details: `docs/learning/2026-10-08-readability-refactor.md`.
 
 - **2026-09-30 — Merged the phone battle HUD with the desktop board and
   the attack gauge.** Both views run together: the dock (in the canvas,

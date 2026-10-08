@@ -300,7 +300,7 @@ but marked as such.
    knowledge).
 5. It declares its role: solo spawn, sendable (one row in the send table), or
    both.
-6. Its numbers live in `config/constants.ts`.
+6. Its numbers live in `config/tuning/` (the right domain file, e.g. `monsters.ts`).
 
 ## 10. Phase 0 milestones
 

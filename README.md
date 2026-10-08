@@ -22,6 +22,9 @@ lose a life — lose all three and it's game over.
 
 ## Project layout
 
+Read `AGENTS.md` first; how code is written here is in `docs/ENGINEERING.md`
+and the design patterns are explained in `docs/ARCHITECTURE.md`.
+
 ```
 public/assets/        Game art, audio and fonts (reused from the Unity repo)
   sprites/            16px pixel-art spritesheets
@@ -29,10 +32,10 @@ public/assets/        Game art, audio and fonts (reused from the Unity repo)
   fonts/              Kenney pixel fonts
 src/
   main.ts             Phaser.Game config + scene registration
-  config/constants.ts Tunable gameplay/layout values
+  config/tuning/      Tunable gameplay/layout values, one file per domain
   scenes/
     BootScene.ts      Preloads assets, builds animations
-    GameScene.ts      The core loop (spawn, input, targeting, combat, HUD)
+    GameScene.ts      Wires the run, the HUD (ui/hud/) and the 3D view
   objects/
     Alien.ts          Alien state (numbers, position) + movement; no rendering
     Bullet.ts         Bullet state
