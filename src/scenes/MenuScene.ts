@@ -1,7 +1,8 @@
 import Phaser from "phaser";
-import { GAME, POWERS, POWER_KINDS, RENDER3D, STORAGE } from "../config/constants";
+import { GAME, POWERS, POWER_KINDS, RENDER3D } from "../config/constants";
 import { selectPower, selectedPower } from "../config/powers";
 import { selectShip, selectedShip } from "../config/ships";
+import { storedHighScore } from "../services/masteryStats";
 import { onKeyDown } from "../ui/keyboard";
 import { PALETTE, css } from "../config/palette";
 import { textStyle } from "../ui/theme";
@@ -37,7 +38,7 @@ export default class MenuScene extends Phaser.Scene {
       .text(cx, 188, "math invaders", textStyle(18, PALETTE.ACCENT))
       .setOrigin(0.5);
 
-    const best = Number(localStorage.getItem(STORAGE.HIGHSCORE) ?? 0);
+    const best = storedHighScore();
     if (best > 0) {
       this.add
         .text(cx, 222, `Best: ${best}`, textStyle(16, PALETTE.TEXT_MUTED))
