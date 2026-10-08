@@ -194,6 +194,7 @@ docs/learning/        The owner's learning: HOW_WE_LEARN.md (the science),
 .claude/skills/explain-change/  How Claude explains every change
 docs/ART_SPEC.md      3D art style, budgets, axes, pipeline
 docs/MULTIPLAYER_DESIGN.md  Battle-royale design: energy, attacks, backend plan
+docs/NETCODE.md       Phase 1 (online server) plan S0–S6 + learning journal
   env.d.ts            Types for Vite `import.meta.env` (Supabase env vars)
 ```
 
@@ -765,7 +766,8 @@ dMatch)`; it is 0 in solo play.
        `docs/MULTIPLAYER_DESIGN.md`. Single player first: [x] energy bar +
        one picked power (FREEZE / SLOW / BLAST / SHIELD), [x] alien
        movement patterns, [x] monster abilities; then offline bots (and energy
-       "send"), then the WebSocket match server (8 players to start).
+       "send"), then the WebSocket match server (8 players to start;
+       plan S0–S6 in `docs/NETCODE.md`, one chat per milestone).
        **Phase 0 (offline vs bots)** milestones M0–M9 are in
        `docs/MULTIPLAYER_DESIGN.md` §10: [x] M0 battle rules/bots/contracts
        written down, [x] M1 seeded random numbers + game clock, [x] M2a
@@ -810,6 +812,12 @@ dMatch)`; it is 0 in solo play.
 ## Decision Log
 
 Newest first. Format: `YYYY-MM-DD — decision — rationale`.
+
+- **2026-10-08 — Phase 1 (online match server) is planned as S0–S6 in
+  `docs/NETCODE.md`, one chat per milestone.** Server re-runs every field
+  from inputs (option A), Node + plain `ws` sharing `src/sim`. Each
+  milestone is small learning-loop steps where the owner designs first;
+  NETCODE.md is the plan and the journal (decisions, measurements, glossary).
 
 - **2026-10-08 — Reviews move to a dedicated quiz chat (owner's design).**
   One chat per feature teaches; one long-lived chat quizzes (`/quiz`, and a
