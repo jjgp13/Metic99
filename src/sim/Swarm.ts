@@ -1,5 +1,6 @@
 import {
   ABILITY,
+  BALL_COLOR,
   DIFFICULTY,
   ENEMY,
   GAME,
@@ -27,6 +28,32 @@ export const STREAM = { FIELD: 1, SPAWN: 2, DRIFTER: 3, SEND: 4 } as const;
 export interface SentAlien {
   kind: AlienKind;
   ability: AbilityKind | null;
+}
+
+/** A sum: its digits (one per ball) and its result (what the player types). */
+interface Sum {
+  digits: number[];
+  result: number;
+}
+
+/** Everything `makeAlien` needs to build one alien (see AlienConfig). */
+interface AlienSpec {
+  kind: AlienKind;
+  sum: Sum;
+  x: number;
+  y: number;
+  /** Speeds and patrol time come from the difficulty at spawn time. */
+  pace: DifficultyParams;
+  /** Strafer / drifter: body y of the band it patrols or crosses. */
+  bandY?: number;
+  /** An ability changes the alien's speed and model too. */
+  ability?: AbilityKind | null;
+  /** Model to wear instead of the kind's (splitlings). */
+  model?: string;
+  /** Swooper: where its sideways flight in ends. */
+  laneX?: number;
+  /** Battle: the seat that sent it. */
+  sentBy?: number;
 }
 
 /** What happened to the aliens; `Field` drains them after each step. */
@@ -204,8 +231,8 @@ export class Swarm implements AbilityHost {
       fallSpeed: diff.fallSpeed * SPLITTER.CHILD_SPEED,
       homeSpeed: diff.homeSpeed * SPLITTER.CHILD_SPEED,
     };
-    const make = (cx: number, cy: number) =>
-      this.makeAlien(this.rng, "darter", sum, cx, cy, pace, undefined, null, SPLITTER.CHILD_MODEL);
+    const make = (x: number, y: number) =>
+      this.makeAlien(this.rng, { kind: "darter", sum, x, y, pace, model: SPLITTER.CHILD_MODEL });
     // Start halfway out, not at the parent's center: the two splitlings then
     // begin a full box apart, so their numbers never overlap mid-glide. Its box
     // must pass the readability rule where it starts and where it lands (the
@@ -309,7 +336,7 @@ export class Swarm implements AbilityHost {
     minBalls: number,
     maxBalls: number,
     maxDigit: number,
-  ): { digits: number[]; result: number } | null {
+  ): Sum | null {
     for (let attempt = 0; attempt < 12; attempt++) {
       const count = rng.int(minBalls, maxBalls);
       const digits = Array.from({ length: count }, () => rng.int(1, maxDigit));
@@ -322,42 +349,30 @@ export class Swarm implements AbilityHost {
   /**
    * Build (not add) an alien. With an ability it moves as ABILITY.KIND at the
    * ability's SPEED and wears the ability's model; a blinker (strafer) also
-   * patrols PATROL_MULT longer. `model` overrides the look (splitlings);
-   * `laneX` is where a swooper's flight in ends.
+   * patrols PATROL_MULT longer.
    */
-  private makeAlien(
-    rng: Rng,
-    kind: AlienKind,
-    sum: { digits: number[]; result: number },
-    x: number,
-    y: number,
-    diff: DifficultyParams,
-    bandY?: number,
-    ability?: AbilityKind | null,
-    model?: string,
-    laneX?: number,
-    sentBy?: number,
-  ): Alien {
+  private makeAlien(rng: Rng, spec: AlienSpec): Alien {
+    const { ability, pace } = spec;
     const speed = ability ? ABILITY.SPEED[ability] : 1;
     const patrol = ability === "blinker" ? ABILITY.PATROL_MULT : 1;
     return new Alien({
-      kind,
-      x,
-      y,
+      kind: spec.kind,
+      x: spec.x,
+      y: spec.y,
       bodyKey: `alien${rng.int(1, 13)}`,
-      result: sum.result,
-      digits: sum.digits,
-      ballTexture: "blueBalls",
-      fallSpeed: diff.fallSpeed * speed,
-      homeSpeed: diff.homeSpeed * speed,
+      result: spec.sum.result,
+      digits: spec.sum.digits,
+      ballTexture: BALL_COLOR.SUM, // every sum is an addition for now
+      fallSpeed: pace.fallSpeed * speed,
+      homeSpeed: pace.homeSpeed * speed,
       spawnedAt: this.elapsedMs,
       rng,
-      patrolMs: diff.straferPatrolMs * patrol,
-      bandY,
-      laneX,
-      model: ability ? ABILITY.MODEL[ability] : model,
+      patrolMs: pace.straferPatrolMs * patrol,
+      bandY: spec.bandY,
+      laneX: spec.laneX,
+      model: ability ? ABILITY.MODEL[ability] : spec.model,
       ability: ability ? createAbility(ability) : undefined,
-      sentBy,
+      sentBy: spec.sentBy,
     });
   }
 
@@ -394,7 +409,7 @@ export class Swarm implements AbilityHost {
         ? rng.int(MONSTERS.strafer.BAND_Y.min, MONSTERS.strafer.BAND_Y.max)
         : undefined;
 
-    if (!this.enterFromTop(rng, kind, sum, diff, bandY, ability)) return false;
+    if (!this.enterFromTop(rng, { kind, sum, pace: diff, bandY, ability })) return false;
     this.spawnStreams.succeeded();
     return true;
   }
@@ -416,7 +431,7 @@ export class Swarm implements AbilityHost {
       sent.kind === "strafer"
         ? this.rng.int(MONSTERS.strafer.BAND_Y.min, MONSTERS.strafer.BAND_Y.max)
         : undefined;
-    return this.enterFromTop(this.rng, sent.kind, sum, diff, bandY, sent.ability, from);
+    return this.enterFromTop(this.rng, { kind: sent.kind, sum, pace: diff, bandY, ability: sent.ability, sentBy: from });
   }
 
   /**
@@ -425,22 +440,15 @@ export class Swarm implements AbilityHost {
    * everyone, so ball rows start apart; advanceReadable keeps them apart.
    * False if no clear column was found (the caller retries soon).
    */
-  private enterFromTop(
-    rng: Rng,
-    kind: AlienKind,
-    sum: { digits: number[]; result: number },
-    diff: DifficultyParams,
-    bandY: number | undefined,
-    ability: AbilityKind | null,
-    sentBy?: number,
-  ): boolean {
-    const probe = this.makeAlien(rng, kind, sum, 0, 0, diff, bandY, ability, undefined, undefined, sentBy);
+  private enterFromTop(rng: Rng, spec: Omit<AlienSpec, "x" | "y">): boolean {
+    // A probe alien at (0, 0) tells the box and sweep size for this spec.
+    const probe = this.makeAlien(rng, { ...spec, x: 0, y: 0 });
     const y = -probe.bottom - 2;
     const lo = probe.sweepHalf + ENEMY.SPAWN_EDGE;
     const hi = GAME.WIDTH - lo;
     for (let attempt = 0; attempt < 12; attempt++) {
       const x = rng.int(lo, hi);
-      const alien = this.makeAlien(rng, kind, sum, x, y, diff, bandY, ability, undefined, undefined, sentBy);
+      const alien = this.makeAlien(rng, { ...spec, x, y });
       if (this.hasRoomFor(alien)) {
         this.addAlien(alien);
         return true;
@@ -467,9 +475,9 @@ export class Swarm implements AbilityHost {
    * could come down into it, so the flight in isn't held up. False if no try
    * found room (the spawner retries soon).
    */
-  private placeSwooper(rng: Rng, sum: { digits: number[]; result: number }, diff: DifficultyParams): boolean {
+  private placeSwooper(rng: Rng, sum: Sum, pace: DifficultyParams): boolean {
     const m = MONSTERS.swooper;
-    const probe = this.makeAlien(rng, "swooper", sum, 0, 0, diff);
+    const probe = this.makeAlien(rng, { kind: "swooper", sum, x: 0, y: 0, pace });
     const lo = probe.halfW + ENEMY.SPAWN_EDGE;
     const hi = GAME.WIDTH - lo;
     for (let attempt = 0; attempt < 12; attempt++) {
@@ -477,7 +485,7 @@ export class Swarm implements AbilityHost {
       const x = fromLeft ? -probe.halfW : GAME.WIDTH + probe.halfW;
       const y = rng.int(m.BAND_Y.min, m.BAND_Y.max);
       const laneX = rng.int(lo, hi);
-      const alien = this.makeAlien(rng, "swooper", sum, x, y, diff, undefined, null, undefined, laneX);
+      const alien = this.makeAlien(rng, { kind: "swooper", sum, x, y, pace, laneX });
       if (this.pathClearFor(alien)) {
         this.addAlien(alien);
         this.spawnStreams.succeeded();
@@ -531,10 +539,10 @@ export class Swarm implements AbilityHost {
     const m = MONSTERS.drifter;
     for (let attempt = 0; attempt < 6; attempt++) {
       const fromLeft = rng.chance(0.5);
-      const probe = this.makeAlien(rng, "drifter", sum, 0, 0, diff);
+      const probe = this.makeAlien(rng, { kind: "drifter", sum, x: 0, y: 0, pace: diff });
       const x = fromLeft ? -probe.halfW : GAME.WIDTH + probe.halfW - 1;
       const bandY = rng.int(m.BAND_Y.min, m.BAND_Y.max);
-      const alien = this.makeAlien(rng, "drifter", sum, x, bandY, diff, bandY);
+      const alien = this.makeAlien(rng, { kind: "drifter", sum, x, y: bandY, pace: diff, bandY });
       if (this.aliens.every((o) => !o.active || !alien.overlaps(o))) {
         this.addAlien(alien);
         this.drifterStreams.succeeded();
