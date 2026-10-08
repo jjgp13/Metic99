@@ -1,6 +1,8 @@
 import Phaser from "phaser";
 import { GAME, LEADERBOARD } from "../config/constants";
 import { ScoreRow, getTop, isLeaderboardEnabled } from "../services/leaderboard";
+import { PALETTE } from "../config/palette";
+import { textStyle } from "../ui/theme";
 
 interface LeaderboardData {
   /** When true the scene was opened from the menu to browse the board, so it
@@ -54,29 +56,17 @@ export default class LeaderboardScene extends Phaser.Scene {
     const cx = GAME.WIDTH / 2;
 
     this.add
-      .text(cx, 70, "HIGH SCORES", {
-        fontFamily: "monospace",
-        fontSize: "30px",
-        color: "#ffd166",
-      })
+      .text(cx, 70, "HIGH SCORES", textStyle(30, PALETTE.GOLD))
       .setOrigin(0.5);
 
     if (!this.result.browse) {
       if (this.result.ok && this.result.rank > 0) {
         this.add
-          .text(cx, 112, `YOUR RANK: #${this.result.rank}`, {
-            fontFamily: "monospace",
-            fontSize: "18px",
-            color: "#4ea1ff",
-          })
+          .text(cx, 112, `YOUR RANK: #${this.result.rank}`, textStyle(18, PALETTE.ACCENT))
           .setOrigin(0.5);
       } else if (!this.result.ok) {
         this.add
-          .text(cx, 112, "Offline — score not saved", {
-            fontFamily: "monospace",
-            fontSize: "14px",
-            color: "#8893b5",
-          })
+          .text(cx, 112, "Offline — score not saved", textStyle(14, PALETTE.TEXT_MUTED))
           .setOrigin(0.5);
       }
     }
@@ -85,19 +75,11 @@ export default class LeaderboardScene extends Phaser.Scene {
       // Browsing from the menu: fetch the board ourselves.
       if (!isLeaderboardEnabled()) {
         this.add
-          .text(cx, 200, "Leaderboard unavailable", {
-            fontFamily: "monospace",
-            fontSize: "16px",
-            color: "#8893b5",
-          })
+          .text(cx, 200, "Leaderboard unavailable", textStyle(16, PALETTE.TEXT_MUTED))
           .setOrigin(0.5);
       } else {
         const loading = this.add
-          .text(cx, 200, "Loading…", {
-            fontFamily: "monospace",
-            fontSize: "16px",
-            color: "#8893b5",
-          })
+          .text(cx, 200, "Loading…", textStyle(16, PALETTE.TEXT_MUTED))
           .setOrigin(0.5);
         getTop()
           .then((rows) => {
@@ -113,11 +95,7 @@ export default class LeaderboardScene extends Phaser.Scene {
 
     const label = this.result.browse ? "BACK" : "tap or press Enter to continue";
     this.add
-      .text(cx, GAME.HEIGHT - 50, label, {
-        fontFamily: "monospace",
-        fontSize: "14px",
-        color: "#8893b5",
-      })
+      .text(cx, GAME.HEIGHT - 50, label, textStyle(14, PALETTE.TEXT_MUTED))
       .setOrigin(0.5);
 
     // Both modes return to the menu.
@@ -144,11 +122,7 @@ export default class LeaderboardScene extends Phaser.Scene {
     if (rows.length === 0) {
       this.rowObjects.push(
         this.add
-          .text(cx, top + 40, "No scores yet — be the first!", {
-            fontFamily: "monospace",
-            fontSize: "16px",
-            color: "#8893b5",
-          })
+          .text(cx, top + 40, "No scores yet — be the first!", textStyle(16, PALETTE.TEXT_MUTED))
           .setOrigin(0.5),
       );
       return;
@@ -169,23 +143,15 @@ export default class LeaderboardScene extends Phaser.Scene {
           : row.name === this.result.playerName && row.score === this.result.score);
       if (isPlayer) highlighted = true;
 
-      const color = isPlayer ? "#ffd166" : "#ffffff";
+      const color = isPlayer ? PALETTE.GOLD : PALETTE.TEXT;
       const rankStr = `${i + 1}`.padStart(2, " ");
 
       this.rowObjects.push(
-        this.add.text(leftX, y, `${rankStr}. ${row.name}`, {
-          fontFamily: "monospace",
-          fontSize: "16px",
-          color,
-        }),
+        this.add.text(leftX, y, `${rankStr}. ${row.name}`, textStyle(16, color)),
       );
       this.rowObjects.push(
         this.add
-          .text(rightX, y, `${row.score}`, {
-            fontFamily: "monospace",
-            fontSize: "16px",
-            color,
-          })
+          .text(rightX, y, `${row.score}`, textStyle(16, color))
           .setOrigin(1, 0),
       );
     });

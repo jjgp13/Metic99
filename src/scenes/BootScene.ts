@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { PALETTE } from "../config/palette";
 import { GAME, RENDER3D } from "../config/constants";
 import { getWorld3D } from "../render3d/World3D";
 
@@ -25,7 +26,7 @@ export default class BootScene extends Phaser.Scene {
     const base = "assets";
 
     // A tiny loading bar so we are honest about load time (it is ~instant).
-    const bar = this.add.rectangle(GAME.WIDTH / 2, GAME.HEIGHT / 2, 0, 6, 0x4ea1ff);
+    const bar = this.add.rectangle(GAME.WIDTH / 2, GAME.HEIGHT / 2, 0, 6, PALETTE.ACCENT);
     this.load.on("progress", (p: number) => bar.setSize(200 * p, 6));
 
     // --- Aliens: 16px-wide, 2-frame idle animations -------------------------

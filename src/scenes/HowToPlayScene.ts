@@ -1,5 +1,7 @@
 import Phaser from "phaser";
 import { GAME, PLAYER } from "../config/constants";
+import { PALETTE } from "../config/palette";
+import { textStyle } from "../ui/theme";
 
 /**
  * Static rules screen reached from the menu. Explains the core loop, controls
@@ -15,11 +17,7 @@ export default class HowToPlayScene extends Phaser.Scene {
     const lives: number = PLAYER.LIVES;
 
     this.add
-      .text(cx, 60, "HOW TO PLAY", {
-        fontFamily: "monospace",
-        fontSize: "30px",
-        color: "#ffd166",
-      })
+      .text(cx, 60, "HOW TO PLAY", textStyle(30, PALETTE.GOLD))
       .setOrigin(0.5);
 
     const sections: { heading: string; body: string }[] = [
@@ -70,18 +68,9 @@ export default class HowToPlayScene extends Phaser.Scene {
 
     let y = 100;
     for (const s of sections) {
-      this.add.text(40, y, s.heading, {
-        fontFamily: "monospace",
-        fontSize: "17px",
-        color: "#4ea1ff",
-      });
+      this.add.text(40, y, s.heading, textStyle(17, PALETTE.ACCENT));
       y += 24;
-      this.add.text(40, y, s.body, {
-        fontFamily: "monospace",
-        fontSize: "14px",
-        color: "#ffffff",
-        lineSpacing: 4,
-      });
+      this.add.text(40, y, s.body, textStyle(14, PALETTE.TEXT, { lineSpacing: 4 }));
       y += s.body.split("\n").length * 20 + 2;
     }
 
@@ -91,11 +80,11 @@ export default class HowToPlayScene extends Phaser.Scene {
   private makeBackButton(x: number, y: number): void {
     const back = () => this.scene.start("MenuScene");
     const bg = this.add
-      .rectangle(x, y, 200, 46, 0x1b2340)
-      .setStrokeStyle(2, 0x4ea1ff)
+      .rectangle(x, y, 200, 46, PALETTE.PANEL)
+      .setStrokeStyle(2, PALETTE.ACCENT)
       .setInteractive({ useHandCursor: true });
     this.add
-      .text(x, y, "BACK", { fontFamily: "monospace", fontSize: "20px", color: "#ffd166" })
+      .text(x, y, "BACK", textStyle(20, PALETTE.GOLD))
       .setOrigin(0.5);
     bg.on("pointerdown", back);
     this.input.keyboard?.once("keydown-ESC", back);

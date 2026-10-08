@@ -2,6 +2,8 @@ import Phaser from "phaser";
 import { BATTLE_HUD, GAME, PLAYER, TARGET_STRATEGIES, type TargetStrategy } from "../config/constants";
 import type { Match, MatchEvent, PlayerTile } from "../sim/Match";
 import { OpponentBoard, boardWanted } from "./OpponentBoard";
+import { PALETTE, css } from "../config/palette";
+import { textStyle, outline } from "./theme";
 
 /**
  * A way of showing the other players in a battle (docs/MULTIPLAYER_DESIGN.md
@@ -65,7 +67,6 @@ const STRATEGY_LABEL: Record<TargetStrategy, string> = {
   attackers: "ATTACK",
   badges: "BADGES",
 };
-const TEXT_STROKE = { stroke: "#05060f", strokeThickness: 3 };
 
 function lerpColor(a: number, b: number, t: number): number {
   const ch = (shift: number) => {
@@ -161,23 +162,17 @@ export class PhoneBattleDock implements BattleView {
     this.you = you;
     const { TOP, BOTTOM, MARGIN } = H.DOCK;
     const midY = (TOP + BOTTOM) / 2;
-    const text = (x: number, y: number, size: number, color: string, bold = false) =>
+    const text = (x: number, y: number, size: number, color: number, bold = false) =>
       this.keep(
         this.scene.add
-          .text(x, y, "", {
-            fontFamily: "monospace",
-            fontSize: `${size}px`,
-            fontStyle: bold ? "bold" : "normal",
-            color,
-            ...TEXT_STROKE,
-          })
+          .text(x, y, "", textStyle(size, color, { fontStyle: bold ? "bold" : "normal", ...outline(3) }))
           .setDepth(5),
       );
 
     // Aim chip (left). Its hit zone reaches the canvas' bottom edge.
     const chipX = MARGIN;
-    this.chipAim = text(chipX + H.CHIP_W / 2, TOP + 11, 13, "#ffffff", true).setOrigin(0.5);
-    this.chipTarget = text(chipX + H.CHIP_W / 2, BOTTOM - 10, 12, "#ffffff").setOrigin(0.5);
+    this.chipAim = text(chipX + H.CHIP_W / 2, TOP + 11, 13, PALETTE.TEXT, true).setOrigin(0.5);
+    this.chipTarget = text(chipX + H.CHIP_W / 2, BOTTOM - 10, 12, PALETTE.TEXT).setOrigin(0.5);
     this.zone(chipX + H.CHIP_W / 2, H.CHIP_W + H.GAP, () => this.tapChip());
 
     // Opponent tiles (middle), as wide as fits, centred in their span.
@@ -194,8 +189,8 @@ export class PhoneBattleDock implements BattleView {
       return {
         seat,
         x,
-        label: text(x + 3, TOP + 1, 13, "#ffffff", true).setText(`P${seat + 1}`),
-        place: text(x + this.tileW / 2, midY + 6, 12, "#8893b5").setOrigin(0.5),
+        label: text(x + 3, TOP + 1, 13, PALETTE.TEXT, true).setText(`P${seat + 1}`),
+        place: text(x + this.tileW / 2, midY + 6, 12, PALETTE.TEXT_MUTED).setOrigin(0.5),
         flash: 0,
         flashColor: H.ATTACK,
       };
@@ -203,9 +198,9 @@ export class PhoneBattleDock implements BattleView {
 
     // Info (right): players left, your badges, the KO feed.
     const infoX = GAME.WIDTH - MARGIN - H.INFO_W;
-    this.leftText = text(infoX + 1, TOP + 1, 15, "#ffffff", true);
-    this.badgeText = text(GAME.WIDTH - MARGIN, TOP + 3, 12, "#ffd166").setOrigin(1, 0);
-    this.feedText = text(infoX + 1, BOTTOM - 16, 12, "#8893b5");
+    this.leftText = text(infoX + 1, TOP + 1, 15, PALETTE.TEXT, true);
+    this.badgeText = text(GAME.WIDTH - MARGIN, TOP + 3, 12, PALETTE.GOLD).setOrigin(1, 0);
+    this.feedText = text(infoX + 1, BOTTOM - 16, 12, PALETTE.TEXT_MUTED);
   }
 
   /** A tap target as tall as the dock down to the canvas' bottom edge. */
@@ -288,8 +283,8 @@ export class PhoneBattleDock implements BattleView {
           break;
         }
         const mine = e.by === you;
-        flash(e.seat, mine ? H.BADGE : 0xffffff);
-        this.feedText.setText(mine ? `KO P${e.seat + 1}` : `P${e.seat + 1} OUT`).setColor(mine ? "#ffd166" : "#c9d1f0");
+        flash(e.seat, mine ? H.BADGE : PALETTE.TEXT);
+        this.feedText.setText(mine ? `KO P${e.seat + 1}` : `P${e.seat + 1} OUT`).setColor(mine ? css(PALETTE.GOLD) : "#c9d1f0");
         this.feedLeftMs = H.FEED_MS;
         if (mine) vibrate(H.VIBRATE.KO);
         break;
@@ -308,8 +303,8 @@ export class PhoneBattleDock implements BattleView {
     const picked = typeof me.aim === "string" ? null : me.aim.seat;
 
     // Aim chip: looks like a key (it is one).
-    g.fillStyle(lerpColor(0x1b2340, 0x33406e, this.chipFlash), 1).fillRect(MARGIN, TOP, H.CHIP_W, h);
-    g.lineStyle(2, 0x4ea1ff, 1).strokeRect(MARGIN, TOP, H.CHIP_W, h);
+    g.fillStyle(lerpColor(PALETTE.PANEL, PALETTE.PANEL_LIGHT, this.chipFlash), 1).fillRect(MARGIN, TOP, H.CHIP_W, h);
+    g.lineStyle(2, PALETTE.ACCENT, 1).strokeRect(MARGIN, TOP, H.CHIP_W, h);
     this.chipAim.setText(picked === null ? STRATEGY_LABEL[me.aim as TargetStrategy] : "PICK");
     const aimedAt = me.targetedBy > 0 ? ` ⚠${me.targetedBy}` : "";
     this.chipTarget.setText(`→${me.target === null ? "--" : `P${me.target + 1}`}${aimedAt}`);
@@ -329,7 +324,7 @@ export class PhoneBattleDock implements BattleView {
         const incomingH = Math.min(h - dangerH, Math.round((Math.min(1, t.incoming / H.INCOMING_FULL) * h) / 2));
         if (incomingH > 0) {
           g.fillStyle(H.INCOMING, 0.95).fillRect(x, BOTTOM - dangerH - incomingH, w, incomingH);
-          if (dangerH > 0) g.fillStyle(0x05060f, 1).fillRect(x, BOTTOM - dangerH - 1, w, 1);
+          if (dangerH > 0) g.fillStyle(PALETTE.BACKGROUND, 1).fillRect(x, BOTTOM - dangerH - 1, w, 1);
         }
         // Badges: gold pips down the right edge.
         g.fillStyle(H.BADGE, 1);
@@ -338,7 +333,7 @@ export class PhoneBattleDock implements BattleView {
       if (s.flash > 0) g.fillStyle(s.flashColor, 0.6 * s.flash).fillRect(x, TOP, w, h);
       // Orange frame: this player aims at you.
       const aimsAtYou = t.alive && t.target === this.you;
-      g.lineStyle(aimsAtYou ? 2 : 1, aimsAtYou ? H.ATTACK : 0x33406e, t.alive ? 1 : 0.5);
+      g.lineStyle(aimsAtYou ? 2 : 1, aimsAtYou ? H.ATTACK : PALETTE.PANEL_LIGHT, t.alive ? 1 : 0.5);
       g.strokeRect(x, TOP, w, h);
       // White brackets: where your attacks go. A hand pick blinks until the
       // match makes it your target.
@@ -346,20 +341,20 @@ export class PhoneBattleDock implements BattleView {
       const pending = picked === s.seat && !isTarget;
       if (t.alive && (isTarget || pending)) this.brackets(g, x - 2, TOP - 2, w + 4, h + 4, pending ? blink : 1);
 
-      s.label.setColor(t.alive ? "#ffffff" : "#56608a");
+      s.label.setColor(t.alive ? css(PALETTE.TEXT) : "#56608a");
       s.place.setText(t.alive ? "" : `#${t.placement}`);
     }
 
     const alive = this.tiles.filter((t) => t.alive).length;
     this.leftText.setText(`${alive}/${this.tiles.length}`);
     this.badgeText.setText(me.badges ? `★${me.badges}` : "");
-    if (this.feedLeftMs <= 0) this.feedText.setText("LEFT").setColor("#8893b5");
+    if (this.feedLeftMs <= 0) this.feedText.setText("LEFT").setColor(css(PALETTE.TEXT_MUTED));
     this.feedText.setAlpha(this.feedLeftMs > 0 ? Math.min(1, this.feedLeftMs / 400) : 1);
   }
 
   private brackets(g: Phaser.GameObjects.Graphics, x: number, y: number, w: number, h: number, alpha: number): void {
     const arm = 8;
-    g.lineStyle(3, 0xffffff, alpha);
+    g.lineStyle(3, PALETTE.TEXT, alpha);
     for (const [cx, cy, dx, dy] of [
       [x, y, 1, 1],
       [x + w, y, -1, 1],

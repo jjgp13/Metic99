@@ -5,13 +5,15 @@ import type { InkEvent } from "../handwriting/inkReader";
 import { rankDigits } from "../handwriting/recognizer";
 import { encodeGroups, type Sample, type SampleFile } from "../handwriting/samples";
 import DrawPad from "../ui/DrawPad";
+import { PALETTE, css } from "../config/palette";
+import { textStyle } from "../ui/theme";
 
 const PAD_CX = GAME.WIDTH / 2;
 const PAD_CY = (KEYPAD_AREA.TOP + KEYPAD_AREA.BOTTOM) / 2;
 const PAD_H = KEYPAD_AREA.BOTTOM - KEYPAD_AREA.TOP;
 const PAD_LEFT = PAD_CX - KEYPAD_AREA.PAD_W / 2;
 const GOOD = "#06d6a0";
-const BAD = "#ef476f";
+const BAD = css(PALETTE.DANGER);
 
 /**
  * Handwriting lab, opened with `?lab=draw` (not linked from the game). It asks
@@ -38,27 +40,27 @@ export default class HandwritingLabScene extends Phaser.Scene {
 
   create(): void {
     this.restore();
-    const text = (y: number, size: number, color = "#ffffff") =>
+    const text = (y: number, size: number, color: number = PALETTE.TEXT) =>
       this.add
-        .text(GAME.WIDTH / 2, y, "", { fontFamily: "monospace", fontSize: `${size}px`, color, align: "center" })
+        .text(GAME.WIDTH / 2, y, "", textStyle(size, color, { align: "center" }))
         .setOrigin(0.5);
-    text(40, 24, "#ffd166").setText("HANDWRITING LAB");
-    text(72, 13, "#8892b0").setText("draw like you do in the game · scribble = redo");
-    this.countText = text(118, 15, "#8892b0");
+    text(40, 24, PALETTE.GOLD).setText("HANDWRITING LAB");
+    text(72, 13, PALETTE.TEXT_MUTED).setText("draw like you do in the game · scribble = redo");
+    this.countText = text(118, 15, PALETTE.TEXT_MUTED);
     this.promptText = text(190, 64);
     this.resultText = text(290, 20);
-    this.rankText = text(324, 14, "#8892b0");
-    this.tallyText = text(360, 14, "#8892b0");
+    this.rankText = text(324, 14, PALETTE.TEXT_MUTED);
+    this.tallyText = text(360, 14, PALETTE.TEXT_MUTED);
 
     this.pad = new DrawPad(this, PAD_CX, PAD_CY, KEYPAD_AREA.PAD_W, PAD_H, (e) => this.onInk(e));
     this.pad.setVisible(true);
 
     const button = (x: number, label: string, onPress: () => void) => {
       const bg = this.add
-        .rectangle(x, 440, 120, 34, 0x1b2340)
-        .setStrokeStyle(1, 0x4ea1ff)
+        .rectangle(x, 440, 120, 34, PALETTE.PANEL)
+        .setStrokeStyle(1, PALETTE.ACCENT)
         .setInteractive({ useHandCursor: true });
-      this.add.text(x, 440, label, { fontFamily: "monospace", fontSize: "15px", color: "#ffffff" }).setOrigin(0.5);
+      this.add.text(x, 440, label, textStyle(15)).setOrigin(0.5);
       bg.on("pointerup", onPress);
     };
     button(95, "UNDO", () => this.undo());

@@ -2,6 +2,8 @@ import Phaser from "phaser";
 import { GAME, LEADERBOARD, STORAGE } from "../config/constants";
 import { submitScore } from "../services/leaderboard";
 import { onKeyDown } from "../ui/keyboard";
+import { PALETTE } from "../config/palette";
+import { textStyle } from "../ui/theme";
 
 interface NameEntryData {
   score: number;
@@ -52,34 +54,22 @@ export default class NameEntryScene extends Phaser.Scene {
     const cx = GAME.WIDTH / 2;
 
     this.add
-      .text(cx, 90, this.personalBest ? "NEW HIGH SCORE!" : "GAME OVER", {
-        fontFamily: "monospace",
-        fontSize: "34px",
-        color: this.personalBest ? "#ffd166" : "#ef476f",
-      })
+      .text(cx, 90, this.personalBest ? "NEW HIGH SCORE!" : "GAME OVER", textStyle(34, this.personalBest ? PALETTE.GOLD : PALETTE.DANGER))
       .setOrigin(0.5);
 
     this.add
-      .text(cx, 140, `Score: ${this.score}`, {
-        fontFamily: "monospace",
-        fontSize: "20px",
-        color: "#ffffff",
-      })
+      .text(cx, 140, `Score: ${this.score}`, textStyle(20))
       .setOrigin(0.5);
 
     this.add
-      .text(cx, 200, "ENTER YOUR INITIALS", {
-        fontFamily: "monospace",
-        fontSize: "18px",
-        color: "#4ea1ff",
-      })
+      .text(cx, 200, "ENTER YOUR INITIALS", textStyle(18, PALETTE.ACCENT))
       .setOrigin(0.5);
 
     this.buildLengthSelector(cx, 250);
 
     // Highlight bar under the active slot; repositioned as slots rebuild.
     this.highlight = this.add
-      .rectangle(cx, this.slotsRowY + 26, 44, 4, 0xffd166)
+      .rectangle(cx, this.slotsRowY + 26, 44, 4, PALETTE.GOLD)
       .setOrigin(0.5)
       .setDepth(1);
 
@@ -87,24 +77,20 @@ export default class NameEntryScene extends Phaser.Scene {
 
     // Confirm button.
     const btn = this.add
-      .rectangle(cx, 430, 200, 48, 0x1b2340)
-      .setStrokeStyle(2, 0x4ea1ff)
+      .rectangle(cx, 430, 200, 48, PALETTE.PANEL)
+      .setStrokeStyle(2, PALETTE.ACCENT)
       .setInteractive({ useHandCursor: true });
     this.add
-      .text(cx, 430, "CONFIRM", { fontFamily: "monospace", fontSize: "22px", color: "#ffd166" })
+      .text(cx, 430, "CONFIRM", textStyle(22, PALETTE.GOLD))
       .setOrigin(0.5);
     btn.on("pointerdown", () => this.confirm());
 
     this.add
-      .text(cx, 500, "tap ▲▼ or type · ← → to move · Enter", {
-        fontFamily: "monospace",
-        fontSize: "13px",
-        color: "#8893b5",
-      })
+      .text(cx, 500, "tap ▲▼ or type · ← → to move · Enter", textStyle(13, PALETTE.TEXT_MUTED))
       .setOrigin(0.5);
 
     this.status = this.add
-      .text(cx, 560, "", { fontFamily: "monospace", fontSize: "16px", color: "#ffd166" })
+      .text(cx, 560, "", textStyle(16, PALETTE.GOLD))
       .setOrigin(0.5);
 
     this.bindKeyboard();
@@ -113,21 +99,17 @@ export default class NameEntryScene extends Phaser.Scene {
   // ---------------------------------------------------------------------------
   private buildLengthSelector(cx: number, y: number): void {
     const dec = this.add
-      .text(cx - 80, y, "◄", { fontFamily: "monospace", fontSize: "24px", color: "#4ea1ff" })
+      .text(cx - 80, y, "◄", textStyle(24, PALETTE.ACCENT))
       .setOrigin(0.5)
       .setInteractive({ useHandCursor: true });
     dec.on("pointerdown", () => this.changeLength(-1));
 
     this.lenLabel = this.add
-      .text(cx, y, `LENGTH: ${this.nameLen}`, {
-        fontFamily: "monospace",
-        fontSize: "18px",
-        color: "#ffffff",
-      })
+      .text(cx, y, `LENGTH: ${this.nameLen}`, textStyle(18))
       .setOrigin(0.5);
 
     const inc = this.add
-      .text(cx + 80, y, "►", { fontFamily: "monospace", fontSize: "24px", color: "#4ea1ff" })
+      .text(cx + 80, y, "►", textStyle(24, PALETTE.ACCENT))
       .setOrigin(0.5)
       .setInteractive({ useHandCursor: true });
     inc.on("pointerdown", () => this.changeLength(+1));
@@ -161,7 +143,7 @@ export default class NameEntryScene extends Phaser.Scene {
       const x = startX + i * this.slotSpacing;
 
       const up = this.add
-        .text(x, rowY - 44, "▲", { fontFamily: "monospace", fontSize: "22px", color: "#4ea1ff" })
+        .text(x, rowY - 44, "▲", textStyle(22, PALETTE.ACCENT))
         .setOrigin(0.5)
         .setInteractive({ useHandCursor: true });
       up.on("pointerdown", () => {
@@ -170,18 +152,14 @@ export default class NameEntryScene extends Phaser.Scene {
       });
 
       const letter = this.add
-        .text(x, rowY, this.charAt(i), {
-          fontFamily: "monospace",
-          fontSize: "40px",
-          color: "#ffffff",
-        })
+        .text(x, rowY, this.charAt(i), textStyle(40))
         .setOrigin(0.5)
         .setInteractive({ useHandCursor: true });
       letter.on("pointerdown", () => this.selectSlot(i));
       this.slotText.push(letter);
 
       const down = this.add
-        .text(x, rowY + 44, "▼", { fontFamily: "monospace", fontSize: "22px", color: "#4ea1ff" })
+        .text(x, rowY + 44, "▼", textStyle(22, PALETTE.ACCENT))
         .setOrigin(0.5)
         .setInteractive({ useHandCursor: true });
       down.on("pointerdown", () => {

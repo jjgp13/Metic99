@@ -3,6 +3,8 @@ import { GAME, POWERS, POWER_KINDS, RENDER3D, STORAGE } from "../config/constant
 import { selectPower, selectedPower } from "../config/powers";
 import { selectShip, selectedShip } from "../config/ships";
 import { onKeyDown } from "../ui/keyboard";
+import { PALETTE, css } from "../config/palette";
+import { textStyle } from "../ui/theme";
 
 /**
  * Title / main menu. The first scene the player sees: a ship picker (a look
@@ -29,28 +31,16 @@ export default class MenuScene extends Phaser.Scene {
     }
 
     this.add
-      .text(cx, 130, "METIC", {
-        fontFamily: "monospace",
-        fontSize: "72px",
-        color: "#ffd166",
-      })
+      .text(cx, 130, "METIC", textStyle(72, PALETTE.GOLD))
       .setOrigin(0.5);
     this.add
-      .text(cx, 188, "math invaders", {
-        fontFamily: "monospace",
-        fontSize: "18px",
-        color: "#4ea1ff",
-      })
+      .text(cx, 188, "math invaders", textStyle(18, PALETTE.ACCENT))
       .setOrigin(0.5);
 
     const best = Number(localStorage.getItem(STORAGE.HIGHSCORE) ?? 0);
     if (best > 0) {
       this.add
-        .text(cx, 222, `Best: ${best}`, {
-          fontFamily: "monospace",
-          fontSize: "16px",
-          color: "#8893b5",
-        })
+        .text(cx, 222, `Best: ${best}`, textStyle(16, PALETTE.TEXT_MUTED))
         .setOrigin(0.5);
     }
 
@@ -66,11 +56,7 @@ export default class MenuScene extends Phaser.Scene {
     );
 
     this.add
-      .text(cx, GAME.HEIGHT - 26, "a Phaser math-shooter", {
-        fontFamily: "monospace",
-        fontSize: "12px",
-        color: "#8893b5",
-      })
+      .text(cx, GAME.HEIGHT - 26, "a Phaser math-shooter", textStyle(12, PALETTE.TEXT_MUTED))
       .setOrigin(0.5);
 
     onKeyDown(this, (e) => {
@@ -84,11 +70,7 @@ export default class MenuScene extends Phaser.Scene {
     let index = ships.indexOf(selectedShip());
     const icon = this.add.image(x, y, `icon:${ships[index].model}`).setDisplaySize(96, 96);
     const name = this.add
-      .text(x, y + 58, ships[index].name, {
-        fontFamily: "monospace",
-        fontSize: "18px",
-        color: "#ffd166",
-      })
+      .text(x, y + 58, ships[index].name, textStyle(18, PALETTE.GOLD))
       .setOrigin(0.5);
 
     const step = (dir: number) => {
@@ -100,16 +82,12 @@ export default class MenuScene extends Phaser.Scene {
     };
     for (const dir of [-1, 1]) {
       const arrow = this.add
-        .text(x + dir * 110, y, dir < 0 ? "◀" : "▶", {
-          fontFamily: "monospace",
-          fontSize: "36px",
-          color: "#4ea1ff",
-        })
+        .text(x + dir * 110, y, dir < 0 ? "◀" : "▶", textStyle(36, PALETTE.ACCENT))
         .setOrigin(0.5)
         .setPadding(16)
         .setInteractive({ useHandCursor: true });
-      arrow.on("pointerover", () => arrow.setColor("#ffd166"));
-      arrow.on("pointerout", () => arrow.setColor("#4ea1ff"));
+      arrow.on("pointerover", () => arrow.setColor(css(PALETTE.GOLD)));
+      arrow.on("pointerout", () => arrow.setColor(css(PALETTE.ACCENT)));
       arrow.on("pointerdown", () => step(dir));
     }
     onKeyDown(this, (e) => {
@@ -121,19 +99,18 @@ export default class MenuScene extends Phaser.Scene {
   /** ◀ POWER ▶ picker with a one-line description; saved for the next run. */
   private makePowerPicker(x: number, y: number): void {
     let index = POWER_KINDS.indexOf(selectedPower());
-    const hex = (c: number) => `#${c.toString(16).padStart(6, "0")}`;
     this.add
-      .text(x, y - 30, "POWER", { fontFamily: "monospace", fontSize: "13px", color: "#8893b5" })
+      .text(x, y - 30, "POWER", textStyle(13, PALETTE.TEXT_MUTED))
       .setOrigin(0.5);
     const name = this.add
-      .text(x, y, "", { fontFamily: "monospace", fontSize: "22px", color: "#ffffff" })
+      .text(x, y, "", textStyle(22))
       .setOrigin(0.5);
     const blurb = this.add
-      .text(x, y + 24, "", { fontFamily: "monospace", fontSize: "13px", color: "#8893b5" })
+      .text(x, y + 24, "", textStyle(13, PALETTE.TEXT_MUTED))
       .setOrigin(0.5);
     const show = () => {
       const def = POWERS[POWER_KINDS[index]];
-      name.setText(def.NAME).setColor(hex(def.COLOR));
+      name.setText(def.NAME).setColor(css(def.COLOR));
       blurb.setText(def.BLURB);
     };
     show();
@@ -146,16 +123,12 @@ export default class MenuScene extends Phaser.Scene {
     };
     for (const dir of [-1, 1]) {
       const arrow = this.add
-        .text(x + dir * 110, y, dir < 0 ? "◀" : "▶", {
-          fontFamily: "monospace",
-          fontSize: "28px",
-          color: "#4ea1ff",
-        })
+        .text(x + dir * 110, y, dir < 0 ? "◀" : "▶", textStyle(28, PALETTE.ACCENT))
         .setOrigin(0.5)
         .setPadding(14)
         .setInteractive({ useHandCursor: true });
-      arrow.on("pointerover", () => arrow.setColor("#ffd166"));
-      arrow.on("pointerout", () => arrow.setColor("#4ea1ff"));
+      arrow.on("pointerover", () => arrow.setColor(css(PALETTE.GOLD)));
+      arrow.on("pointerout", () => arrow.setColor(css(PALETTE.ACCENT)));
       arrow.on("pointerdown", () => step(dir));
     }
     onKeyDown(this, (e) => {
@@ -167,20 +140,20 @@ export default class MenuScene extends Phaser.Scene {
   private makeButton(x: number, y: number, label: string, onClick: () => void, w = 260): void {
     const h = 52;
     const bg = this.add
-      .rectangle(x, y, w, h, 0x1b2340)
-      .setStrokeStyle(2, 0x4ea1ff)
+      .rectangle(x, y, w, h, PALETTE.PANEL)
+      .setStrokeStyle(2, PALETTE.ACCENT)
       .setInteractive({ useHandCursor: true });
     const txt = this.add
-      .text(x, y, label, { fontFamily: "monospace", fontSize: "24px", color: "#ffffff" })
+      .text(x, y, label, textStyle(24))
       .setOrigin(0.5);
 
     bg.on("pointerover", () => {
       bg.setFillStyle(0x24305a);
-      txt.setColor("#ffd166");
+      txt.setColor(css(PALETTE.GOLD));
     });
     bg.on("pointerout", () => {
-      bg.setFillStyle(0x1b2340);
-      txt.setColor("#ffffff");
+      bg.setFillStyle(PALETTE.PANEL);
+      txt.setColor(css(PALETTE.TEXT));
     });
     bg.on("pointerdown", onClick);
   }

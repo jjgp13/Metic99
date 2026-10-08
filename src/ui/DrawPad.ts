@@ -2,6 +2,8 @@ import Phaser from "phaser";
 import { HANDWRITING } from "../config/constants";
 import InkReader, { type InkEvent } from "../handwriting/inkReader";
 import { bounds, type Stroke } from "../handwriting/recognizer";
+import { PALETTE } from "../config/palette";
+import { textStyle, outline } from "./theme";
 
 const INK = HANDWRITING.INK;
 const DEPTH = 5;
@@ -37,17 +39,11 @@ export default class DrawPad {
     this.bounds = new Phaser.Geom.Rectangle(cx - w / 2, cy - h / 2, w, h);
     this.bg = scene.add
       .rectangle(cx, cy, w, h, HANDWRITING.PAD_FILL, HANDWRITING.PAD_ALPHA)
-      .setStrokeStyle(2, 0x4ea1ff, 0.7)
+      .setStrokeStyle(2, PALETTE.ACCENT, 0.7)
       .setDepth(DEPTH)
       .setInteractive();
     this.hint = scene.add
-      .text(cx, cy, "draw the answer\nscribble to clear", {
-        fontFamily: "monospace",
-        fontSize: "14px",
-        color: "#8892b0",
-        align: "center",
-        lineSpacing: 6,
-      })
+      .text(cx, cy, "draw the answer\nscribble to clear", textStyle(14, PALETTE.TEXT_MUTED, { align: "center", lineSpacing: 6 }))
       .setOrigin(0.5)
       .setAlpha(0.6)
       .setDepth(DEPTH);
@@ -165,14 +161,7 @@ export default class DrawPad {
   private showUnknown(inks: Stroke[][]): void {
     const b = bounds(inks.flat());
     const q = this.scene.add
-      .text((b.minX + b.maxX) / 2, (b.minY + b.maxY) / 2, "?", {
-        fontFamily: "monospace",
-        fontSize: "48px",
-        fontStyle: "bold",
-        color: "#ef476f",
-        stroke: "#05060f",
-        strokeThickness: 4,
-      })
+      .text((b.minX + b.maxX) / 2, (b.minY + b.maxY) / 2, "?", textStyle(48, PALETTE.DANGER, { fontStyle: "bold", ...outline(4) }))
       .setOrigin(0.5)
       .setDepth(DEPTH)
       .setScale(1.5);
