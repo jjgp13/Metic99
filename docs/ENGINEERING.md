@@ -100,6 +100,9 @@ npm run build      # the real bundle
 
 ## 5. How a change is made
 
+0. **Learn together.** For the owner, every change is also a lesson: before
+   coding, run the learning loop (`docs/learning/HOW_WE_LEARN.md`; Claude:
+   the `learning-loop` skill), so the owner thinks about the change first.
 1. **Understand.** Read the code involved and the relevant docs. Say what the
    current behavior is before changing it.
 2. **Choose.** Think of at least two ways to do it. Pick the simplest that

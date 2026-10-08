@@ -22,6 +22,14 @@ design decisions.
 > explanation** of the pattern used, why, the alternatives that lost, and how
 > to change it later (template in ENGINEERING.md §6; Claude: the
 > `explain-change` skill). Bigger changes get a note in `docs/learning/`.
+>
+> **Learning loop:** every change request is also a short tutoring session,
+> built on learning research (`docs/learning/HOW_WE_LEARN.md`). Before
+> coding, the owner thinks first (how would you do it? which option, how
+> sure?), then we reason together, build, walk through, and check with 1–2
+> questions; concepts are tracked for spaced review in
+> `docs/learning/PROGRESS.md`. Claude: the `learning-loop` skill. "Just do
+> it" skips the waiting but not the explanation.
 
 ---
 
@@ -176,7 +184,9 @@ public/assets/models/ Built .glb models loaded by World3D
 public/assets/icons/  Transparent top-down model renders for 2D menus (build output)
 docs/ENGINEERING.md   How code is written, verified and explained (read first)
 docs/ARCHITECTURE.md  Guided tour of the design patterns used, and why
-docs/learning/        Explanations of bigger changes, for the owner to learn from
+docs/learning/        The owner's learning: HOW_WE_LEARN.md (the science),
+                      PROGRESS.md (concepts + review dates), notes on big changes
+.claude/skills/learning-loop/   Every change as a tutoring session (Claude)
 .claude/skills/explain-change/  How Claude explains every change
 docs/ART_SPEC.md      3D art style, budgets, axes, pipeline
 docs/MULTIPLAYER_DESIGN.md  Battle-royale design: energy, attacks, backend plan
@@ -796,6 +806,16 @@ dMatch)`; it is 0 in solo play.
 ## Decision Log
 
 Newest first. Format: `YYYY-MM-DD — decision — rationale`.
+
+- **2026-10-08 — Every change is a tutoring session (learning-loop skill).**
+  Owner's ask: learn by back-and-forth, grounded in learning science. The
+  owner thinks first (pretesting, generation), we reason together, Claude
+  builds and walks through (worked examples with subgoals, PRIMM), then 1–2
+  retrieval questions; concepts get spaced reviews in
+  `docs/learning/PROGRESS.md`, and help fades into "your turn" tasks.
+  Chosen over explanations alone (re-reading gives an illusion of
+  competence) and over quizzing on every change (overload): ≤ 2 questions
+  per message, "just do it" skips the waiting.
 
 - **2026-10-08 — Engineering practices + readability refactor (no
   behavior change).** Owner's ask: readable, self-explaining code and every

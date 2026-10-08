@@ -10,7 +10,16 @@ patterns, so a change is not finished until it is explained. The rules for
 writing the code itself are in `docs/ENGINEERING.md`; the patterns already in
 the codebase are in `docs/ARCHITECTURE.md`.
 
+This skill is *what* to write. *How* to teach it (owner thinks first, ≤ 2
+questions at a time, predict moments, spaced review) is the `learning-loop`
+skill, which uses this template in its walkthrough step: order the blocks
+by the change's named subgoals, and end with questions, not with "does that
+make sense?".
+
 ## Before writing code
+
+(When the owner is there, the `learning-loop` skill's steps 1–2 come first:
+the owner proposes or picks an option before you do.)
 
 1. Read the code you will touch and say, in one or two sentences, what it
    does today.
