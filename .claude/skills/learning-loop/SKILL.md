@@ -1,6 +1,6 @@
 ---
 name: learning-loop
-description: Run every change in Metic99 as a short tutoring session for the owner, based on learning science (retrieval practice, pretesting, self-explanation, spacing, worked examples that fade). Use BEFORE writing code whenever the owner asks for a code change, feature, fix, refactor or balance tweak in this repo; whenever the owner asks what a concept means; and at the start of a session to run due reviews from docs/learning/PROGRESS.md. If the owner says "just do it" (or nobody is there to answer), skip the waiting but still explain and leave the questions as an optional quiz.
+description: Run every change in Metic99 as a short tutoring session for the owner, based on learning science (retrieval practice, pretesting, self-explanation, spacing, worked examples that fade). Use BEFORE writing code whenever the owner asks for a code change, feature, fix, refactor or balance tweak in this repo; and whenever the owner asks what a concept means. (Spaced reviews happen in the owner's separate quiz chat: the quiz skill.) If the owner says "just do it" (or nobody is there to answer), skip the waiting but still explain and leave the questions as an optional quiz.
 ---
 
 # Learning loop (Metic99)
@@ -29,11 +29,11 @@ step is in `docs/learning/HOW_WE_LEARN.md` (section numbers in brackets).
 
 ## The loop
 
-### 0. Review (session start, ~2 min)
-Read `docs/learning/PROGRESS.md`. If concepts are due (next review ≤
-today), ask **1–2 of them, from different topics** [1.5, 1.6], before the
-request. Grade each answer, give feedback, and update the dates (step 7).
-Skip if nothing is due or the owner says "just do it".
+### 0. Where reviews happen
+Not here. Feature chats teach; the owner's dedicated **quiz chat** (the
+`quiz` skill) brings concepts back on a schedule. [1.5] Read
+`docs/learning/REVIEWS.md` only to see what the owner already knows (its
+level per concept); never edit it here.
 
 ### 1. Owner thinks first (pretest)
 Restate the request in one sentence. Then ask **one or two** of:
@@ -68,7 +68,7 @@ subgoals**. At the one or two key points, use a **predict moment** before
 revealing: "before I show the next part: what do you expect happens to the
 ship when the target dies?" (PRIMM). Run something to check the prediction
 when possible: a test, `npm run bots`, the game. [1.7, 1.9] For a concept
-the owner already knows ("can explain" or better in PROGRESS.md), keep it
+the owner already knows ("can explain" or better in REVIEWS.md), keep it
 to a line or two and spend the time on what is new. [1.7, expertise reversal]
 
 ### 5. Check (retrieval)
@@ -91,35 +91,30 @@ one or two things to improve, why. [1.7, 1.12] Offer, don't force: the
 owner may prefer Claude to write it this time.
 
 ### 7. Record
-Update `docs/learning/PROGRESS.md` in the same commit as the change (or on
-its own if no code changed):
-- add new concepts (one line: what it is, where it lives in the code);
-- set each concept's **level** and **next review**:
+In the same commit as the change, **add a row to
+`docs/learning/CONCEPTS.md` for each new concept** (what it is in one line,
+where it lives in the code, topic, today's date, which change it came
+from). That is how the quiz chat finds this week's material. Don't edit
+`REVIEWS.md` (the quiz chat owns it), and don't add a row for a concept
+that's already in the catalog.
 
-| Level | Meaning | Reached when |
-| --- | --- | --- |
-| seen | explained once | walked through it |
-| can explain | says it in own words | answered a step-5 or review question right |
-| can apply | uses it in a decision or code | picked well in step 1, or did a "your turn" task |
-| solid | still knows it later | right at a review ≥ 1 week after the last |
-
-**Intervals:** a correct review moves the next review from 1 → 3 → 7 → 14
-→ 30 days; a miss sets it back to 1 day (and the level down one).
-[1.5] Keep the "Log" section to one line per session.
+If the owner answered step 5 well, or a "your turn" task went well, say so
+in the commit body ("owner explained X correctly"): the quiz chat reads
+commit bodies and can move the level up. [1.5]
 
 ## When the owner asks "what is X?"
 
 Answer in this order, short: (1) one-sentence definition; (2) where it is in
 *this* code; (3) why it exists / when not to use it. Then hand it back:
 "put it in your own words" or "where else in Metic99 could it apply?".
-Add it to PROGRESS.md as "seen". [1.4, 1.13]
+Add it to CONCEPTS.md. [1.4, 1.13]
 
 ## "Just do it" mode
 
 When the owner says "just do it", is in a hurry, or isn't there to answer
-(a scheduled or background run): skip steps 1 and 0, build, walk through
+(a scheduled or background run): skip step 1, build, walk through
 briefly, and end the reply with **an optional quiz** of 1–2 questions the
-owner can answer later. Record the concepts as "seen".
+owner can answer later. Still add the concepts to CONCEPTS.md.
 
 ## Don't
 

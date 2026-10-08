@@ -27,9 +27,11 @@ design decisions.
 > built on learning research (`docs/learning/HOW_WE_LEARN.md`). Before
 > coding, the owner thinks first (how would you do it? which option, how
 > sure?), then we reason together, build, walk through, and check with 1–2
-> questions; concepts are tracked for spaced review in
-> `docs/learning/PROGRESS.md`. Claude: the `learning-loop` skill. "Just do
-> it" skips the waiting but not the explanation.
+> questions; new concepts are added to `docs/learning/CONCEPTS.md`. Claude:
+> the `learning-loop` skill. "Just do it" skips the waiting but not the
+> explanation. **Spaced review happens in a separate quiz chat** (`/quiz`,
+> the `quiz` skill, scheduled Mon/Wed/Fri), the only writer of
+> `docs/learning/REVIEWS.md`.
 
 ---
 
@@ -185,8 +187,10 @@ public/assets/icons/  Transparent top-down model renders for 2D menus (build out
 docs/ENGINEERING.md   How code is written, verified and explained (read first)
 docs/ARCHITECTURE.md  Guided tour of the design patterns used, and why
 docs/learning/        The owner's learning: HOW_WE_LEARN.md (the science),
-                      PROGRESS.md (concepts + review dates), notes on big changes
+                      CONCEPTS.md (catalog; feature chats add rows),
+                      REVIEWS.md (review dates; quiz chat only), notes
 .claude/skills/learning-loop/   Every change as a tutoring session (Claude)
+.claude/skills/quiz/            /quiz: spaced-repetition review (quiz chat)
 .claude/skills/explain-change/  How Claude explains every change
 docs/ART_SPEC.md      3D art style, budgets, axes, pipeline
 docs/MULTIPLAYER_DESIGN.md  Battle-royale design: energy, attacks, backend plan
@@ -806,6 +810,15 @@ dMatch)`; it is 0 in solo play.
 ## Decision Log
 
 Newest first. Format: `YYYY-MM-DD — decision — rationale`.
+
+- **2026-10-08 — Reviews move to a dedicated quiz chat (owner's design).**
+  One chat per feature teaches; one long-lived chat quizzes (`/quiz`, and a
+  Mon/Wed/Fri Routine bound to that chat) on due concepts and the week's
+  features. Progress split by writer: feature chats add rows to
+  `CONCEPTS.md`, the quiz chat alone writes `REVIEWS.md` on its own branch,
+  so they never conflict. Chosen over one shared file (both sides editing
+  the same table → merge conflicts) and over a claude.ai Artifact database
+  (works across chats, but a second system to learn and keep running).
 
 - **2026-10-08 — Every change is a tutoring session (learning-loop skill).**
   Owner's ask: learn by back-and-forth, grounded in learning science. The

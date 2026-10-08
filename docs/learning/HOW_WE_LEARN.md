@@ -3,8 +3,10 @@
 Every change to Metic99 is also a lesson for the owner. This page says
 **what learning research has found**, and **how each finding shapes the way
 Claude works with you**. The day-to-day procedure is the `learning-loop`
-skill (`.claude/skills/learning-loop/SKILL.md`); your progress is tracked in
-[`PROGRESS.md`](PROGRESS.md).
+skill (`.claude/skills/learning-loop/SKILL.md`) in feature chats and the
+`quiz` skill in your quiz chat. What you've learned is listed in
+[`CONCEPTS.md`](CONCEPTS.md) and its review dates in
+[`REVIEWS.md`](REVIEWS.md).
 
 The short version: **you learn by doing the thinking, not by reading
 someone else's thinking.** Explanations help most *after* you have tried.
@@ -54,10 +56,11 @@ someone else's thinking.** Explanations help most *after* you have tried.
 - **Finding:** the same amount of study spread over time is remembered far
   longer than when it is crammed (Cepeda et al., 2006, a review of 300+
   experiments). The best gap grows as the memory gets stronger.
-- **How we use it:** `PROGRESS.md` gives every concept a next-review date.
-  At the start of a session Claude asks 1–2 due questions (about 2
-  minutes). Each correct answer roughly doubles the gap (1 → 3 → 7 → 14 →
-  30 days); a miss resets it to 1 day.
+- **How we use it:** feature work and review are separate. A dedicated
+  quiz chat (`/quiz`, also on a Mon/Wed/Fri schedule) asks about concepts
+  whose review is due and about the week's features. Each correct answer
+  roughly doubles the gap (1 → 3 → 7 → 14 → 30 days); a miss resets it to
+  1 day.
 
 ### 1.6 Interleaving: mix topics in practice
 - **Finding:** practicing mixed problem types beats practicing one type in
@@ -134,20 +137,24 @@ someone else's thinking.** Explanations help most *after* you have tried.
 
 ---
 
-## 2. What it looks like in a session
+## 2. What it looks like
 
-1. **Review (2 min):** 1–2 due questions from `PROGRESS.md`.
-2. **Your turn to think:** you ask for a change. Claude restates it and
+**In a feature chat** (one chat per feature):
+
+1. **Your turn to think:** you ask for a change. Claude restates it and
    asks how *you* would do it, or which of 2–3 options you'd pick (and how
    sure you are). Then it waits.
-3. **Reason together:** feedback on your answer, Claude's choice and the
+2. **Reason together:** feedback on your answer, Claude's choice and the
    trade-offs, an agreed plan.
-4. **Build:** Claude makes the change, verified by tests.
-5. **Walkthrough:** the change, step by named step, with "predict what
+3. **Build:** Claude makes the change, verified by tests.
+4. **Walkthrough:** the change, step by named step, with "predict what
    happens" moments.
-6. **Check:** 1–2 questions in your own words. Feedback.
-7. **Record:** `PROGRESS.md` is updated with what you learned and when to
-   review it.
+5. **Check:** 1–2 questions in your own words. Feedback.
+6. **Record:** new concepts go into `CONCEPTS.md`.
+
+**In the quiz chat** (one chat, kept for quizzes; `/quiz` or the schedule):
+~10 minutes, one question at a time, mixing due concepts and this week's
+features; feedback after each answer; `REVIEWS.md` gets the new dates.
 
 At any point: ask "what is X?". Say **"just do it"** when you're in a hurry:
 Claude skips the waiting, still explains, and leaves the questions as an
