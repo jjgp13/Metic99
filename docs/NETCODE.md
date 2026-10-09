@@ -55,7 +55,7 @@ Design background: [`MULTIPLAYER_DESIGN.md`](MULTIPLAYER_DESIGN.md) §5
 
 | # | Milestone | Steps (one learning loop each) | Backend idea it maps to | Status |
 | --- | --- | --- | --- | --- |
-| S0 | Determinism spike | 1. What "same inputs, same run" means. 2. Fingerprint: a hash of the field state (owner writes how one float is hashed). 3. Phone lab `?lab=determinism`: Node vs iPhone vs Android. 4. Fix what differs and pin it with a test | Event sourcing, replica checksums | next |
+| S0 | Determinism spike | 1. What "same inputs, same run" means. 2. Fingerprint: a hash of the field state (owner writes how one float is hashed). 3. Phone lab `?lab=determinism`: Node vs iPhone vs Android. 4. Fix what differs and pin it with a test | Event sourcing, replica checksums | in progress: steps 1–2 done (owner's `hashNumber` open) |
 | S1 | Protocol (`src/net/protocol.ts`) | 1. Envelope, versions, build-id handshake. 2. The messages each way + validation. 3. JSON vs binary, bytes per second | API contracts, schema validation | |
 | S2 | Server skeleton | 1. WebSocket server. 2. Heartbeat and timeouts. 3. Lobby that fills seats with bots after a countdown. 4. One tick loop | Connection lifecycle, health checks | |
 | S3 | Server runs the match | 1. Remote fields fed by inputs. 2. Late and "future" inputs. 3. A player who stops sending | Queues, ordering, idempotency | |
@@ -108,6 +108,17 @@ measurements, glossary), and leave the owner's summary section ready.
 
 ### Decisions
 
+- **2026-10-08 — S0: copies must be bit-identical, checked by a fingerprint
+  of the whole state.** Inputs-only replication can't tolerate "close
+  enough": a last-bit difference eventually flips a comparison (butterfly
+  effect), so A (bit-identical) is the only way to guarantee the same
+  events. The fingerprint (`src/sim/fingerprint.ts`) walks every value
+  reachable from the field instead of a hand-picked list (a forgotten field
+  would be a hole in the smoke detector), hashes it with FNV-1a (tiny,
+  synchronous everywhere; SHA-256 is async in browsers and security isn't
+  needed), and the lab takes one every 60 steps (`NET.FINGERPRINT_EVERY`):
+  a mismatch lands within 1 s of its cause, and `stateDump` shows which
+  number differs. Measured: ~0.15 ms per fingerprint in Node.
 - **2026-10-08 — One chat per milestone, small steps inside.** Owner picked
   it over continuing one long chat (the learning-loop skill loads cleanly in
   a fresh chat, and each chat stays focused) and over one chat per step
@@ -125,6 +136,11 @@ backend idea it maps to._
 
 | Term | Meaning in Metic99 | Backend equivalent |
 | --- | --- | --- |
+| Input replication | Clients send only inputs; the server re-runs the same `Field` code from the seed | Event sourcing (the log is the truth, state is a projection) |
+| Step | One fixed 1/60 s rule tick; `Field.steps` counts them and inputs are tagged with it | Sequence number / logical clock |
+| Bit-identical | Every 64-bit number in the state is the same on both copies | Byte-for-byte replica consistency |
+| Fingerprint | 8-hex hash of the whole field state (`fingerprint(field)`) | Replica checksum, ETag |
+| Checkpoint | A fingerprint taken every 60 steps during a replay | Periodic consistency check |
 
 ### Owner's summaries
 

@@ -265,8 +265,11 @@ the agreed shape.
   WebSocket messages (the server owns the match, clients own their field).
   All fields in a match share one seed (same base aliens).
 - **Float caveat:** `Math.sin`/`Math.exp` may differ in the last bit between
-  Safari and Node, so a cross-engine replay can drift. Keep them out of
-  decisions or let the server check with a tolerance.
+  Safari and Node, so a cross-engine replay can drift. A tolerance doesn't
+  work with inputs-only replication (a last-bit difference eventually flips
+  a comparison), so copies must be bit-identical (netcode S0,
+  `docs/NETCODE.md`). Drift is detected by a whole-state fingerprint
+  (`src/sim/fingerprint.ts`) compared every 60 steps.
 
 ## 9. Contracts vs content
 

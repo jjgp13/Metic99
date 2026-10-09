@@ -18,3 +18,4 @@ export * from "./tuning/battle";
 export * from "./tuning/bots";
 export * from "./tuning/storage";
 export * from "./tuning/render3d";
+export * from "./tuning/net";

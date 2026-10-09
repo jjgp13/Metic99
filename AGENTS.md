@@ -156,6 +156,11 @@ src/
                       `field.apply()`; skill levels in `BOT` (rookie/pilot/ace).
     SimClock.ts       Fixed timestep: real time → whole rule steps + alpha.
     stats.ts          Solve-time summaries.
+    hash.ts           FNV-1a 32-bit hash helpers (hashByte/String/Number).
+    fingerprint.ts    State fingerprint: walks every value reachable from a
+                      Field (`walkState`), hashes it; `stateDump` lists
+                      "path = value"; `fingerprintReplay` = a checkpoint
+                      every `NET.FINGERPRINT_EVERY` steps (netcode S0).
     golden.test.ts    Golden master: fixed-seed bot runs + a match vs a
                       saved snapshot (refactors must keep it green).
     pace.ts           Answer times by ball count (replayed from an input
@@ -812,6 +817,13 @@ dMatch)`; it is 0 in solo play.
 ## Decision Log
 
 Newest first. Format: `YYYY-MM-DD — decision — rationale`.
+
+- **2026-10-08 — Netcode S0: field copies must be bit-identical; checked
+  with a whole-state fingerprint.** Inputs-only replication can't use a
+  tolerance (a last-bit difference eventually changes an event). The
+  fingerprint walks every value reachable from the `Field` (no hand-picked
+  list to forget), hashes it with FNV-1a, every 60 steps
+  (`NET.FINGERPRINT_EVERY`). Details: `docs/NETCODE.md` journal.
 
 - **2026-10-08 — Phase 1 (online match server) is planned as S0–S6 in
   `docs/NETCODE.md`, one chat per milestone.** Server re-runs every field
