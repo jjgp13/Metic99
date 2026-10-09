@@ -30,20 +30,20 @@ export function hashString(h: number, s: string): number {
   return h;
 }
 
+/** Scratch space for hashNumber (reused: no allocation per number). */
+const BYTES = new DataView(new ArrayBuffer(8));
+
 /**
  * Fold one number into the hash: its exact 64-bit float value, so two numbers
  * that differ in the last bit hash differently.
  *
- * YOUR TURN (owner, NETCODE S0 step 2). The rule the tests in hash.test.ts
- * check: take the 8 bytes of `x` as a 64-bit float in **little-endian** order
- * (lowest byte first) and fold each one in with `hashByte`, first to last.
- * Then remove `.skip` from the "hashNumber (owner)" tests and run
- * `npx vitest run src/sim/hash.test.ts`.
- *
- * Until then this placeholder hashes the number's text. `String(x)` is exact
- * too (JS prints the shortest digits that read back as the same 64 bits), but
- * it is slower and has one blind spot the tests will show you.
+ * A JS number is stored as 8 bytes; we write it into an 8-byte buffer and
+ * fold the bytes in lowest first ("little-endian", the order phones and PCs
+ * use). Hashing `String(x)` instead would also be exact for most numbers,
+ * but slower, and blind to -0 (prints "0" though its bits differ).
  */
 export function hashNumber(h: number, x: number): number {
-  return hashString(h, String(x));
+  BYTES.setFloat64(0, x, true);
+  for (let i = 0; i < 8; i++) h = hashByte(h, BYTES.getUint8(i));
+  return h;
 }

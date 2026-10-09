@@ -83,8 +83,12 @@ different example or a diagram), and plan to ask again next session.
 
 ### 6. Practice (faded help)
 When a concept is at "can explain" but not "can apply", offer a small
-**"your turn" task** in the real code, just beyond what the owner has done
-(e.g. "add a pop for combo lost: same pattern as Popups.points"). Give
+**"your turn" task**, just beyond what the owner has done. Prefer
+**intent-level** tasks (owner's pick, 2026-10-08): write test cases in
+plain English, find a smell or a planted bug, design a "break it"
+experiment, or read a file by its intent comment and explain it. Code
+tasks only for code above the low-level plumbing (e.g. "add a pop for
+combo lost: same pattern as Popups.points"), never byte-twiddling. Give
 hints only when asked, in increasing steps (where to look → which pattern
 → a code sketch). Review the owner's change like a teammate: what works,
 one or two things to improve, why. [1.7, 1.12] Offer, don't force: the

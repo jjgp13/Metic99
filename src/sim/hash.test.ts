@@ -19,13 +19,10 @@ describe("hashByte / hashString", () => {
 });
 
 /**
- * YOUR TURN (NETCODE S0 step 2): implement `hashNumber` in hash.ts, then
- * change `describe.skip` to `describe` and run
- * `npx vitest run src/sim/hash.test.ts`.
  * The expected numbers come from the rule in hashNumber's comment: the 8
  * bytes of the 64-bit float, little-endian, each folded in with hashByte.
  */
-describe.skip("hashNumber (owner)", () => {
+describe("hashNumber", () => {
   it("matches the reference values (the exact 8 bytes, little-endian)", () => {
     expect(hashNumber(FNV_OFFSET, 0)).toBe(0x9be17165);
     expect(hashNumber(FNV_OFFSET, 1)).toBe(0x8c6a9878);
@@ -39,7 +36,7 @@ describe.skip("hashNumber (owner)", () => {
   });
 
   it("tells 0 and -0 apart (same printed text, different bits)", () => {
-    // String(-0) is "0", so the placeholder version can't see this.
+    // String(-0) is "0", so hashing the text couldn't see this.
     expect(hashNumber(FNV_OFFSET, -0)).toBe(0x1be23ae5);
     expect(hashNumber(FNV_OFFSET, -0)).not.toBe(hashNumber(FNV_OFFSET, 0));
   });

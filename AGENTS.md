@@ -818,6 +818,12 @@ dMatch)`; it is 0 in solo play.
 
 Newest first. Format: `YYYY-MM-DD — decision — rationale`.
 
+- **2026-10-08 — Owner practice is intent-level (owner's pick).** "Your
+  turn" tasks are now test cases in plain English, finding smells or
+  planted bugs, designing break-it experiments and reading files by their
+  intent comment; Claude writes the low-level code. Writing code is cheap
+  now; specifying, judging and debugging it is the skill to build.
+
 - **2026-10-08 — Netcode S0: field copies must be bit-identical; checked
   with a whole-state fingerprint.** Inputs-only replication can't use a
   tolerance (a last-bit difference eventually changes an event). The

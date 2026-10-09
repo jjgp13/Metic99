@@ -38,7 +38,10 @@ Design background: [`MULTIPLAYER_DESIGN.md`](MULTIPLAYER_DESIGN.md) §5
   - a tour of the ~50 lines that matter most;
   - one "break it" experiment behind a flag (URL param or env var), and
     what to look for;
-  - one small piece for the owner to write, with its tests already written;
+  - one **intent-level task** for the owner (not low-level code): write
+    test cases in plain English, find a smell or a planted bug in the
+    code, design the "break it" experiment, or read a file by its intent
+    comment and explain it. Claude writes the code;
   - the owner's own summary below, which Claude critiques.
 - **Concepts** go into [`learning/CONCEPTS.md`](learning/CONCEPTS.md); the
   quiz chat reviews them on a schedule.
@@ -55,7 +58,7 @@ Design background: [`MULTIPLAYER_DESIGN.md`](MULTIPLAYER_DESIGN.md) §5
 
 | # | Milestone | Steps (one learning loop each) | Backend idea it maps to | Status |
 | --- | --- | --- | --- | --- |
-| S0 | Determinism spike | 1. What "same inputs, same run" means. 2. Fingerprint: a hash of the field state (owner writes how one float is hashed). 3. Phone lab `?lab=determinism`: Node vs iPhone vs Android. 4. Fix what differs and pin it with a test | Event sourcing, replica checksums | in progress: steps 1–2 done (owner's `hashNumber` open) |
+| S0 | Determinism spike | 1. What "same inputs, same run" means. 2. Fingerprint: a hash of the field state. 3. Phone lab `?lab=determinism`: Node vs iPhone vs Android. 4. Fix what differs and pin it with a test | Event sourcing, replica checksums | in progress: steps 1–2 done |
 | S1 | Protocol (`src/net/protocol.ts`) | 1. Envelope, versions, build-id handshake. 2. The messages each way + validation. 3. JSON vs binary, bytes per second | API contracts, schema validation | |
 | S2 | Server skeleton | 1. WebSocket server. 2. Heartbeat and timeouts. 3. Lobby that fills seats with bots after a countdown. 4. One tick loop | Connection lifecycle, health checks | |
 | S3 | Server runs the match | 1. Remote fields fed by inputs. 2. Late and "future" inputs. 3. A player who stops sending | Queues, ordering, idempotency | |
@@ -107,6 +110,15 @@ measurements, glossary), and leave the owner's summary section ready.
 ## Journal
 
 ### Decisions
+
+- **2026-10-08 — The owner practices at the intent level, not by writing
+  low-level functions.** After the `hashNumber` task (DataView, byte
+  order) proved to be syntax work, not design: the owner's pieces are now
+  plain-English test cases, spotting smells or planted bugs, designing
+  break-it experiments, and reading files by their intent comments. Why:
+  writing code is cheap now; specifying, judging and debugging it is not
+  (S0's real stumbles were design ones: inputs vs state, what goes in the
+  hash).
 
 - **2026-10-08 — S0: copies must be bit-identical, checked by a fingerprint
   of the whole state.** Inputs-only replication can't tolerate "close
