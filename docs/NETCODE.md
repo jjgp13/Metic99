@@ -166,7 +166,14 @@ replays them and re-asks every `Math.sin`/`Math.exp` input the rules used.
   *checked* (every fingerprint mismatches) and nothing guarantees the next
   match stays lucky. The server's Node version and every player's browser
   will differ, so step 4 has to take `sin`/`exp` out of engine hands.
-- _Next: iPhone (JavaScriptCore) and Android (Chrome) in the lab._
+- **2026-10-15 — Android 10 phone, Chrome 155 (ARM).** Bit-identical to the
+  desktop Chromium 152 (x86): the same keys at every checkpoint, the same
+  `sin` answers. So it still differs from Node at the same steps (mix
+  103 s, lumberers 1 s, Blinkers 17 s); outcomes match. The state dump at
+  the mix run's first mismatch differs in one number: a Shielded alien
+  moving as a lumberer, `y` = 53.674691355859224 (Node) vs
+  53.67469135585922 (Android), the gait's `Math.sin`.
+- _Next: iPhone (JavaScriptCore)._
 
 ### Glossary
 
