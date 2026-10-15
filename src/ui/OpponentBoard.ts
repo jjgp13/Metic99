@@ -364,7 +364,7 @@ export class OpponentBoard implements BattleView {
     set(v, "cls", `mb-tile${out ? " mb-out" : ""}${isTarget ? " mb-target" : ""}${onYou ? " mb-on-you" : ""}`, (c) => {
       v.el.className = c;
     });
-    set(v, "level", tile.who === "human" ? "PLAYER" : tile.who.toUpperCase(), (s) => (v.level.textContent = s));
+    set(v, "level", tile.name ?? (tile.who === "human" || tile.who === "remote" ? "PLAYER" : tile.who.toUpperCase()), (s) => (v.level.textContent = s));
     set(v, "badges", String(tile.badges), () => {
       v.badgesOn.textContent = "★".repeat(tile.badges);
       v.badgesOff.textContent = "☆".repeat(Math.max(0, 4 - tile.badges));

@@ -1,6 +1,6 @@
 import { MATCH, type BotLevel, type PowerKind } from "../config/constants";
 import { Bot } from "./Bot";
-import { Field, type Aim, type FieldSummary } from "./Field";
+import { Field, type Aim, type FieldSummary, type MatchMessage } from "./Field";
 import type { SentAlien } from "./Swarm";
 import { Rng } from "./rng";
 
@@ -8,9 +8,12 @@ import { Rng } from "./rng";
  * the fields' and the bots' streams. */
 const MATCH_STREAM = 98;
 
-/** Who plays a seat: a bot of some level, or a person driving it from outside
- * (GameScene applies their inputs to `match.fields[seat]`). */
-export type Seat = BotLevel | "human";
+/** Who plays a seat: a bot of some level, a person driving it from outside
+ * (GameScene applies their inputs to `match.fields[seat]`), or a person on
+ * another machine ("remote", online play): their field here is a copy the
+ * server advances from their inputs, and messages to it go out through
+ * `takeOutbox()` instead of straight into the field. */
+export type Seat = BotLevel | "human" | "remote";
 
 export interface MatchOptions {
   seed: number;
@@ -22,6 +25,14 @@ export interface MatchOptions {
   /** Per seat, the power that seat plays (overrides the above; balancing runs
    * give bots different powers). */
   powers?: readonly (PowerKind | undefined)[];
+  /** Per seat, a player name for the tiles (online play). */
+  names?: readonly (string | undefined)[];
+}
+
+/** A message for a remote seat's field, waiting to be sent over the network. */
+export interface OutgoingMessage {
+  seat: number;
+  message: MatchMessage;
 }
 
 /** What happened in the match, drained with `takeEvents()`. */
@@ -44,6 +55,8 @@ export type MatchEvent =
 export interface PlayerTile extends FieldSummary {
   seat: number;
   who: Seat;
+  /** The player's name (online play), else undefined. */
+  name?: string;
   alive: boolean;
   /** Final place once knocked out (1 = winner), else 0. */
   placement: number;
@@ -79,7 +92,9 @@ export interface PlayerTile extends FieldSummary {
  */
 export class Match {
   readonly seed: number;
-  readonly seats: readonly Seat[];
+  /** Who plays each seat; a remote seat can become a bot (replaceWithBot). */
+  readonly seats: Seat[];
+  readonly names: readonly (string | undefined)[];
   readonly fields: Field[];
   /** The bot playing each seat (null for a person). */
   readonly bots: (Bot | null)[];
@@ -94,6 +109,8 @@ export class Match {
   /** Badge points per seat. */
   readonly badgePoints: number[];
   private events: MatchEvent[] = [];
+  /** Messages for remote seats (online play), drained by the server. */
+  private outbox: OutgoingMessage[] = [];
   private readonly rng: Rng;
   private retargetLeftMs: number[];
   /** The last attack each seat received: from whom, at what match time. */
@@ -101,7 +118,8 @@ export class Match {
 
   constructor(options: MatchOptions) {
     this.seed = options.seed;
-    this.seats = options.seats;
+    this.seats = [...options.seats];
+    this.names = options.seats.map((_, seat) => options.names?.[seat]);
     const lives = options.lives ?? MATCH.LIVES;
     this.fields = this.seats.map(
       (s, seat) =>
@@ -111,7 +129,9 @@ export class Match {
           power: options.powers?.[seat] ?? (s === "human" ? options.humanPower : undefined),
         }),
     );
-    this.bots = this.seats.map((s, seat) => (s === "human" ? null : Bot.forSeat(s, this.seed, seat)));
+    this.bots = this.seats.map((s, seat) =>
+      s === "human" || s === "remote" ? null : Bot.forSeat(s, this.seed, seat),
+    );
     this.placements = this.seats.map(() => 0);
     this.targets = this.seats.map(() => null);
     this.badgePoints = this.seats.map(() => 0);
@@ -145,6 +165,7 @@ export class Match {
       ...field.summary(),
       seat,
       who: this.seats[seat],
+      name: this.names[seat],
       alive: this.placements[seat] === 0,
       placement: this.placements[seat],
       badgePoints: this.badgePoints[seat],
@@ -170,13 +191,14 @@ export class Match {
    * One fixed step for every field: bots decide (they see the field as it is
    * now), then all fields step, then KOs are counted and attacks delivered
    * (they land in the next steps, after the incoming delay). A person's inputs are
-   * applied to their field between steps, like a bot's.
+   * applied to their field between steps, like a bot's. Remote seats' fields
+   * are not stepped here: the server advances them as their inputs arrive.
    */
   step(dt: number): void {
     if (this.over) return;
     this.steps++;
     this.fields.forEach((field, seat) => {
-      if (this.placements[seat] !== 0) return;
+      if (this.placements[seat] !== 0 || this.seats[seat] === "remote") return;
       this.bots[seat]?.update(field, dt);
       field.step(dt);
       // Nobody draws a bot's field; drop its events (the person's scene drains its own).
@@ -302,7 +324,7 @@ export class Match {
           ...attack.aliens,
           ...Array.from({ length: extra }, (): SentAlien => ({ kind: "darter", ability: null })),
         ];
-        this.fields[to].receive({ type: "attack", from, cost: weight, aliens });
+        this.deliver(to, { type: "attack", from, cost: weight, aliens });
         this.lastAttack[to] = { from, atMs: this.elapsedMs };
         this.events.push({ type: "attack", from, to, cost: attack.cost, weight, step: this.steps });
       }
@@ -316,11 +338,37 @@ export class Match {
     return events;
   }
 
+  /** Messages for remote seats since the last call (online play). */
+  takeOutbox(): OutgoingMessage[] {
+    const out = this.outbox;
+    this.outbox = [];
+    return out;
+  }
+
+  /**
+   * A remote player stopped playing (left, or fell too far behind): a bot of
+   * this level takes over their field from where the server's copy is.
+   */
+  replaceWithBot(seat: number, level: BotLevel): void {
+    this.seats[seat] = level;
+    this.bots[seat] = Bot.forSeat(level, this.seed, seat);
+  }
+
+  /**
+   * Hand a message to a seat's field. A remote seat gets it through the
+   * network: the player's own machine applies it at a step it picks and
+   * reports that step back, so its field and the server's copy stay equal.
+   */
+  private deliver(seat: number, message: MatchMessage): void {
+    if (this.seats[seat] === "remote") this.outbox.push({ seat, message });
+    else this.fields[seat].receive(message);
+  }
+
   /** Tell every field still playing how many are left (the pressure). */
   private announceStanding(): void {
     const alive = this.alive;
     for (const seat of alive) {
-      this.fields[seat].receive({ type: "standing", alive: alive.length, total: this.seats.length });
+      this.deliver(seat, { type: "standing", alive: alive.length, total: this.seats.length });
     }
   }
 }
