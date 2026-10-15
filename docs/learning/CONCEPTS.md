@@ -31,6 +31,7 @@ One row per concept. Add new rows at the bottom.
 | Hash collision (pigeonhole) | More possible inputs than keys, so two different inputs must sometimes share a key; make it rare, and check again | `sim/fingerprint.ts` header (32-bit key) | netcode | 2026-10-14 | NETCODE S0 step 2 |
 | Controlled experiment | Change one variable at a time, so a difference has one cause (a recorded input log, not a live bot) | `src/lab/determinismLab.ts`, `scripts/determinism-record.ts` | testing | 2026-10-14 | NETCODE S0 step 3 |
 | Implementation-approximated math | The JS spec lets each engine compute `sin`/`exp` its own way, so results can differ in the last bit; `+ - * /` and `sqrt` are exact | `Alien.ts` gait, `difficulty.ts`; measured in `docs/NETCODE.md` | netcode | 2026-10-14 | NETCODE S0 step 3 |
+| Fitness function (guard test) | A test that checks a rule about the code itself, so a convention can't be forgotten | `src/math/detmath.test.ts` (no engine sin/exp in rules) | testing | 2026-10-15 | NETCODE S0 step 4 |
 | Hash / fingerprint (checksum) | A short number computed from all the data; any change gives a different one, so two copies compare cheaply | `sim/hash.ts` (FNV-1a), `sim/fingerprint.ts` | netcode | 2026-10-08 | NETCODE S0 step 2 |
 
 ## In the code, not studied yet

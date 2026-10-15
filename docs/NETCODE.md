@@ -58,7 +58,7 @@ Design background: [`MULTIPLAYER_DESIGN.md`](MULTIPLAYER_DESIGN.md) §5
 
 | # | Milestone | Steps (one learning loop each) | Backend idea it maps to | Status |
 | --- | --- | --- | --- | --- |
-| S0 | Determinism spike | 1. What "same inputs, same run" means. 2. Fingerprint: a hash of the field state. 3. Phone lab `?lab=determinism`: Node vs iPhone vs Android. 4. Fix what differs and pin it with a test | Event sourcing, replica checksums | in progress: steps 1–3 built (phones to measure) |
+| S0 | Determinism spike | 1. What "same inputs, same run" means. 2. Fingerprint: a hash of the field state. 3. Phone lab `?lab=determinism`: Node vs iPhone vs Android. 4. Fix what differs and pin it with a test | Event sourcing, replica checksums | done 2026-10-15 |
 | S1 | Protocol (`src/net/protocol.ts`) | 1. Envelope, versions, build-id handshake. 2. The messages each way + validation. 3. JSON vs binary, bytes per second | API contracts, schema validation | |
 | S2 | Server skeleton | 1. WebSocket server. 2. Heartbeat and timeouts. 3. Lobby that fills seats with bots after a countdown. 4. One tick loop | Connection lifecycle, health checks | |
 | S3 | Server runs the match | 1. Remote fields fed by inputs. 2. Late and "future" inputs. 3. A player who stops sending | Queues, ordering, idempotency | |
@@ -110,6 +110,16 @@ measurements, glossary), and leave the owner's summary section ready.
 ## Journal
 
 ### Decisions
+
+- **2026-10-15 — S0 step 4: the rules use our own sin/cos/exp (owner
+  picked A).** fdlibm ports written with exact operations only
+  (`src/math/detmath.ts`, a new bottom layer since `config/difficulty.ts`
+  needs `exp`). Rejected: B, removing sin/exp (changes how the lumberer
+  moves: a game-feel call) and C, rounding results (two engines can land
+  on either side of a rounding edge, so it only makes mismatches rarer).
+  Cost measured: ~18 ns per call, 1–3 calls per step, i.e. ~0.0001 ms per
+  step. A guard test scans the rule files for engine sin/cos/exp/pow/`**`
+  (bots excepted: server-only, they act through logged inputs).
 
 - **2026-10-14 — S0 step 3: the lab replays a recording, not a live bot.**
   The bot's own `exp`/`log`/`cos` could make it type at a different step
@@ -173,7 +183,17 @@ replays them and re-asks every `Math.sin`/`Math.exp` input the rules used.
   the mix run's first mismatch differs in one number: a Shielded alien
   moving as a lumberer, `y` = 53.674691355859224 (Node) vs
   53.67469135585922 (Android), the gait's `Math.sin`.
-- _Next: iPhone (JavaScriptCore)._
+- **2026-10-15 — After step 4 (rules on `math/detmath.ts`):** desktop
+  Chromium 152 matches Node in every fingerprint of every run, and all
+  10,000 sin/exp answers are bit-identical; the "before" column (engine
+  Math) still drifts as above. The fdlibm port reproduces Node 24's
+  `Math.sin`/`exp` exactly on all recorded inputs, so the switch changed no
+  run on Node. The guard test then found `** 3` in the glide easing (pow):
+  replaced by multiplications, a last-bit rule change on Node (recording
+  re-made; golden master unchanged at 3 decimals).
+- _Not measured: iPhone (JavaScriptCore). No faithful way on Windows; with
+  the rules on exact operations only it should match by construction —
+  open the lab on an iPhone when one is around._
 
 ### Glossary
 
@@ -188,6 +208,8 @@ backend idea it maps to._
 | Fingerprint | 8-hex hash of the whole field state (`fingerprint(field)`) | Replica checksum, ETag |
 | Checkpoint | A fingerprint taken every 60 steps during a replay | Periodic consistency check |
 | Recording | Inputs + Node's fingerprints + Node's Math answers, replayed by the lab | Golden dataset / contract test fixture |
+| Guard test | A test that scans the rule files for engine math (`math/detmath.test.ts`) | Architecture fitness function / lint rule |
+| fdlibm | Sun's portable math library; our `sin`/`exp` are ports of it using exact ops only | A pinned, vendored dependency instead of the platform's |
 | Last bit (ulp) | The smallest step between two floats; engines may round `sin`/`exp` one ulp apart | Floating-point non-determinism across platforms |
 
 ### Owner's summaries
