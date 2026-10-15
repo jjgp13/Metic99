@@ -1,4 +1,5 @@
 import { ABILITY, BLINKER, GAME, SHIELD, SPLITTER } from "../config/constants";
+import { sin } from "../math/detmath";
 import type Alien from "./Alien";
 
 /**
@@ -71,7 +72,7 @@ export class Blinker extends Ability {
     if (t < B.OPEN_MS) {
       this.cover = 0;
     } else if ((t -= B.OPEN_MS) < B.WARN_MS) {
-      this.cover = B.WARN_COVER * Math.abs(Math.sin((Math.PI * B.WARN_FLUTTERS * t) / B.WARN_MS));
+      this.cover = B.WARN_COVER * Math.abs(sin((Math.PI * B.WARN_FLUTTERS * t) / B.WARN_MS));
     } else if ((t -= B.WARN_MS) < B.LID_MS) {
       this.cover = t / B.LID_MS;
     } else if ((t -= B.LID_MS) < B.CLOSED_MS) {

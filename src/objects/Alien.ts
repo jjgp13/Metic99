@@ -1,4 +1,5 @@
 import { ENEMY, GAME, MODEL_BOXES, MONSTERS, type AlienKind } from "../config/constants";
+import { sin } from "../math/detmath";
 import type { Rng } from "../sim/rng";
 import type { Ability } from "./abilities";
 
@@ -267,7 +268,7 @@ export default class Alien {
         // second; the π gain keeps the average at the difficulty's speed.
         const m = MONSTERS.lumberer;
         this.gait = (this.gait + (TAU * delta) / m.STOMP_MS) % TAU;
-        const step = Math.PI * Math.max(0, Math.sin(this.gait));
+        const step = Math.PI * Math.max(0, sin(this.gait));
         this.y += this.descentSpeed() * m.SPEED * step * dt;
         break;
       }
@@ -283,7 +284,7 @@ export default class Alien {
         const m = MONSTERS.drifter;
         this.x += this.dir * m.CROSS_SPEED * dt;
         const g = this.gait + (TAU * delta) / m.BOB_MS;
-        this.y += m.BOB_PX * (Math.sin(g) - Math.sin(this.gait));
+        this.y += m.BOB_PX * (sin(g) - sin(this.gait));
         this.gait = g % TAU;
         break;
       }

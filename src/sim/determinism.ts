@@ -1,4 +1,5 @@
 import { SIM } from "../config/constants";
+import { DET, useNativeMath } from "../math/detmath";
 import type { FieldOptions, LoggedInput } from "./Field";
 import { fingerprintReplay, type Checkpoint } from "./fingerprint";
 
@@ -101,14 +102,21 @@ export interface MathMismatch {
   got: string;
 }
 
-/** Re-ask this engine every recorded Math question; list where it disagrees. */
-export function checkMath(probe: MathProbe): { checked: number; mismatches: MathMismatch[] } {
+/**
+ * Re-ask every recorded math question; list where the answer differs from
+ * Node's. `source`: "engine" = this engine's own Math.sin/exp (what the rules
+ * used before S0), "game" = the deterministic versions the rules use now.
+ */
+export function checkMath(
+  probe: MathProbe,
+  source: "engine" | "game" = "game",
+): { checked: number; mismatches: MathMismatch[] } {
   let checked = 0;
   const mismatches: MathMismatch[] = [];
   for (const fn of PROBED) {
     for (const [xBits, yBits] of probe[fn]) {
       const x = fromBits(xBits);
-      const got = toBits(Math[fn](x));
+      const got = toBits(source === "engine" ? Math[fn](x) : DET[fn](x));
       checked++;
       if (got !== yBits) mismatches.push({ fn, x, expected: yBits, got });
     }
@@ -120,6 +128,19 @@ export function checkMath(probe: MathProbe): { checked: number; mismatches: Math
  * possible change, like an engine that rounds the other way. */
 export function oneBitOff(x: number): number {
   return fromBits((BigInt(`0x${toBits(x)}`) + 1n).toString(16).padStart(16, "0"));
+}
+
+/**
+ * Run `body` with the rules on this engine's own Math.sin/exp again, as
+ * before S0 step 4 (the lab's "before" column), then switch back.
+ */
+export function withEngineMath<T>(body: () => T): T {
+  useNativeMath(true);
+  try {
+    return body();
+  } finally {
+    useNativeMath(false);
+  }
 }
 
 /**

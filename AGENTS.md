@@ -80,6 +80,9 @@ public/assets/        Game art/audio/fonts (reused verbatim from the Unity repo)
   sprites/  sounds/  fonts/
 src/
   main.ts             Phaser.Game config + scene registration
+  math/
+    detmath.ts        Deterministic sin/cos/exp (fdlibm ports, exact ops
+                      only): same bits on every engine (netcode S0)
   config/
     constants.ts      Re-exports every tuning file (import constants from here)
     tuning/           Tuning numbers, one file per domain: game, monsters,
@@ -813,6 +816,9 @@ dMatch)`; it is 0 in solo play.
 - **Game rule state lives inside the `Field`** (no counters or caches at the
   top of a file): the fingerprint (`sim/fingerprint.ts`) only sees what is
   reachable from the field, so state outside it could drift unnoticed.
+- **Game rules use `sin`/`cos`/`exp` from `src/math/detmath.ts`, never
+  `Math.sin`/`cos`/`exp`/`pow` or `**`:** engines round those differently
+  (netcode S0), which would make the server's copy of a field drift.
 - **Game rules never use `Math.random()` or the wall clock** (`this.time.now`):
   draw from the run's seeded streams and read the game clock. Visual-only
   randomness (stars, debris) may use `Math.random()`. New monsters and

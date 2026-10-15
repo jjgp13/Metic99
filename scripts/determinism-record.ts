@@ -4,8 +4,10 @@
  *
  * An ace bot plays a few runs here in Node; we keep only its inputs. Then
  * each run is replayed WITHOUT the bot (so only the field's own code runs),
- * taking a fingerprint every 60 steps and noting every Math.sin / Math.exp
- * call the rules make with Node's exact answer. The result is saved as
+ * taking a fingerprint every 60 steps. A second replay switches the rules
+ * back to the engine's Math (as before S0 step 4) only to note every
+ * Math.sin / Math.exp input they use, with Node's exact answer; the lab asks
+ * both its own engine and the game's math the same questions. The result is saved as
  * `src/lab/determinism-recording.json`, which the phone lab
  * (`?lab=determinism`) replays and compares, and `determinism.test.ts`
  * checks is up to date.
@@ -19,6 +21,7 @@ import {
   PROBED,
   toBits,
   outcomeOf,
+  withEngineMath,
   type MathProbe,
   type ProbedFn,
   type RecordedRun,
@@ -84,11 +87,12 @@ const seen: Record<ProbedFn, Map<string, string>> = { sin: new Map(), exp: new M
 const runs: RecordedRun[] = [];
 for (const spec of RUNS) {
   const { log, steps } = play(spec.options, spec.seconds);
-  let replay!: ReturnType<typeof fingerprintReplay>;
-  withMathProbe(seen, () => {
-    replay = fingerprintReplay(spec.options, log, steps, SIM.STEP_MS);
-  });
-  const { checkpoints, field } = replay;
+  const { checkpoints, field } = fingerprintReplay(spec.options, log, steps, SIM.STEP_MS);
+  withEngineMath(() =>
+    withMathProbe(seen, () => {
+      fingerprintReplay(spec.options, log, steps, SIM.STEP_MS);
+    }),
+  );
   const outcome = outcomeOf(field);
   runs.push({ name: spec.name, about: spec.about, options: spec.options, steps, log, checkpoints, outcome });
   console.log(

@@ -7,6 +7,7 @@ import {
   oneBitOff,
   toBits,
   withBrokenSin,
+  withEngineMath,
   type Recording,
 } from "./determinism";
 
@@ -20,17 +21,26 @@ describe("the determinism recording", () => {
     },
   );
 
-  it("Node agrees with its own recorded Math.sin / Math.exp answers", () => {
-    const { checked, mismatches } = checkMath(recording.math);
+  it("the game's own sin/exp give exactly Node's recorded answers", () => {
+    const { checked, mismatches } = checkMath(recording.math, "game");
     expect(checked).toBeGreaterThan(1000);
     expect(mismatches).toEqual([]);
+  });
+
+  it("so does Node's Math (the recording was made with it)", () => {
+    expect(checkMath(recording.math, "engine").mismatches).toEqual([]);
   });
 });
 
 describe("break it: Math.sin off by one bit", () => {
-  it("makes a lumberer run drift from Node's fingerprints", () => {
-    const run = recording.runs.find((r) => r.name === "lumberers")!;
-    const result = withBrokenSin(() => checkRun(run));
+  const run = recording.runs.find((r) => r.name === "lumberers")!;
+
+  it("no longer reaches the game: the rules use their own sin", () => {
+    expect(withBrokenSin(() => checkRun(run)).ok).toBe(true);
+  });
+
+  it("with the engine's Math (the rules before S0 step 4) the run drifts", () => {
+    const result = withEngineMath(() => withBrokenSin(() => checkRun(run)));
     expect(result.ok).toBe(false);
     expect(result.firstMismatch!.step).toBeGreaterThan(0);
   });

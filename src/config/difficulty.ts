@@ -1,3 +1,4 @@
+import { exp } from "../math/detmath";
 import { ABILITY, DIFFICULTY, MATCH } from "./constants";
 
 export interface DifficultyParams {
@@ -41,7 +42,7 @@ type Range = { easy: number; hard: number };
  */
 export function difficultyAt(elapsedMs: number, score = 0, dMatch = 0): DifficultyParams {
   const t = elapsedMs / 1000; // seconds
-  const dTime = 1 / (1 + Math.exp(-DIFFICULTY.STEEPNESS * (t - DIFFICULTY.MIDPOINT)));
+  const dTime = 1 / (1 + exp(-DIFFICULTY.STEEPNESS * (t - DIFFICULTY.MIDPOINT)));
   const dTimeFloor = Math.min(dTime, DIFFICULTY.TIME_FLOOR_MAX);
   const dScore = score / (score + DIFFICULTY.SCORE_HALF); // 0 at score 0, →1
   const d = Math.max(dScore, dTimeFloor, dMatch);
