@@ -4,6 +4,7 @@ import {
   checkMath,
   checkRun,
   withBrokenSin,
+  withEngineMath,
   type MathMismatch,
   type Recording,
   type RunResult,
@@ -12,18 +13,22 @@ import { replayField } from "../sim/Field";
 import { stateDump } from "../sim/fingerprint";
 
 /**
- * The determinism lab (`?lab=determinism`, docs/NETCODE.md S0 step 3): a
- * plain page, no Phaser, that replays Node's recorded runs on THIS device's
- * JavaScript engine and shows whether it computes exactly what Node did.
+ * The determinism lab (`?lab=determinism`, docs/NETCODE.md S0 steps 3–4):
+ * a plain page, no Phaser, that replays Node's recorded runs on THIS
+ * device's JavaScript engine and shows whether it computes exactly what Node
+ * did.
  *
- * Open it on each phone. Per run it shows whether every fingerprint (one per
- * game second) matches Node's, and if not, the first second that differs;
- * then whether the outcome a player sees (score, kills, lives) matches. It
- * also re-asks this engine every Math.sin / Math.exp question the rules asked
- * Node. The report box at the bottom is what to paste back into the chat.
+ * Everything is measured twice: "Game" = the rules as they ship (their own
+ * deterministic sin/exp, step 4) and "Before" = the same rules on this
+ * engine's Math.sin/exp (as before step 4). Per run it shows whether every
+ * fingerprint (one per game second) matches Node's, the first second that
+ * differs, and whether the outcome a player sees (score, kills, lives)
+ * matches; then it re-asks every sin/exp question the rules asked Node. The
+ * report box at the bottom is what to paste back into the chat.
  *
  * Break it: `&break=sin` makes Math.sin off by one last bit (as if this
- * engine rounded differently), `&break=sin1` makes it 1% wrong.
+ * engine rounded differently), `&break=sin1` makes it 1% wrong. Only the
+ * "Before" lines should notice.
  */
 export async function runDeterminismLab(): Promise<void> {
   const breakMode = new URLSearchParams(window.location.search).get("break");
@@ -34,39 +39,64 @@ export async function runDeterminismLab(): Promise<void> {
   status(page, "Replaying… (a few seconds on a phone)");
   await nextPaint();
 
-  const run = () => {
-    const results = recording.runs.map((r) => checkRun(r));
-    const math = checkMath(recording.math);
-    return { results, math };
-  };
-  const { results, math } =
-    breakMode === "sin" ? withBrokenSin(run) : breakMode === "sin1" ? withBrokenSin(run, 0.01) : run();
+  const broken = <T>(body: () => T): T =>
+    breakMode === "sin" ? withBrokenSin(body) : breakMode === "sin1" ? withBrokenSin(body, 0.01) : body();
+  const game: Measured = broken(() => ({
+    results: recording.runs.map((r) => checkRun(r)),
+    math: checkMath(recording.math, "game"),
+  }));
+  const before: Measured = broken(() =>
+    withEngineMath(() => ({
+      results: recording.runs.map((r) => checkRun(r)),
+      math: checkMath(recording.math, "engine"),
+    })),
+  );
 
-  const firstBad = recording.runs.find((_run, i) => !results[i].ok);
-  const dump = firstBad ? dumpAt(firstBad, results.find((r) => r.name === firstBad.name)!, breakMode) : [];
+  // The game's own state at its first mismatch, to diff against Node's.
+  const firstBad = recording.runs.findIndex((_run, i) => !game.results[i].ok);
+  const dump = firstBad < 0 ? [] : broken(() => dumpAt(recording.runs[firstBad], game.results[firstBad]));
 
   page.innerHTML =
     header(breakMode) +
-    verdict(results, math.mismatches) +
-    results.map((r, i) => runCard(r, recording.runs[i].about, recording.runs[i].outcome)).join("") +
-    mathCard(math.checked, math.mismatches) +
+    verdict(game) +
+    recording.runs.map((r, i) => runCard(r.name, r.about, r.outcome, game.results[i], before.results[i])).join("") +
+    mathCard(game.math, before.math) +
     reportBox({
       engine: navigator.userAgent,
       build: __BUILD_ID__,
       recorded: recording.recorded,
       break: breakMode,
-      runs: results,
-      math: { checked: math.checked, mismatches: math.mismatches.slice(0, 20) },
+      game: summary(game),
+      before: summary(before),
       firstMismatchDump: dump,
     });
   wireCopyButton(page);
 }
 
+/** One column of measurements: every run, and the sin/exp answers. */
+interface Measured {
+  results: RunResult[];
+  math: { checked: number; mismatches: MathMismatch[] };
+}
+
+/** A column for the report: per run, and how many math answers differ. */
+function summary({ results, math }: Measured) {
+  return {
+    runs: results.map((r) => ({
+      name: r.name,
+      ok: r.ok,
+      firstMismatch: r.firstMismatch,
+      sameOutcome: r.sameOutcome,
+      outcome: r.outcome,
+      ms: Math.round(r.ms),
+    })),
+    math: { checked: math.checked, differ: math.mismatches.length, first: math.mismatches.slice(0, 10) },
+  };
+}
+
 /** The state at the first differing checkpoint, to diff against Node's. */
-function dumpAt(run: Recording["runs"][number], result: RunResult, breakMode: string | null): string[] {
-  const step = result.firstMismatch!.step;
-  const replay = () => stateDump(replayField(run.options, run.log, step, SIM.STEP_MS));
-  return breakMode === "sin" ? withBrokenSin(replay) : breakMode === "sin1" ? withBrokenSin(replay, 0.01) : replay();
+function dumpAt(run: Recording["runs"][number], result: RunResult): string[] {
+  return stateDump(replayField(run.options, run.log, result.firstMismatch!.step, SIM.STEP_MS));
 }
 
 function setUpPage(): HTMLElement {
@@ -90,7 +120,8 @@ function header(breakMode: string | null): string {
     breakMode === "sin" || breakMode === "sin1"
       ? `<p style="${box(PALETTE.ATTACK)}"><b>BREAK IT:</b> Math.sin is ${
           breakMode === "sin" ? "off by one last bit" : "1% wrong"
-        } on purpose, as if this engine computed it differently from Node.</p>`
+        } on purpose, as if this engine computed it differently from Node. The game doesn't call
+        Math.sin any more, so only the "Before" lines should change.</p>`
       : "";
   const links = [
     ["normal", "?lab=determinism"],
@@ -104,40 +135,53 @@ function header(breakMode: string | null): string {
     ${banner}`;
 }
 
-function verdict(results: RunResult[], mathMismatches: MathMismatch[]): string {
-  const same = results.every((r) => r.ok) && mathMismatches.length === 0;
+function verdict({ results, math }: Measured): string {
+  const same = results.every((r) => r.ok) && math.mismatches.length === 0;
   const color = same ? PALETTE.GOLD : PALETTE.DANGER;
   const text = same
-    ? "✓ This engine computes exactly what Node computed."
-    : "✗ This engine differs from Node (details below).";
+    ? "✓ The game computes exactly what Node computed, on this engine."
+    : "✗ The game differs from Node on this engine (details below).";
   return `<p style="${box(color)};font-size:18px"><b>${text}</b></p>`;
 }
 
-function runCard(r: RunResult, about: string, nodeOutcome: RunResult["outcome"]): string {
-  const prints = r.ok
-    ? `✓ all ${r.checkpoints} fingerprints match`
-    : `✗ first differs at step ${r.firstMismatch!.step} (${(r.firstMismatch!.step / 60).toFixed(0)} s): Node ${
-        r.firstMismatch!.expected
-      }, here ${r.firstMismatch!.got}`;
-  const outcome = r.sameOutcome
-    ? `✓ same outcome (score ${r.outcome.score}, ${r.outcome.kills} kills, ${r.outcome.lives} lives)`
-    : `✗ different outcome: score ${r.outcome.score} vs Node ${nodeOutcome.score}, kills ${r.outcome.kills} vs ${nodeOutcome.kills}, lives ${r.outcome.lives} vs ${nodeOutcome.lives}`;
+function runCard(
+  name: string,
+  about: string,
+  nodeOutcome: RunResult["outcome"],
+  game: RunResult,
+  before: RunResult,
+): string {
+  const line = (label: string, r: RunResult) => {
+    const prints = r.ok
+      ? `✓ all ${r.checkpoints} fingerprints match`
+      : `✗ fingerprints differ from step ${r.firstMismatch!.step} (${(r.firstMismatch!.step / 60).toFixed(0)} s)`;
+    const outcome = r.sameOutcome
+      ? `same outcome (score ${r.outcome.score}, ${r.outcome.kills} kills, ${r.outcome.lives} lives)`
+      : `✗ different outcome: score ${r.outcome.score} vs Node ${nodeOutcome.score}, kills ${r.outcome.kills} vs ${nodeOutcome.kills}, lives ${r.outcome.lives} vs ${nodeOutcome.lives}`;
+    return `<br><b>${label}:</b> ${prints} · ${outcome}`;
+  };
   return `<section style="${box(PALETTE.PANEL_LIGHT)}">
-    <b>${r.name}</b> <span style="color:${css(PALETTE.TEXT_MUTED)}">${about} · replayed in ${r.ms.toFixed(0)} ms</span><br>
-    Fingerprints: ${prints}<br>Outcome: ${outcome}</section>`;
+    <b>${name}</b> <span style="color:${css(PALETTE.TEXT_MUTED)}">${about} · replayed in ${game.ms.toFixed(0)} ms</span>
+    ${line("Game", game)}${line("Before (engine math)", before)}</section>`;
 }
 
-function mathCard(checked: number, mismatches: MathMismatch[]): string {
-  const list = mismatches
-    .slice(0, 5)
-    .map((m) => `<br><code>Math.${m.fn}(${m.x})</code>: Node ${m.expected}, here ${m.got}`)
-    .join("");
-  const text = mismatches.length
-    ? `✗ ${mismatches.length} of ${checked} answers differ from Node's${list}`
-    : `✓ all ${checked} answers are bit-identical to Node's`;
-  return `<section style="${box(PALETTE.PANEL_LIGHT)}"><b>Math.sin / Math.exp</b> <span style="color:${css(
+function mathCard(game: Measured["math"], before: Measured["math"]): string {
+  const text = (label: string, source: string, { checked, mismatches }: Measured["math"]) => {
+    const list = mismatches
+      .slice(0, 3)
+      .map((m) => `<br>&nbsp;&nbsp;<code>${m.fn}(${m.x})</code>: Node ${m.expected}, here ${m.got}`)
+      .join("");
+    return mismatches.length
+      ? `<br><b>${label}</b> (${source}): ✗ ${mismatches.length} of ${checked} answers differ from Node's${list}`
+      : `<br><b>${label}</b> (${source}): ✓ all ${checked} answers bit-identical to Node's`;
+  };
+  return `<section style="${box(PALETTE.PANEL_LIGHT)}"><b>sin / exp</b> <span style="color:${css(
     PALETTE.TEXT_MUTED,
-  )}">every input the rules used, asked again</span><br>${text}</section>`;
+  )}">every input the rules used, asked again</span>${text("Game", "math/detmath.ts", game)}${text(
+    "Before",
+    "this engine's Math",
+    before,
+  )}</section>`;
 }
 
 function reportBox(report: object): string {
