@@ -11,6 +11,14 @@ import { Field, feed, type FieldOptions, type LoggedInput } from "./Field";
  * can change a future step. Instead of a hand-picked list (which silently
  * misses the next field someone adds), `walkState` visits every value
  * reachable from the field, private ones included, in a fixed order.
+ *
+ * Two holes it can't close:
+ * - State outside the field (a counter at the top of a file that a rule
+ *   reads) is invisible to the walk. Rule: game rules keep all their state
+ *   inside the Field (AGENTS.md conventions).
+ * - 32 bits = ~4.3 billion keys for far more states, so two different
+ *   states can share a key (a collision). The chance per check is 1 in 4.3
+ *   billion, and drift persists, so the next checkpoint still catches it.
  */
 
 /** A value the walk reports; objects and arrays are walked into. */

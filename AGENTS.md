@@ -800,6 +800,9 @@ dMatch)`; it is 0 in solo play.
   **Never mix a refactor and a behavior change in one commit**: a refactor
   keeps the golden master (`src/sim/golden.test.ts`) green; an intended rule
   change updates it (`npx vitest run -u`) and says why.
+- **Game rule state lives inside the `Field`** (no counters or caches at the
+  top of a file): the fingerprint (`sim/fingerprint.ts`) only sees what is
+  reachable from the field, so state outside it could drift unnoticed.
 - **Game rules never use `Math.random()` or the wall clock** (`this.time.now`):
   draw from the run's seeded streams and read the game clock. Visual-only
   randomness (stars, debris) may use `Math.random()`. New monsters and

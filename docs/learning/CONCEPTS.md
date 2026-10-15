@@ -28,6 +28,7 @@ One row per concept. Add new rows at the bottom.
 | Input replication (event sourcing) | Send only inputs tagged with their step; every copy re-runs the same code to get the same state | `replayField` in `sim/Field.ts`; the server plan in `docs/NETCODE.md` | netcode | 2026-10-08 | NETCODE S0 step 1 |
 | Logical clock (step number) | Tag events with a shared counter, not a wall-clock time, so every copy orders them the same | `Field.steps`, `inputLog` entries `{ step, input }` | netcode | 2026-10-08 | NETCODE S0 step 1 |
 | Bit-identical state / butterfly effect | Copies must match in every bit, because a last-bit difference eventually flips a comparison and the runs split | `0.1 + 0.2` vs `0.3`; `Swarm.ts` readability guard | netcode | 2026-10-08 | NETCODE S0 step 1 |
+| Hash collision (pigeonhole) | More possible inputs than keys, so two different inputs must sometimes share a key; make it rare, and check again | `sim/fingerprint.ts` header (32-bit key) | netcode | 2026-10-14 | NETCODE S0 step 2 |
 | Hash / fingerprint (checksum) | A short number computed from all the data; any change gives a different one, so two copies compare cheaply | `sim/hash.ts` (FNV-1a), `sim/fingerprint.ts` | netcode | 2026-10-08 | NETCODE S0 step 2 |
 
 ## In the code, not studied yet
