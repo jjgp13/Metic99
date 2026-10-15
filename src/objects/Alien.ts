@@ -240,7 +240,12 @@ export default class Alien {
   public advance(delta: number): void {
     if (this.glide) {
       const g = this.glide;
-      const ease = (t: number) => 1 - (1 - t / g.ms) ** 3; // ease-out
+      // Ease-out cubic. Two multiplications, not `** 3`: `**` is pow, which
+      // engines may round differently (docs/ENGINEERING.md §2).
+      const ease = (t: number) => {
+        const left = 1 - t / g.ms;
+        return 1 - left * left * left;
+      };
       const k0 = ease(g.t);
       g.t = Math.min(g.t + delta, g.ms);
       const dk = ease(g.t) - k0;
