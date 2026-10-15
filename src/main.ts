@@ -48,7 +48,12 @@ const config: Phaser.Types.Core.GameConfig = {
   ],
 };
 
-const game = new Phaser.Game(config);
-
-// Dev-only console handle for inspecting the running game (stripped from builds).
-if (import.meta.env.DEV) Object.assign(window, { __metic: { game, world: getWorld3D } });
+// `?lab=determinism` is a plain page instead of the game (netcode S0); it is
+// loaded only when asked for, so the game's bundle doesn't carry it.
+if (new URLSearchParams(window.location.search).get("lab") === "determinism") {
+  void import("./lab/determinismLab").then((lab) => lab.runDeterminismLab());
+} else {
+  const game = new Phaser.Game(config);
+  // Dev-only console handle for inspecting the running game (stripped from builds).
+  if (import.meta.env.DEV) Object.assign(window, { __metic: { game, world: getWorld3D } });
+}

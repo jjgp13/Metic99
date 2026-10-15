@@ -123,7 +123,7 @@ export interface Checkpoint {
  * Replay a run (like `replayField`) and take a fingerprint every `every`
  * steps, from step 0, plus one at the end. Two machines that replay the same
  * seed and log should produce the same list; the first entry that differs
- * says when they drifted apart.
+ * says when they drifted apart. Also returns the replayed field.
  */
 export function fingerprintReplay(
   options: FieldOptions,
@@ -131,7 +131,7 @@ export function fingerprintReplay(
   steps: number,
   dt: number,
   every: number = NET.FINGERPRINT_EVERY,
-): Checkpoint[] {
+): { checkpoints: Checkpoint[]; field: Field } {
   const field = new Field(options);
   const checkpoints: Checkpoint[] = [];
   let next = 0;
@@ -140,5 +140,5 @@ export function fingerprintReplay(
     if (i % every === 0 || i === steps) checkpoints.push({ step: i, hash: fingerprint(field) });
     if (i < steps) field.step(dt);
   }
-  return checkpoints;
+  return { checkpoints, field };
 }

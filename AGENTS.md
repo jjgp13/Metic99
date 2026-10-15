@@ -69,6 +69,9 @@ loop. See the Decision Log.
   plays whole bot-only battle matches (`scripts/match-report.ts`; `--
   --matches 40 --players 16 --seats ace,pilot,...`): win rate and placement
   per level, match length, KO times, what knocks players out.
+  `npm run determinism:record` re-records the determinism lab's runs
+  (`src/lab/determinism-recording.json`; needed after any rule change,
+  `determinism.test.ts` says so).
 
 ## Project layout
 
@@ -157,6 +160,9 @@ src/
     SimClock.ts       Fixed timestep: real time → whole rule steps + alpha.
     stats.ts          Solve-time summaries.
     hash.ts           FNV-1a 32-bit hash helpers (hashByte/String/Number).
+    determinism.ts    The S0 experiment: replay a recorded run and compare
+                      fingerprints/outcome with Node's (`checkRun`), re-ask
+                      Math.sin/exp (`checkMath`), `withBrokenSin` (break it).
     fingerprint.ts    State fingerprint: walks every value reachable from a
                       Field (`walkState`), hashes it; `stateDump` lists
                       "path = value"; `fingerprintReplay` = a checkpoint
@@ -174,6 +180,10 @@ src/
     abilities.ts      Monster abilities (Blinker, Shielded, Splitter): pure
                       state with update/onHit/onKilled hooks + `AbilityHost`.
     Bullet.ts         Pure bullet state {x, y, active}.
+  lab/
+    determinismLab.ts `?lab=determinism`: plain DOM page (no Phaser) that
+                      replays Node's recording on this engine; report box
+    determinism-recording.json  Written by `npm run determinism:record`
   render3d/
     World3D.ts        Three.js view: camera, lights, starfield, ship/alien/bullet
                       meshes, voxel-debris explosions, shake. Page-wide singleton.
@@ -820,6 +830,13 @@ dMatch)`; it is 0 in solo play.
 ## Decision Log
 
 Newest first. Format: `YYYY-MM-DD — decision — rationale`.
+
+- **2026-10-14 — Netcode S0: two V8 versions already disagree on
+  `Math.sin`/`Math.exp`.** Node 24 vs Chromium 152: last-bit differences on
+  3% / 10% of the inputs the rules use; fingerprints drift in every
+  recorded run, outcomes still match after 2–2.5 min. A recording (not a
+  live bot) is replayed by the `?lab=determinism` page so only the engine
+  varies. Phones next; step 4 decides the fix. Details: `docs/NETCODE.md`.
 
 - **2026-10-08 — Owner practice is intent-level (owner's pick).** "Your
   turn" tasks are now test cases in plain English, finding smells or

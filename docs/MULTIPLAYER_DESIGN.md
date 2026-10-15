@@ -269,7 +269,9 @@ the agreed shape.
   work with inputs-only replication (a last-bit difference eventually flips
   a comparison), so copies must be bit-identical (netcode S0,
   `docs/NETCODE.md`). Drift is detected by a whole-state fingerprint
-  (`src/sim/fingerprint.ts`) compared every 60 steps.
+  (`src/sim/fingerprint.ts`) compared every 60 steps. Measured 2026-10-14:
+  even Node 24 and Chromium 152 (both V8) differ in the last bit of `sin`
+  (3%) and `exp` (10%), so the shared sim can't use them as they are.
 
 ## 9. Contracts vs content
 

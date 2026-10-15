@@ -56,7 +56,7 @@ describe("fingerprint", () => {
 describe("fingerprintReplay", () => {
   const options: FieldOptions = { seed: 7, power: "blast" };
   const original = botRun(options, 30);
-  const checkpoints = fingerprintReplay(options, original.inputLog, original.steps, STEP);
+  const { checkpoints } = fingerprintReplay(options, original.inputLog, original.steps, STEP);
 
   it(`takes a checkpoint every ${NET.FINGERPRINT_EVERY} steps and one at the end`, () => {
     const steps = checkpoints.map((c) => c.step);
@@ -66,7 +66,7 @@ describe("fingerprintReplay", () => {
 
   it("ends on the original run's fingerprint, and a second replay gives the same list", () => {
     expect(checkpoints[checkpoints.length - 1].hash).toBe(fingerprint(original));
-    expect(fingerprintReplay(options, original.inputLog, original.steps, STEP)).toEqual(checkpoints);
+    expect(fingerprintReplay(options, original.inputLog, original.steps, STEP).checkpoints).toEqual(checkpoints);
   });
 });
 
