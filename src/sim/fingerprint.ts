@@ -26,10 +26,12 @@ export type StateLeaf = number | string | boolean | null | undefined;
 
 /**
  * Keys that are not state: the input log is what produced the state (both
- * copies have it by definition), and `events` is an outbox nobody may have
- * emptied (a replay never takes them).
+ * copies have it by definition), and `events` and `outgoing` are outboxes
+ * (field → screen, field → match) that copies empty at different moments:
+ * the rules never read them. Found online: the server's match takes a
+ * copy's `outgoing` every step, the player's device never does.
  */
-const SKIP_KEYS = new Set(["inputLog", "events"]);
+const SKIP_KEYS = new Set(["inputLog", "events", "outgoing"]);
 
 /**
  * Visit every value reachable from `root`, depth first, in a fixed order:
