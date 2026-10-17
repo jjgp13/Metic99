@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import { BATTLE_HUD, GAME, PLAYER, TARGET_STRATEGIES, type TargetStrategy } from "../config/constants";
-import type { Match, MatchEvent, PlayerTile } from "../sim/Match";
+import type { MatchEvent, PlayerTile } from "../sim/Match";
 import { OpponentBoard, boardWanted } from "./OpponentBoard";
 import { PALETTE, css } from "../config/palette";
 import { textStyle, outline } from "./theme";
@@ -43,10 +43,10 @@ export interface BattleActions {
  * The views for this screen. Add a view here (one line), e.g. an opponent
  * board when the window is wide enough and a compact strip on phones.
  */
-export function createBattleViews(scene: Phaser.Scene, match: Match, actions: BattleActions): BattleView[] {
+export function createBattleViews(scene: Phaser.Scene, seatCount: number, actions: BattleActions): BattleView[] {
   // Every screen: the dock under the energy meter and the edge glow (inside
   // the canvas, so it fits phones and desktops alike).
-  const views: BattleView[] = [new PhoneBattleDock(scene, match.tiles().length, actions)];
+  const views: BattleView[] = [new PhoneBattleDock(scene, seatCount, actions)];
   // Desktop: the other players' tiles beside the canvas (shown while there is room).
   if (boardWanted(scene.game.canvas)) {
     // Read the box's new size before refitting: refresh() alone uses the

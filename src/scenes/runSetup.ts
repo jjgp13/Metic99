@@ -3,16 +3,17 @@ import { selectedPower } from "../config/powers";
 import { ABILITY_KINDS, type AbilityKind } from "../objects/abilities";
 import { Bot } from "../sim/Bot";
 import { Field } from "../sim/Field";
+import { LocalBattle, type BattleSource } from "../sim/BattleSource";
 import { Match } from "../sim/Match";
 import { randomSeed } from "../sim/rng";
 
 /** Everything a run starts from (GameScene builds its screen around it). */
 export interface RunSetup {
   seed: number;
-  /** The player's field (in a battle: `match.fields[0]`). */
+  /** The player's field (in a battle: `battle.field`). */
   field: Field;
-  /** Battle mode: the match; null in solo play. */
-  match: Match | null;
+  /** Battle mode: the battle (offline match or online); null in solo play. */
+  battle: BattleSource | null;
   /** Dev (`?ability=…`): every allowed spawn gets one of these. */
   forcedAbilities: AbilityKind[] | null;
   /** Dev (`?bot=ace`): a bot plays the player's field through the same inputs. */
@@ -39,11 +40,12 @@ export function setUpRun(battle: boolean): RunSetup {
   if (battle) {
     // You (seat 0) and the bots share the seed, one life each.
     const match = new Match({ seed, seats: ["human", ...MATCH.OPPONENTS], humanPower: selectedPower() });
-    return { seed, field: match.fields[0], match, forcedAbilities: null, autopilot };
+    const battle = new LocalBattle(match);
+    return { seed, field: battle.field, battle, forcedAbilities: null, autopilot };
   }
   const forcedAbilities = abilitiesFrom(params);
   const field = new Field({ seed, forcedAbilities, power: selectedPower() });
-  return { seed, field, match: null, forcedAbilities, autopilot };
+  return { seed, field, battle: null, forcedAbilities, autopilot };
 }
 
 function seedFrom(params: URLSearchParams | null): number {
