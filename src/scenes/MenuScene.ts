@@ -10,7 +10,7 @@ import { textStyle } from "../ui/theme";
 /**
  * Title / main menu. The first scene the player sees: a ship picker (a look
  * only), a power picker (the one power used in play), then PLAY or BATTLE
- * (you + 7 bots), HOW TO PLAY and SCORES. Buttons are large pointer targets
+ * (you + 7 bots), ONLINE (friends on the game server), HOW TO PLAY and SCORES. Buttons are large pointer targets
  * (mobile-friendly); ←/→ change ship, ↑/↓ change power and Enter plays.
  */
 export default class MenuScene extends Phaser.Scene {
@@ -51,10 +51,10 @@ export default class MenuScene extends Phaser.Scene {
     this.makeButton(cx - 68, 522, "PLAY", () => this.scene.start("GameScene"), 124);
     // Battle royale vs bots (docs/MULTIPLAYER_DESIGN.md): you + 7 bots, one life.
     this.makeButton(cx + 68, 522, "BATTLE", () => this.scene.start("GameScene", { battle: true }), 124);
-    this.makeButton(cx, 582, "HOW TO PLAY", () => this.scene.start("HowToPlayScene"));
-    this.makeButton(cx, 642, "SCORES", () =>
-      this.scene.start("LeaderboardScene", { browse: true }),
-    );
+    // Online battle with friends (docs/NETCODE.md): needs the game server.
+    this.makeButton(cx, 582, "ONLINE", () => this.scene.start("LobbyScene"));
+    this.makeButton(cx - 55, 642, "HOW TO PLAY", () => this.scene.start("HowToPlayScene"), 150, 18);
+    this.makeButton(cx + 80, 642, "SCORES", () => this.scene.start("LeaderboardScene", { browse: true }), 100, 18);
 
     this.add
       .text(cx, GAME.HEIGHT - 26, "a Phaser math-shooter", textStyle(12, PALETTE.TEXT_MUTED))
@@ -138,14 +138,14 @@ export default class MenuScene extends Phaser.Scene {
     });
   }
 
-  private makeButton(x: number, y: number, label: string, onClick: () => void, w = 260): void {
+  private makeButton(x: number, y: number, label: string, onClick: () => void, w = 260, fontSize = 24): void {
     const h = 52;
     const bg = this.add
       .rectangle(x, y, w, h, PALETTE.PANEL)
       .setStrokeStyle(2, PALETTE.ACCENT)
       .setInteractive({ useHandCursor: true });
     const txt = this.add
-      .text(x, y, label, textStyle(24))
+      .text(x, y, label, textStyle(fontSize))
       .setOrigin(0.5);
 
     bg.on("pointerover", () => {

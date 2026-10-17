@@ -11,6 +11,8 @@ import type { Match, MatchEvent, PlayerTile } from "./Match";
 export interface BattleSource {
   /** Your seat. */
   readonly you: number;
+  /** Played against people over the network (no pausing: the others don't wait). */
+  readonly online: boolean;
   /** Your field: the one you play (online: played here at once, the server
    * checks it from your inputs). */
   readonly field: Field;
@@ -33,6 +35,7 @@ export interface BattleSource {
 /** An offline battle: the whole match runs here; you are seat 0. */
 export class LocalBattle implements BattleSource {
   readonly you = 0;
+  readonly online = false;
   readonly kicked = null;
 
   constructor(readonly match: Match) {}

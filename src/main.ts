@@ -7,6 +7,7 @@ import GameScene from "./scenes/GameScene";
 import NameEntryScene from "./scenes/NameEntryScene";
 import LeaderboardScene from "./scenes/LeaderboardScene";
 import HandwritingLabScene from "./scenes/HandwritingLabScene";
+import LobbyScene from "./scenes/LobbyScene";
 import { getWorld3D } from "./render3d/World3D";
 
 /**
@@ -45,6 +46,7 @@ const config: Phaser.Types.Core.GameConfig = {
     NameEntryScene,
     LeaderboardScene,
     HandwritingLabScene,
+    LobbyScene,
   ],
 };
 

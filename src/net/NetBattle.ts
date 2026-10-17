@@ -30,6 +30,7 @@ export type StartInfo = Extract<ServerMessage, { t: "start" }>;
 export class NetBattle implements BattleSource {
   readonly field: Field;
   readonly you: number;
+  readonly online = true;
   readonly seats: { who: Seat; name?: string }[];
   kicked: string | null = null;
   /** Desyncs the server reported (should stay 0). */

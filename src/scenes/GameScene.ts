@@ -28,6 +28,10 @@ import { SendButton } from "../ui/hud/SendButton";
 import { TopHud } from "../ui/hud/TopHud";
 import { onKeyDown } from "../ui/keyboard";
 import { setUpRun } from "./runSetup";
+import { NetBattle } from "../net/NetBattle";
+
+/** Online: longest wait for the server's placement after your KO (ms). */
+const RESULTS_WAIT_MS = 3_000;
 
 /**
  * The game screen. It is the *composition root* (docs/ARCHITECTURE.md §2.9):
@@ -57,6 +61,9 @@ export default class GameScene extends Phaser.Scene {
   private gameOver = false;
   /** Guards the single way out of the game-over screen. */
   private leaving = false;
+  /** Online: knocked out, waiting (briefly) for the server's placement before
+   * showing the results; the time we started waiting. */
+  private resultsPendingSince: number | null = null;
   /** Whether this run set a new personal best (name entry says so). */
   private newHighScore = false;
 
@@ -79,8 +86,8 @@ export default class GameScene extends Phaser.Scene {
     super("GameScene");
   }
 
-  create(data?: { battle?: boolean }): void {
-    const run = setUpRun(data?.battle ?? false);
+  create(data?: { battle?: boolean; online?: BattleSource }): void {
+    const run = setUpRun(data?.battle ?? false, data?.online);
     this.field = run.field;
     this.battle = run.battle;
     this.autopilot = run.autopilot;
@@ -88,6 +95,7 @@ export default class GameScene extends Phaser.Scene {
     this.paused = false;
     this.gameOver = false;
     this.leaving = false;
+    this.resultsPendingSince = null;
     this.newHighScore = false;
     this.runExtras = {
       lives: this.field.lives,
@@ -155,6 +163,8 @@ export default class GameScene extends Phaser.Scene {
       this.inputPanel.update(delta);
     }
     this.battle?.poll();
+    if (this.battle?.kicked && !this.gameOver) this.endGame();
+    this.showResultsWhenPlaced(time);
     this.updateBattleViews(delta);
     this.renderWorld(time, delta);
   }
@@ -403,7 +413,8 @@ export default class GameScene extends Phaser.Scene {
 
   /** Freeze the field and hide the aliens, so sums can't be solved on a break. */
   private togglePause(): void {
-    if (this.gameOver) return;
+    // Online the others keep playing: a paused field would dodge attacks.
+    if (this.gameOver || this.battle?.online) return;
     this.paused = !this.paused;
     this.reticle.setVisible(!this.paused);
     this.answer.setVisible(!this.paused);
@@ -423,6 +434,25 @@ export default class GameScene extends Phaser.Scene {
     this.inputPanel.setEnabled(false);
     if (import.meta.env.DEV) this.logPaceToConsole();
 
+    // Online, your KO happened here first: the server confirms it (and your
+    // place) a moment later, when its copy of your field gets there.
+    if (this.battle?.online && this.battle.placementOf(this.battle.you) === 0) {
+      this.resultsPendingSince = this.time.now;
+      return;
+    }
+    this.showResults();
+  }
+
+  /** Online: show the results once the server has placed you (or after a wait). */
+  private showResultsWhenPlaced(now: number): void {
+    const since = this.resultsPendingSince;
+    if (since === null || !this.battle) return;
+    if (this.battle.placementOf(this.battle.you) === 0 && now - since < RESULTS_WAIT_MS) return;
+    this.resultsPendingSince = null;
+    this.showResults();
+  }
+
+  private showResults(): void {
     const f = this.field;
     const { mastery, newHighScore } = recordRun(f);
     this.newHighScore = newHighScore;
@@ -433,12 +463,17 @@ export default class GameScene extends Phaser.Scene {
       field: f,
       mastery,
       rank: rankFor(mastery.highScore),
-      battle: this.battle && placement !== null ? { placement, players: this.battle.seatCount } : null,
-      continueHint: this.battle
-        ? "tap / Enter for the menu"
-        : isLeaderboardEnabled()
-          ? "tap / Enter to enter initials"
-          : "tap / Enter to play again",
+      // No place shown while it's unknown (online: replaced by a bot mid-match).
+      battle: this.battle && placement ? { placement, players: this.battle.seatCount } : null,
+      continueHint: this.battle?.kicked
+        ? `replaced by a bot (${this.battle.kicked}) · tap for the lobby`
+        : this.battle?.online
+          ? "tap / Enter for the lobby"
+          : this.battle
+            ? "tap / Enter for the menu"
+            : isLeaderboardEnabled()
+              ? "tap / Enter to enter initials"
+              : "tap / Enter to play again",
     });
 
     // Playtest build (a claude.ai Artifact): save the run for analysis.
@@ -463,9 +498,12 @@ export default class GameScene extends Phaser.Scene {
 
   /** The single way out of game over: name entry (solo, leaderboard on) or the menu. */
   private leaveGameOver(): void {
-    if (this.leaving) return;
+    if (this.leaving || this.resultsPendingSince !== null) return;
     this.leaving = true;
-    if (isLeaderboardEnabled() && !this.battle) {
+    if (this.battle instanceof NetBattle) {
+      this.battle.dispose();
+      this.scene.start("LobbyScene");
+    } else if (isLeaderboardEnabled() && !this.battle) {
       this.scene.start("NameEntryScene", { score: this.field.score, personalBest: this.newHighScore });
     } else {
       this.scene.start("MenuScene");

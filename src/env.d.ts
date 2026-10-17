@@ -7,6 +7,9 @@ interface ImportMetaEnv {
   readonly VITE_SUPABASE_ANON_KEY?: string;
   /** "json": load 3D models as base64 JSON (the playtest Artifact build). */
   readonly VITE_MODEL_PACK?: string;
+  /** Online play: the game server's WebSocket URL (wss://host/ws). Empty =
+   * the page's own host (the game server serves the page). */
+  readonly VITE_NET_URL?: string;
 }
 
 interface ImportMeta {

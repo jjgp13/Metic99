@@ -13,7 +13,7 @@ function buildId(): string {
   }
 }
 
-export default defineConfig({
+export default defineConfig(({ isSsrBuild }) => ({
   base: "./",
   define: {
     __BUILD_ID__: JSON.stringify(buildId()),
@@ -30,5 +30,7 @@ export default defineConfig({
   build: {
     target: "es2020",
     sourcemap: true,
+    // The server bundle (`npm run build:server`) doesn't need the game's art.
+    copyPublicDir: !isSsrBuild,
   },
-});
+}));

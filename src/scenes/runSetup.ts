@@ -27,10 +27,16 @@ export interface RunSetup {
  * Dev builds read URL parameters for play-testing:
  * - `?seed=123` replays a seed (every run logs its seed);
  * - `?ability=blinker,shielded` makes every allowed spawn one of these;
- * - `?bot=ace` puts a bot on autopilot.
+ * - `?bot=ace` puts a bot on autopilot (also online: handy for testing).
  */
-export function setUpRun(battle: boolean): RunSetup {
+export function setUpRun(battle: boolean, online?: BattleSource): RunSetup {
   const params = import.meta.env.DEV ? new URLSearchParams(window.location.search) : null;
+  if (online) {
+    // Online: the server picked the seed and built the field's twin.
+    const level = params?.get("bot") ?? "";
+    const autopilot = Bot.isLevel(level) ? Bot.forSeat(level, online.field.seed, online.you) : null;
+    return { seed: online.field.seed, field: online.field, battle: online, forcedAbilities: null, autopilot };
+  }
   const seed = seedFrom(params);
   if (params) console.info(`[metic] run seed ${seed} (replay with ?seed=${seed})`);
 

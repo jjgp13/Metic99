@@ -13,6 +13,7 @@ export const STORAGE = {
   POWER: "metic-power", // power picked on the menu (POWER_KINDS)
   INPUT_MODE: "metic-input", // "keys" (keypad) or "draw" (handwriting pad)
   HW_LAB: "metic-hw-lab", // handwriting lab samples in progress (?lab=draw)
+  NET_NAME: "metic-net-name", // the player's name for online play
 } as const;
 
 /** Arcade global leaderboard (Supabase-backed). */
