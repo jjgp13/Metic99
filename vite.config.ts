@@ -21,6 +21,11 @@ export default defineConfig({
   server: {
     host: true,
     port: 5173,
+    // Online play in dev: the page talks to `npm run server` through Vite,
+    // so it uses the same address in dev and when the server hosts the game.
+    proxy: {
+      "/ws": { target: "ws://localhost:8787", ws: true },
+    },
   },
   build: {
     target: "es2020",

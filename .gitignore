@@ -11,3 +11,4 @@ dist/
 
 # Python bytecode from Blender build scripts
 __pycache__/
+dist-server

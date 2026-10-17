@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "build": "tsc --noEmit && tsc --noEmit -p server && vite build",
     "preview": "vite preview",
     "test": "vitest run",
     "bots": "vite-node scripts/bot-report.ts",
@@ -13,15 +13,21 @@
     "playtest:build": "vite build --mode playtest && vite-node scripts/playtest-page.ts",
     "bots:fit": "vite-node scripts/bot-fit.ts",
     "match": "vite-node scripts/match-report.ts",
-    "determinism:record": "vite-node scripts/determinism-record.ts"
+    "determinism:record": "vite-node scripts/determinism-record.ts",
+    "server": "vite-node server/main.ts",
+    "build:server": "vite build --ssr server/main.ts --outDir dist-server --emptyOutDir",
+    "start": "node dist-server/main.js",
+    "net:bots": "vite-node scripts/net-bots.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.106.2",
     "phaser": "^3.80.1",
-    "three": "^0.180.0"
+    "three": "^0.180.0",
+    "ws": "^8.22.0"
   },
   "devDependencies": {
     "@types/three": "^0.180.0",
+    "@types/ws": "^8.18.2",
     "typescript": "^5.4.5",
     "vite": "^5.2.11",
     "vitest": "^2.1.9"
