@@ -204,6 +204,7 @@ docs/learning/        The owner's learning: HOW_WE_LEARN.md (the science),
 .claude/skills/explain-change/  How Claude explains every change
 docs/ART_SPEC.md      3D art style, budgets, axes, pipeline
 docs/MULTIPLAYER_DESIGN.md  Battle-royale design: energy, attacks, backend plan
+docs/SOLO_MODES_DESIGN.md   Story mode plan: 10 levels + bosses, Endless (draft)
   env.d.ts            Types for Vite `import.meta.env` (Supabase env vars)
 ```
 
@@ -793,6 +794,10 @@ dMatch)`; it is 0 in solo play.
        badges, `tiles()`, [x] sending pays: separate attack gauge,
        [ ] M8 battle UI: [x] desktop opponent board, [x] phone feedback
        (dock + edge glow + haptics), [ ] results + fast-forward.
+
+14. [ ] **Solo modes: STORY + ENDLESS** — 10 notebook-page levels, each
+       with a new monster and a boss; today's game becomes ENDLESS. Plan
+       and open questions: `docs/SOLO_MODES_DESIGN.md` (draft, 2026-10-18).
 
 ## Conventions
 
