@@ -126,6 +126,23 @@ measurements, glossary), and leave the owner's summary section ready.
 
 ### Decisions
 
+- **2026-10-18 — Launch hardening for a public post (owner: free tiers
+  only, an experiment: cap, don't grow).** Details and the why of each:
+  `docs/learning/2026-10-18-launch-hardening.md`.
+  - **Rules id, not git id, in the hello:** a hash of the rule files, so a
+    page built on GitHub Pages and a server built on Render match.
+  - **Rooms with a hard cap** (MAX_ROOMS 3): lobby with a seat → new room
+    → queue → "server busy". A crashing room closes alone.
+  - **Locks:** 4 sockets per IP (X-Forwarded-For's first entry: fakeable,
+    but never locks real players out), a total cap, a token bucket per
+    socket, Origin check, hello timeout, per-message crash guard.
+  - **Compression** (permessage-deflate): tiles 3.8 KB → ~1 KB.
+  - **Slow-motion guard** (the owner's open task): a field more than 3 s
+    behind real time is handed to a bot; honest clients catch up after a
+    stall instead of dropping time.
+  - **Left for separate chats:** fast-solve detection, name filter +
+    privacy note, reconnect (only if people ask), Pages + Render launch.
+
 - **2026-10-18 — S1–S5: how online play works (built in one push, owner's
   "continue until playable").**
   - **The client never sends state, only inputs** tagged with their step,
@@ -245,6 +262,9 @@ replays them and re-asks every `Math.sin`/`Math.exp` input the rules used.
   kicked, 0 desyncs, places 1–8.
 - **2026-10-18 — Browser + 3 bot clients + 4 server bots:** the lobby,
   START NOW, the dock and the game run online in the dev build.
+- **2026-10-18 — Hardening checks (local):** 500-message flood cut off;
+  foreign Origin → 403; 12 clients over two rooms and 8 clients at ~400 ms
+  RTT: 0 kicked, 0 desyncs; `--slowmo 0.5` cheaters replaced after 3 s.
 - _Not measured: iPhone (JavaScriptCore). No faithful way on Windows; with
   the rules on exact operations only it should match by construction —
   open the lab on an iPhone when one is around._

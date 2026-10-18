@@ -2,7 +2,8 @@
 # Dockerfile. Render gives it an https:// address and passes WebSockets
 # through (wss://), sets PORT, and checks /health before sending traffic.
 # Free plan: the service sleeps after ~15 min without visitors and takes
-# about a minute to wake on the next visit.
+# about a minute to wake on the next visit. An experiment: small caps, no
+# scaling; raise MAX_ROOMS only after reading the tick stats in the log.
 services:
   - type: web
     name: metic99
@@ -11,3 +12,14 @@ services:
     branch: claude/netcode-s0-determinism
     healthCheckPath: /health
     autoDeploy: true
+    envVars:
+      # Render's proxy puts the player's address in X-Forwarded-For.
+      - key: TRUST_PROXY
+        value: "1"
+      - key: MAX_ROOMS
+        value: "3"
+      - key: MAX_PER_IP
+        value: "4"
+      # Pages that may connect besides this service's own address.
+      - key: ALLOWED_ORIGINS
+        value: https://jjgp13.github.io

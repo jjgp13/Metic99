@@ -223,8 +223,11 @@ public/assets/icons/  Transparent top-down model renders for 2D menus (build out
 server/               The game server (Node + plain ws; docs/NETCODE.md)
   main.ts             HTTP (serves dist/, /health) + WebSocket upgrade on
                       /ws, hello check, heartbeat; one Room
+  Rooms.ts            Where a newcomer goes (lobby → new room → queue →
+                      busy), MAX_ROOMS cap, a crashing room closes alone
   Room.ts             Lobby → Match → results → lobby; 60 Hz tick from real
                       time; tiles 10 Hz; takeover by a bot
+  RateLimit.ts        Token bucket per socket
   RemoteSeat.ts       The server's copy of one person's field, fed only by
                       their inputs; refuses impossible reports
   Player.ts, TickStats.ts  A connection; tick time p50/p99
@@ -838,7 +841,10 @@ dMatch)`; it is 0 in solo play.
        **Phase 1 (online, docs/NETCODE.md):** [x] S0 determinism,
        [x] S1 protocol, [x] S2 server, [x] S3 server runs the match,
        [x] S4 client network mode, [x] S5 lag + bot-client load test,
-       [ ] S6 deploy (Dockerfile ready; pick a host), [ ] reconnect.
+       [ ] S6 deploy (Dockerfile + render.yaml ready), [x] launch
+       hardening (rooms + caps, rate limit, origin, compression,
+       slow-motion guard), [ ] fast-solve flag, [ ] name filter + privacy
+       note, [ ] reconnect (only if needed).
 
 ## Conventions
 
@@ -876,6 +882,14 @@ dMatch)`; it is 0 in solo play.
 ## Decision Log
 
 Newest first. Format: `YYYY-MM-DD — decision — rationale`.
+
+- **2026-10-18 — Launch hardening, free tiers only (owner: an experiment,
+  cap instead of scaling).** Hello compares a rules-file hash
+  (`__RULES_ID__`), so Pages and Render builds match; up to MAX_ROOMS (3)
+  rooms then "busy"; per-IP/total socket caps, token-bucket rate limit,
+  Origin check, hello timeout, crash isolation; permessage-deflate; a
+  field > 3 s behind real time (slow-motion cheat) goes to a bot, honest
+  clients catch up. Note: docs/learning/2026-10-18-launch-hardening.md.
 
 - **2026-10-18 — Online battles: phase 1 S1–S5 (owner: "continue until a
   playable demo").** One Node process (plain `ws`) serves the game and the

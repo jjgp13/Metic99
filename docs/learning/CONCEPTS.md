@@ -39,6 +39,10 @@ One row per concept. Add new rows at the bottom.
 | Heartbeat / liveness | Ping every connection; close the ones that stop answering | `server/main.ts` heartbeat, `NET.SILENT_TAKEOVER_MS` | backend | 2026-10-18 | NETCODE S2 |
 | Message ordering (TCP) | A socket delivers in order; a fake network must too, or bugs appear that aren't real | `src/net/Lag.ts` | netcode | 2026-10-18 | NETCODE S5 |
 | Outbox | A list one part fills and another empties; not state, so not in the fingerprint | `Field.events`, `Field.outgoing`, `SKIP_KEYS` | design | 2026-10-18 | NETCODE S5 |
+| Token bucket (rate limiting) | A bucket of N tokens refilled at R/s; each message takes one; empty = refuse | `server/RateLimit.ts` | backend | 2026-10-18 | launch hardening |
+| Capacity cap (load shedding) | Past a fixed limit, refuse new work politely instead of slowing everyone down | `server/Rooms.ts` ("server busy") | backend | 2026-10-18 | launch hardening |
+| Content hash as a version | Identify code by a hash of what matters, not by where or when it was built | `rulesId()` in `vite.config.ts` | engineering | 2026-10-18 | launch hardening |
+| Fail open vs fail closed | When a check can't be sure, choose which mistake is cheaper (here: let a faker through rather than lock real players out) | `clientIp()` in `server/main.ts` | security | 2026-10-18 | launch hardening |
 | Hash / fingerprint (checksum) | A short number computed from all the data; any change gives a different one, so two copies compare cheaply | `sim/hash.ts` (FNV-1a), `sim/fingerprint.ts` | netcode | 2026-10-08 | NETCODE S0 step 2 |
 
 ## In the code, not studied yet
