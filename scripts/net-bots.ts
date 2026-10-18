@@ -13,6 +13,8 @@
  * --level ace|pilot|rookie  bot skill (default pilot)
  * --lag / --jitter ms       fake network delay each way (the break-it experiment)
  * --matches N               play N matches, then exit (default 1)
+ * --slowmo 0.5              cheat: run the field at half speed (more
+ *                           thinking time); the server should replace them
  * --rules ID                the rules id to say hello with (default: this
  *                           checkout's __RULES_ID__)
  */
@@ -20,7 +22,6 @@ import { NET, POWER_KINDS, SIM, type BotLevel } from "../src/config/constants";
 import { NetBattle } from "../src/net/NetBattle";
 import { NetClient } from "../src/net/NetClient";
 import { Bot } from "../src/sim/Bot";
-import { SimClock } from "../src/sim/SimClock";
 
 declare const process: { argv: string[]; exit(code: number): void };
 
@@ -34,6 +35,7 @@ const LEVEL = arg("level", "pilot") as BotLevel;
 const LAG = { ms: Number(arg("lag", "0")), jitterMs: Number(arg("jitter", "0")) };
 const MATCHES = Number(arg("matches", "1"));
 const GO = process.argv.includes("--go");
+const SLOWMO = Number(arg("slowmo", "1"));
 const RULES = arg("rules", __RULES_ID__);
 
 interface Result {
@@ -62,16 +64,13 @@ function runClient(i: number): void {
     if (m.t !== "start") return;
     const battle = new NetBattle(client, m);
     const bot = Bot.forSeat(LEVEL, m.seed, m.you);
-    const clock = new SimClock();
-    let last = performance.now();
     const timer = setInterval(() => {
-      const now = performance.now();
-      clock.advance(now - last, () => {
-        if (battle.field.knockedOut || battle.kicked) return false;
+      // Run every step real time owes (like the game's catch-up online).
+      // --slowmo 0.5 plays at half speed: the cheat the server must catch.
+      while (battle.field.steps < battle.stepsDue() * SLOWMO && !battle.field.knockedOut && !battle.kicked) {
         bot.update(battle.field, SIM.STEP_MS);
         battle.step(SIM.STEP_MS);
-      });
-      last = now;
+      }
       battle.poll();
       const events = battle.takeEvents();
       for (const e of events) if (e.type === "over" && i === 0) console.log(`winner: seat ${e.winner}`);

@@ -1,5 +1,5 @@
 import { MATCH, NET, SIM, type BotLevel } from "../src/config/constants";
-import type { ClientMessage } from "../src/net/protocol";
+import { encode, type ClientMessage, type ServerMessage } from "../src/net/protocol";
 import { Match, type Seat } from "../src/sim/Match";
 import { randomSeed } from "../src/sim/rng";
 import type { Player } from "./Player";
@@ -87,8 +87,8 @@ export class Room {
       case "inputs": {
         const seat = this.seats.get(player.id);
         if (!seat || !this.match) return;
-        const maxStep = Math.floor((this.now() - this.matchStartedAt) / SIM.STEP_MS) + NET.MAX_AHEAD_STEPS;
-        const refused = seat.receive(message.upTo, message.entries, maxStep, this.now());
+        const dueStep = Math.floor((this.now() - this.matchStartedAt) / SIM.STEP_MS);
+        const refused = seat.receive(message.upTo, message.entries, dueStep, this.now());
         if (refused) this.handOver(seat, refused);
         return;
       }
@@ -216,8 +216,10 @@ export class Room {
     }
   }
 
-  private broadcast(message: Parameters<Player["send"]>[0]): void {
-    for (const seat of this.seats.values()) if (this.players.has(seat.player.id)) seat.player.send(message);
+  /** To everyone in the match, encoded once (tiles go out 10 times a second). */
+  private broadcast(message: ServerMessage): void {
+    const text = encode(message);
+    for (const seat of this.seats.values()) if (this.players.has(seat.player.id)) seat.player.sendText(text);
   }
 
   /** Lobby countdown, re-sent every second so clients can show it. */

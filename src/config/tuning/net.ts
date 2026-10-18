@@ -38,6 +38,10 @@ export const NET = {
   // A client may claim at most this many steps more than the server's clock
   // allows (network jitter): a speed hack can't run its field faster.
   MAX_AHEAD_STEPS: 30,
+  // ...and at most this many steps behind it (3 s): a client running its
+  // field in slow motion would get extra thinking time. Honest clients that
+  // stall (a hiccup, a hidden tab) catch up instead (CATCH_UP_STEPS).
+  MAX_BEHIND_STEPS: 180,
   // A client that hasn't reported a step for this long is replaced by a bot
   // (otherwise its field would never be knocked out and the match never end).
   SILENT_TAKEOVER_MS: 5_000,
@@ -49,6 +53,9 @@ export const NET = {
   TAKEOVER_BOT: "pilot",
 
   // --- The client ---
+  // Online, a client that fell behind real time runs up to this many extra
+  // steps per frame to catch up (offline the lost time is simply dropped).
+  CATCH_UP_STEPS: 120,
   // How often the client sends its inputs and step (ms). Inputs are also
   // sent at once when the player acts.
   SEND_EVERY_MS: 50,

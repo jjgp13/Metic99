@@ -16,7 +16,7 @@ import type { Lag } from "../src/net/Lag";
 export class Player {
   name = "";
   power: PowerKind = "freeze";
-  /** Said hello with a matching protocol and build. */
+  /** Said hello with a matching protocol and rules id. */
   ready = false;
   /** Answered the last heartbeat ping (ws-level, see main.ts). */
   alive = true;
@@ -28,7 +28,11 @@ export class Player {
   ) {}
 
   send(message: ServerMessage): void {
-    const text = encode(message);
+    this.sendText(encode(message));
+  }
+
+  /** An already-encoded message: a broadcast encodes once for everyone. */
+  sendText(text: string): void {
     this.lag.later(() => {
       if (this.socket.readyState === this.socket.OPEN) this.socket.send(text);
     });

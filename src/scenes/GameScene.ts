@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { MATCH, TARGET_STRATEGIES, type TargetStrategy } from "../config/constants";
+import { MATCH, NET, TARGET_STRATEGIES, type TargetStrategy } from "../config/constants";
 import { inputMode } from "../config/inputMode";
 import { selectedShip } from "../config/ships";
 import type { InkEvent } from "../handwriting/inkReader";
@@ -159,6 +159,7 @@ export default class GameScene extends Phaser.Scene {
     // (stars drift, the last explosion finishes, pause hides the aliens).
     if (!this.paused && !this.gameOver) {
       this.clock.advance(delta, () => this.step());
+      this.catchUp();
       this.updateHud(delta);
       this.inputPanel.update(delta);
     }
@@ -167,6 +168,19 @@ export default class GameScene extends Phaser.Scene {
     this.showResultsWhenPlaced(time);
     this.updateBattleViews(delta);
     this.renderWorld(time, delta);
+  }
+
+  /**
+   * Online: after a stall (a slow frame, a hidden tab), run the steps real
+   * time owes, a batch per frame, instead of dropping them like offline play:
+   * the server refuses a field that lags far behind (a slow-motion cheat).
+   */
+  private catchUp(): void {
+    if (!(this.battle instanceof NetBattle)) return;
+    const due = this.battle.stepsDue() - 1;
+    for (let i = 0; i < NET.CATCH_UP_STEPS && this.field.steps < due; i++) {
+      if (!this.step()) return;
+    }
   }
 
   /** One fixed rule step, then show what happened in it. False once the run ended. */

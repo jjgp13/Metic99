@@ -67,9 +67,12 @@ export class RemoteSeat {
   /**
    * The device's log since its last report. Returns null if all is well,
    * else why the report is refused (the caller then replaces the player).
-   * `maxStep` = the most steps real time allows the device by now.
+   * `dueStep` = the steps real time says the device has played by now: it
+   * may be up to MAX_AHEAD_STEPS ahead (network jitter) and MAX_BEHIND_STEPS
+   * behind (a slow-motion client gets more thinking time).
    */
-  receive(upTo: number, entries: WireEntry[], maxStep: number, now: number): string | null {
+  receive(upTo: number, entries: WireEntry[], dueStep: number, now: number): string | null {
+    const maxStep = dueStep + NET.MAX_AHEAD_STEPS;
     if (this.replaced) return null;
     this.lastHeardAt = now;
     if (upTo < this.ackedStep) return "step went backwards";
@@ -92,6 +95,8 @@ export class RemoteSeat {
     }
     this.advanceTo(upTo);
     this.ackedStep = upTo;
+    // A knocked-out field stops for good: being "behind" is then fine.
+    if (!this.field.knockedOut && upTo < dueStep - NET.MAX_BEHIND_STEPS) return "too far behind real time (slow motion?)";
     return this.lateMessage();
   }
 

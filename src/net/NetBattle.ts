@@ -1,4 +1,4 @@
-import { NET, type PowerKind } from "../config/constants";
+import { NET, SIM, type PowerKind } from "../config/constants";
 import type { BattleSource } from "../sim/BattleSource";
 import { Field, type MatchMessage } from "../sim/Field";
 import { fingerprint } from "../sim/fingerprint";
@@ -50,6 +50,8 @@ export class NetBattle implements BattleSource {
   private readonly stopListening: () => void;
   /** A blank field's summary, for opponents before the first tiles arrive. */
   private readonly blank = new Field({ seed: 0 }).summary();
+  /** When the server's `start` arrived (ms, performance.now). */
+  private readonly startedAt = performance.now();
 
   constructor(
     private readonly client: NetClient,
@@ -64,6 +66,16 @@ export class NetBattle implements BattleSource {
 
   get seatCount(): number {
     return this.seats.length;
+  }
+
+  /**
+   * How many steps real time says your field should have run by now. The
+   * server refuses a field more than NET.MAX_BEHIND_STEPS behind (a
+   * slow-motion cheat), so after a stall the screen runs the missing steps
+   * quickly instead of dropping that time like offline play does.
+   */
+  stepsDue(now = performance.now()): number {
+    return Math.floor((now - this.startedAt) / SIM.STEP_MS);
   }
 
   /** Apply the server's messages that arrived, then one rule step. */
