@@ -9,7 +9,7 @@ export const NET = {
 
   // Bump when a message changes shape: client and server must speak the same
   // version (the hello is rejected otherwise).
-  PROTOCOL_VERSION: 1,
+  PROTOCOL_VERSION: 2,
   // Where the client finds the server: same host as the page, this path.
   WS_PATH: "/ws",
   // Port of the game server (it also serves the built game).

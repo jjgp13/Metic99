@@ -17,8 +17,8 @@ export interface LobbyInfo {
  * bot clients (`npm run net:bots`) use it too; it needs only the standard
  * `WebSocket` (browsers, and Node 22+).
  *
- * It says hello (protocol + build, so we never play with different rules
- * than the server), keeps the lobby info and the round-trip time, and hands
+ * It says hello (protocol version + rules id, so we never play with
+ * different rules than the server), keeps the lobby info and the round-trip time, and hands
  * every other server message to whoever listens (the match in play).
  */
 export class NetClient {
@@ -40,7 +40,7 @@ export class NetClient {
 
   constructor(
     url: string,
-    hello: { name: string; power: PowerKind; build: string },
+    hello: { name: string; power: PowerKind; rules: string },
     lag: { ms: number; jitterMs: number } = { ms: 0, jitterMs: 0 },
   ) {
     this.lagOut = new Lag(lag.ms, lag.jitterMs);
@@ -48,7 +48,7 @@ export class NetClient {
     this.socket = new WebSocket(url);
     this.socket.onopen = () => {
       this.state = "open";
-      this.send({ t: "hello", protocol: NET.PROTOCOL_VERSION, build: hello.build, name: hello.name, power: hello.power });
+      this.send({ t: "hello", protocol: NET.PROTOCOL_VERSION, rules: hello.rules, name: hello.name, power: hello.power });
       this.pingTimer = setInterval(() => this.ping(), NET.PING_EVERY_MS);
     };
     this.socket.onmessage = (e) => this.lagIn.later(() => this.receive(String(e.data)));

@@ -30,8 +30,8 @@ import type { MatchEvent, PlayerTile, Seat } from "../sim/Match";
 export type WireEntry = { step: number; input: FieldInput } | { step: number; seq: number };
 
 export type ClientMessage =
-  /** First message: who I am and which game I run. */
-  | { t: "hello"; protocol: number; build: string; name: string; power: PowerKind }
+  /** First message: who I am and which rules I run (`rules` = __RULES_ID__). */
+  | { t: "hello"; protocol: number; rules: string; name: string; power: PowerKind }
   /** Lobby: start the match now (fill the rest with bots). */
   | { t: "go" }
   /** My log since the last send, and that my field has run `upTo` steps. */
@@ -147,8 +147,8 @@ export function parseClient(raw: string): ClientMessage | null {
     case "hello": {
       const name = typeof x.name === "string" ? cleanName(x.name) : "";
       const power = (POWER_KINDS as readonly unknown[]).includes(x.power) ? (x.power as PowerKind) : null;
-      if (!isInt(x.protocol, 0, 1_000) || typeof x.build !== "string" || x.build.length > 40 || !power) return null;
-      return { t: "hello", protocol: x.protocol, build: x.build, name, power };
+      if (!isInt(x.protocol, 0, 1_000) || typeof x.rules !== "string" || x.rules.length > 40 || !power) return null;
+      return { t: "hello", protocol: x.protocol, rules: x.rules, name, power };
     }
     case "go":
       return { t: "go" };

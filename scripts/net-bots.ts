@@ -13,8 +13,8 @@
  * --level ace|pilot|rookie  bot skill (default pilot)
  * --lag / --jitter ms       fake network delay each way (the break-it experiment)
  * --matches N               play N matches, then exit (default 1)
- * --build ID                the build id to say hello with (default: this
- *                           checkout's; a Docker-built server says "unknown")
+ * --rules ID                the rules id to say hello with (default: this
+ *                           checkout's __RULES_ID__)
  */
 import { NET, POWER_KINDS, SIM, type BotLevel } from "../src/config/constants";
 import { NetBattle } from "../src/net/NetBattle";
@@ -34,7 +34,7 @@ const LEVEL = arg("level", "pilot") as BotLevel;
 const LAG = { ms: Number(arg("lag", "0")), jitterMs: Number(arg("jitter", "0")) };
 const MATCHES = Number(arg("matches", "1"));
 const GO = process.argv.includes("--go");
-const BUILD = arg("build", __BUILD_ID__);
+const RULES = arg("rules", __RULES_ID__);
 
 interface Result {
   name: string;
@@ -50,7 +50,7 @@ let finished = 0;
 
 function runClient(i: number): void {
   const name = `BOT${i + 1}`;
-  const client = new NetClient(URL, { name, power: POWER_KINDS[i % POWER_KINDS.length], build: BUILD }, LAG);
+  const client = new NetClient(URL, { name, power: POWER_KINDS[i % POWER_KINDS.length], rules: RULES }, LAG);
   let played = 0;
   client.on((m) => {
     // Press START once every bot is in the lobby (one press is enough).

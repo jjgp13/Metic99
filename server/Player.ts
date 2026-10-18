@@ -8,7 +8,7 @@ import type { Lag } from "../src/net/Lag";
  * told us in their hello. A player outlives matches: they wait in the lobby,
  * play, and come back to the lobby.
  *
- * Connection lifecycle: connect → hello (checked: protocol and build must
+ * Connection lifecycle: connect → hello (checked: protocol and rules id must
  * match ours) → lobby → match → lobby … → close. Pings keep the round-trip
  * time known; a socket that stops answering is closed by the heartbeat in
  * main.ts.

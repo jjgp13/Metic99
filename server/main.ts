@@ -109,9 +109,11 @@ function connect(ws: WebSocket): void {
 function hello(player: Player, message: Extract<ClientMessage, { t: "hello" }>): void {
   if (player.ready) return;
   // Client and server must run the same rules (S1): fingerprints and
-  // replays only agree if both sides have exactly the same code.
+  // replays only agree if both sides compute with exactly the same code.
+  // __RULES_ID__ hashes the rule files, so a page built on GitHub Pages and
+  // a server built on Render match whenever their rules do.
   if (message.protocol !== NET.PROTOCOL_VERSION) return reject(player, "different protocol version: reload the page");
-  if (message.build !== __BUILD_ID__) return reject(player, `game version ${message.build} ≠ server ${__BUILD_ID__}: reload the page`);
+  if (message.rules !== __RULES_ID__) return reject(player, "the game was updated: reload the page");
   player.name = message.name || `P${player.id}`;
   player.power = message.power;
   player.ready = true;
@@ -144,7 +146,7 @@ setInterval(() => room.announce(), 1_000);
 
 http.listen(PORT, () => {
   const lag = Lag.fromEnv(process.env);
-  console.log(`Metic99 server on http://localhost:${PORT} (ws ${NET.WS_PATH}), build ${__BUILD_ID__}`);
+  console.log(`Metic99 server on http://localhost:${PORT} (ws ${NET.WS_PATH}), rules ${__RULES_ID__} (build ${__BUILD_ID__})`);
   if (lag.on) console.log(`fake lag: ${lag.ms} ms + up to ${lag.jitterMs} ms jitter each way`);
   if (!existsSync(STATIC_DIR)) console.log(`(no ${STATIC_DIR}: run \`npm run build\` to serve the game here)`);
 });

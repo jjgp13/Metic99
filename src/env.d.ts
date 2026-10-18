@@ -18,3 +18,6 @@ interface ImportMeta {
 
 /** The git commit this build came from (vite.config.ts). */
 declare const __BUILD_ID__: string;
+/** A hash of the rule source files (vite.config.ts): online, client and
+ * server must have the same one. */
+declare const __RULES_ID__: string;

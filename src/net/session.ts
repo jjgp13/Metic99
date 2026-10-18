@@ -19,7 +19,7 @@ export function onlineClient(): NetClient {
     const params = new URLSearchParams(window.location.search);
     client = new NetClient(
       NetClient.defaultUrl(window.location, import.meta.env.VITE_NET_URL),
-      { name: onlineName(), power: selectedPower(), build: __BUILD_ID__ },
+      { name: onlineName(), power: selectedPower(), rules: __RULES_ID__ },
       { ms: Number(params.get("lag") ?? 0) || 0, jitterMs: Number(params.get("jitter") ?? 0) || 0 },
     );
   }

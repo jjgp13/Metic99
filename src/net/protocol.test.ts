@@ -6,17 +6,17 @@ describe("parseClient", () => {
   const msg = (x: unknown) => parseClient(JSON.stringify(x));
 
   it("accepts a well-formed hello and cleans the name", () => {
-    expect(msg({ t: "hello", protocol: 1, build: "abc", name: "ana-<b>!", power: "slow" })).toEqual({
+    expect(msg({ t: "hello", protocol: 1, rules: "abc", name: "ana-<b>!", power: "slow" })).toEqual({
       t: "hello",
       protocol: 1,
-      build: "abc",
+      rules: "abc",
       name: "ANAB",
       power: "slow",
     });
   });
 
   it("refuses an unknown power, a bad step, junk and unknown types", () => {
-    expect(msg({ t: "hello", protocol: 1, build: "abc", name: "x", power: "nuke" })).toBeNull();
+    expect(msg({ t: "hello", protocol: 1, rules: "abc", name: "x", power: "nuke" })).toBeNull();
     expect(msg({ t: "inputs", upTo: -1, entries: [] })).toBeNull();
     expect(msg({ t: "inputs", upTo: 1.5, entries: [] })).toBeNull();
     expect(msg({ t: "admin" })).toBeNull();
