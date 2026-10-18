@@ -37,7 +37,7 @@ import { setUpRun } from "./runSetup";
  *   `field.apply(input)` and `field.step()`;
  * - the HUD is made of components in ui/hud/, each owning its own objects;
  * - the playfield is drawn from a snapshot each frame by a FieldView: in 3D
- *   by World3D, or in pencil by DoodleWorld (`?art=doodle`).
+ *   in pencil by DoodleWorld, or in 3D by World3D (`?art=3d`).
  *
  * Each frame: run the rules in fixed steps (SimClock), turn what happened
  * (field events) into sound and pops, let the HUD read the field, draw the field.

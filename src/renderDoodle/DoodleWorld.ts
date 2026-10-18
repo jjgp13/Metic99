@@ -51,7 +51,7 @@ const isShieldUp = (a: Alien) => a.ability instanceof Shielded && a.ability.shie
 const randomSeed = () => 1 + Math.floor(Math.random() * 2 ** 30);
 
 /**
- * The doodle view of the playfield (`?art=doodle`): pencil drawings on a
+ * The doodle view of the playfield (the default art): pencil drawings on a
  * sheet of notebook paper, on a 2D canvas *under* Phaser's transparent one
  * (where World3D's canvas would be). Like World3D it only reads the
  * snapshot, so the rules and the HUD don't change.

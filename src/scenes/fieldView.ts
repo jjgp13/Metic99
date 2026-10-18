@@ -8,8 +8,8 @@ import { getDoodleWorld } from "../renderDoodle/DoodleWorld";
 
 /**
  * What GameScene needs from whatever draws the playfield. Two views fill it:
- * World3D (Three.js models, the default) and DoodleWorld (pencil on paper,
- * `?art=doodle`). Both only read the snapshot, so the rules never know which
+ * DoodleWorld (pencil on paper, the default) and World3D (Three.js models,
+ * `?art=3d`). Both only read the snapshot, so the rules never know which
  * one is on screen.
  */
 export interface FieldView {

@@ -1,4 +1,4 @@
-// The doodle playfield (`?art=doodle`): pencil drawings on notebook paper.
+// The doodle playfield (the default art; `?art=3d` for the old look): pencil drawings on notebook paper.
 // Re-exported by config/constants.ts; see docs/ENGINEERING.md §3.
 
 /**

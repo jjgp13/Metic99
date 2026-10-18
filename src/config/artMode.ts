@@ -1,7 +1,8 @@
 /**
- * Which art the playfield is drawn in: the Three.js models ("3d", the
- * default) or pencil doodles on notebook paper ("doodle", a prototype).
- * Picked by the URL: `?art=doodle`. Read once; a run never switches.
+ * Which art the playfield is drawn in: pencil doodles on notebook paper
+ * ("doodle", the default) or the older Three.js models ("3d"). The URL
+ * `?art=3d` brings the 3D look back for comparison. Read once; a run never
+ * switches.
  */
 export type ArtMode = "3d" | "doodle";
 
@@ -11,7 +12,7 @@ export function artMode(): ArtMode {
   if (mode === null) {
     // No window in the headless sims and tests: they draw nothing anyway.
     const art = typeof window === "undefined" ? null : new URLSearchParams(window.location.search).get("art");
-    mode = art === "doodle" ? "doodle" : "3d";
+    mode = art === "3d" ? "3d" : "doodle";
   }
   return mode;
 }

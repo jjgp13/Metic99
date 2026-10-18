@@ -38,7 +38,7 @@ const NIGHT = {
   TEXT_MUTED: 0x8893b5,
 };
 
-/** The same meanings in ink on notebook paper (the doodle art, `?art=doodle`). */
+/** The same meanings in ink on notebook paper (the doodle art, the default). */
 const PAPER: typeof NIGHT = {
   BACKGROUND: 0xf8f4e8,
   PANEL: 0xefe8d4,

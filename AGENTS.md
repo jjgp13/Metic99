@@ -52,7 +52,12 @@ loop. See the Decision Log.
 - **Phaser 3** — scenes, menus, HUD, keypad, input, audio and the asset loader.
   Its canvas is **transparent** and stacked above the 3D canvas. Arcade physics
   is no longer used (hits are a swept test in `Field.moveBullets`).
-- **Three.js** — renders the gameplay playfield in 3D (`src/render3d/`). Chosen
+- **Doodle view (default art)** — the playfield is pencil doodles on lined
+  notebook paper (`src/renderDoodle/`, Rough.js wobble, Patrick Hand font),
+  drawn on a 2D canvas under Phaser's. The rules don't know which view draws:
+  GameScene talks to a `FieldView` (`scenes/fieldView.ts`) that DoodleWorld
+  and World3D both fill from the same snapshot; `?art=3d` picks the 3D view.
+- **Three.js** — the older 3D view of the playfield (`src/render3d/`, `?art=3d`). Chosen
   over Babylon.js / Unity WebGL for desktop + phone browsers: small bundle
   (~150 kB gz), fast mobile load, and plain TS that a future Node game server can
   share with the client.
@@ -169,6 +174,9 @@ src/
     abilities.ts      Monster abilities (Blinker, Shielded, Splitter): pure
                       state with update/onHit/onKilled hooks + `AbilityHost`.
     Bullet.ts         Pure bullet state {x, y, active}.
+  renderDoodle/        The default view: DoodleWorld (FieldView), recipes.ts
+                      (one short stroke recipe per ship/monster), pencil.ts
+                      (Rough.js + pre-drawn boil frames), paper.ts, font.ts
   render3d/
     World3D.ts        Three.js view: camera, lights, starfield, ship/alien/bullet
                       meshes, voxel-debris explosions, shake. Page-wide singleton.
@@ -810,6 +818,14 @@ dMatch)`; it is 0 in solo play.
 ## Decision Log
 
 Newest first. Format: `YYYY-MM-DD — decision — rationale`.
+
+- **2026-10-18 — Art direction: pencil doodles on notebook paper (owner's
+  pick of two prototypes).** Built both side by side: A = the 3D models
+  through a pencil post-process shader, B = a new 2D view with doodle
+  recipes. Owner picked B: it reads as "playing on a sheet of paper", fits
+  the handwriting input, and is lighter (+15 kB, ~0.2 ms/frame). B is the
+  default; the 3D view stays behind `?art=3d` (both fill `FieldView`).
+  Prototype A stays on its local branch, unmerged.
 
 - **2026-10-08 — Reviews move to a dedicated quiz chat (owner's design).**
   One chat per feature teaches; one long-lived chat quizzes (`/quiz`, and a

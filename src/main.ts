@@ -57,7 +57,7 @@ function startGame(): void {
   if (import.meta.env.DEV) Object.assign(window, { __metic: { game, world: getWorld3D } });
 }
 
-// The doodle art (`?art=doodle`) needs its handwriting font before any text
+// The doodle art (the default) needs its handwriting font before any text
 // is drawn, and puts the menus on paper too.
 if (artMode() === "doodle") {
   document.body.style.background = DOODLE.PAPER;
