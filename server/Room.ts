@@ -37,7 +37,30 @@ export class Room {
   private resultsUntil = 0;
   readonly ticks = new TickStats();
 
-  constructor(private readonly now: () => number = () => performance.now()) {}
+  constructor(
+    readonly id: number,
+    private readonly now: () => number = () => performance.now(),
+  ) {}
+
+  /** Nobody is connected to this room any more. */
+  get isEmpty(): boolean {
+    return this.players.size === 0;
+  }
+
+  /** A match (or its results screen) is on. */
+  get running(): boolean {
+    return this.state !== "lobby";
+  }
+
+  /** People waiting for this room's next match (not playing now). */
+  get waiting(): number {
+    return this.lobbyPlayers().length;
+  }
+
+  /** People connected to this room (playing or waiting). */
+  get size(): number {
+    return this.players.size;
+  }
 
   // --- Connections ---------------------------------------------------------
 
@@ -144,7 +167,7 @@ export class Room {
     );
     // The match's first messages (standing) were queued while it was built.
     for (const { seat, message } of match.takeOutbox()) this.seatAt(seat)?.send(message);
-    console.log(`[room] match started: seed ${seed}, ${people.length} people + ${bots.length} bots`);
+    console.log(`[room ${this.id}] match started: seed ${seed}, ${people.length} people + ${bots.length} bots`);
     this.broadcastLobby();
   }
 
@@ -153,7 +176,7 @@ export class Room {
     this.resultsUntil = now + RESULTS_MS;
     const desyncs = [...this.seats.values()].reduce((n, s) => n + s.desyncs, 0);
     console.log(
-      `[room] match over after ${Math.round((now - this.matchStartedAt) / 1000)} s; ` +
+      `[room ${this.id}] match over after ${Math.round((now - this.matchStartedAt) / 1000)} s; ` +
         `desyncs ${desyncs}; ${this.ticks.summary()}`,
     );
   }
@@ -172,7 +195,7 @@ export class Room {
     seat.handOver(reason);
     this.match.replaceWithBot(seat.seat, NET.TAKEOVER_BOT);
     seat.player.send({ t: "kicked", reason });
-    console.log(`[room] seat ${seat.seat} (${seat.player.name}) → bot: ${reason}`);
+    console.log(`[room ${this.id}] seat ${seat.seat} (${seat.player.name}) → bot: ${reason}`);
   }
 
   private seatAt(seat: number): RemoteSeat | undefined {
@@ -200,5 +223,17 @@ export class Room {
   /** Lobby countdown, re-sent every second so clients can show it. */
   announce(): void {
     if (this.state === "lobby") this.broadcastLobby();
+  }
+
+  /** Close the room (it crashed): tell everyone why and drop them. */
+  closeAll(reason: string): void {
+    for (const player of this.players.values()) {
+      player.send({ t: "reject", reason });
+      player.close();
+    }
+    this.players.clear();
+    this.seats.clear();
+    this.match = null;
+    this.state = "lobby";
   }
 }

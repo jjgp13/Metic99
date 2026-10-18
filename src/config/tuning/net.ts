@@ -15,6 +15,11 @@ export const NET = {
   // Port of the game server (it also serves the built game).
   SERVER_PORT: 8787,
 
+  // --- Capacity (an experiment on a free server: cap, don't grow) ---
+  // Matches the server runs at once (env MAX_ROOMS overrides). Each is ~8
+  // fields at 60 Hz; past this, newcomers queue or hear "busy".
+  MAX_ROOMS: 3,
+
   // --- Lobby ---
   // Seats in a match; empty ones are filled with bots.
   SEATS: 8,

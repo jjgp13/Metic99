@@ -86,6 +86,8 @@ export class NetBattle implements BattleSource {
 
   /** Send what's new: log entries, how far we've played, fingerprints. */
   poll(): void {
+    // No reconnect yet: a lost connection ends your match here.
+    if (this.client.state === "closed" && !this.kicked) this.kicked = this.client.problem ?? "connection lost";
     const now = performance.now();
     const log = this.field.inputLog;
     const entries: WireEntry[] = [];

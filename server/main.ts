@@ -6,7 +6,8 @@ import { NET } from "../src/config/constants";
 import { parseClient, type ClientMessage } from "../src/net/protocol";
 import { Lag } from "../src/net/Lag";
 import { Player } from "./Player";
-import { Room } from "./Room";
+import type { Room } from "./Room";
+import { Rooms } from "./Rooms";
 
 /**
  * The Metic99 game server (docs/NETCODE.md, S2): one Node process that
@@ -14,7 +15,8 @@ import { Room } from "./Room";
  * 1. serves the built game (`dist/`) over HTTP, so friends open one address
  *    and the page and the WebSocket share an origin (no CORS, one TLS
  *    certificate when deployed), and
- * 2. accepts WebSocket connections on NET.WS_PATH and runs one Room.
+ * 2. accepts WebSocket connections on NET.WS_PATH and runs a few Rooms
+ *    (MAX_ROOMS, default NET.MAX_ROOMS; past that it says "busy").
  *
  * Plain `ws`, no framework (Colyseus etc. would hide rooms, state sync and
  * the protocol, which is what this project is here to learn).
@@ -22,7 +24,7 @@ import { Room } from "./Room";
  * Run: `npm run server` (dev, with `npm run dev` for the page; Vite proxies
  * /ws here) or `npm run build && npm run build:server && npm start`.
  * Env: PORT (default NET.SERVER_PORT), NET_LAG_MS / NET_JITTER_MS (fake lag,
- * S5's break-it experiment), STATIC_DIR (default dist).
+ * S5's break-it experiment), STATIC_DIR (default dist), MAX_ROOMS.
  */
 
 const PORT = Number(process.env.PORT ?? NET.SERVER_PORT);
@@ -30,7 +32,9 @@ const STATIC_DIR = resolve(process.cwd(), process.env.STATIC_DIR ?? "dist");
 /** ws-level ping every this often; a socket that missed one is closed. */
 const HEARTBEAT_MS = 10_000;
 
-const room = new Room();
+const rooms = new Rooms(Number(process.env.MAX_ROOMS ?? NET.MAX_ROOMS));
+/** The room each player who said hello is in. */
+const roomOf = new Map<Player, Room>();
 let nextId = 1;
 /** Every open socket and its player (for the heartbeat). */
 const connections = new Map<WebSocket, Player>();
@@ -96,12 +100,13 @@ function connect(ws: WebSocket): void {
         return;
       }
       if (message.t === "hello") return hello(player, message);
-      if (player.ready) room.onMessage(player, message);
+      if (player.ready) roomOf.get(player)?.onMessage(player, message);
     });
   });
   ws.on("close", () => {
     connections.delete(ws);
-    if (player.ready) room.leave(player);
+    roomOf.get(player)?.leave(player);
+    roomOf.delete(player);
     console.log(`[player ${player.id}] ${player.name || "?"} disconnected`);
   });
 }
@@ -118,7 +123,9 @@ function hello(player: Player, message: Extract<ClientMessage, { t: "hello" }>):
   player.power = message.power;
   player.ready = true;
   player.send({ t: "welcome", id: player.id });
-  room.join(player);
+  const room = rooms.place(player);
+  if (!room) return reject(player, "the server is busy (all matches full): try again in a few minutes");
+  roomOf.set(player, room);
   console.log(`[player ${player.id}] ${player.name} joined (${message.power})`);
 }
 
@@ -141,8 +148,8 @@ setInterval(() => {
 }, HEARTBEAT_MS);
 
 // The room's clock: tick often, it runs as many 60 Hz steps as real time paid for.
-setInterval(() => room.tick(), 4);
-setInterval(() => room.announce(), 1_000);
+setInterval(() => rooms.tick(), 4);
+setInterval(() => rooms.announce(), 1_000);
 
 http.listen(PORT, () => {
   const lag = Lag.fromEnv(process.env);
