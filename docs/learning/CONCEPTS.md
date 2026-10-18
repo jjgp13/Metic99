@@ -32,6 +32,13 @@ One row per concept. Add new rows at the bottom.
 | Controlled experiment | Change one variable at a time, so a difference has one cause (a recorded input log, not a live bot) | `src/lab/determinismLab.ts`, `scripts/determinism-record.ts` | testing | 2026-10-14 | NETCODE S0 step 3 |
 | Implementation-approximated math | The JS spec lets each engine compute `sin`/`exp` its own way, so results can differ in the last bit; `+ - * /` and `sqrt` are exact | `Alien.ts` gait, `difficulty.ts`; measured in `docs/NETCODE.md` | netcode | 2026-10-14 | NETCODE S0 step 3 |
 | Fitness function (guard test) | A test that checks a rule about the code itself, so a convention can't be forgotten | `src/math/detmath.test.ts` (no engine sin/exp in rules) | testing | 2026-10-15 | NETCODE S0 step 4 |
+| Client-side prediction | Your device plays your field at once; the server checks it a moment later from your inputs | `src/net/NetBattle.ts` | netcode | 2026-10-18 | NETCODE S4 |
+| Authoritative server | One side's copy decides what counts (KOs, places); the client's view is a prediction | `server/RemoteSeat.ts`, `server/Room.ts` | netcode | 2026-10-18 | NETCODE S3 |
+| Never trust the client (validation) | Rebuild every incoming message field by field; refuse what a player can't do | `parseClient` in `src/net/protocol.ts`, `RemoteSeat.receive` | security | 2026-10-18 | NETCODE S1/S3 |
+| Acknowledged delivery (seq) | Number each message; the receiver reports which one it applied and when | `NetBattle.poll`, `RemoteSeat.receive` | netcode | 2026-10-18 | NETCODE S3 |
+| Heartbeat / liveness | Ping every connection; close the ones that stop answering | `server/main.ts` heartbeat, `NET.SILENT_TAKEOVER_MS` | backend | 2026-10-18 | NETCODE S2 |
+| Message ordering (TCP) | A socket delivers in order; a fake network must too, or bugs appear that aren't real | `src/net/Lag.ts` | netcode | 2026-10-18 | NETCODE S5 |
+| Outbox | A list one part fills and another empties; not state, so not in the fingerprint | `Field.events`, `Field.outgoing`, `SKIP_KEYS` | design | 2026-10-18 | NETCODE S5 |
 | Hash / fingerprint (checksum) | A short number computed from all the data; any change gives a different one, so two copies compare cheaply | `sim/hash.ts` (FNV-1a), `sim/fingerprint.ts` | netcode | 2026-10-08 | NETCODE S0 step 2 |
 
 ## In the code, not studied yet

@@ -59,12 +59,12 @@ Design background: [`MULTIPLAYER_DESIGN.md`](MULTIPLAYER_DESIGN.md) §5
 | # | Milestone | Steps (one learning loop each) | Backend idea it maps to | Status |
 | --- | --- | --- | --- | --- |
 | S0 | Determinism spike | 1. What "same inputs, same run" means. 2. Fingerprint: a hash of the field state. 3. Phone lab `?lab=determinism`: Node vs iPhone vs Android. 4. Fix what differs and pin it with a test | Event sourcing, replica checksums | done 2026-10-15 |
-| S1 | Protocol (`src/net/protocol.ts`) | 1. Envelope, versions, build-id handshake. 2. The messages each way + validation. 3. JSON vs binary, bytes per second | API contracts, schema validation | |
-| S2 | Server skeleton | 1. WebSocket server. 2. Heartbeat and timeouts. 3. Lobby that fills seats with bots after a countdown. 4. One tick loop | Connection lifecycle, health checks | |
-| S3 | Server runs the match | 1. Remote fields fed by inputs. 2. Late and "future" inputs. 3. A player who stops sending | Queues, ordering, idempotency | |
-| S4 | Client network mode | 1. Same `BattleView`/tiles over the network. 2. Prediction of your own field. 3. Reconcile when the server's fingerprint disagrees | Optimistic updates, reconciliation | |
-| S5 | Real network | 1. Two browsers. 2. Simulated latency, jitter, loss. 3. Reconnect and resume. 4. Load test with headless bot clients (fields per core, tick p50/p99) | Chaos testing, capacity planning | |
-| S6 | Deploy | 1. Compare Fly.io, Render, a VM + Caddy. 2. TLS (`wss://`). 3. Connect the Pages build | Ops, TLS | |
+| S1 | Protocol (`src/net/protocol.ts`) | 1. Envelope, versions, build-id handshake. 2. The messages each way + validation. 3. JSON vs binary, bytes per second | API contracts, schema validation | done 2026-10-18 |
+| S2 | Server skeleton | 1. WebSocket server. 2. Heartbeat and timeouts. 3. Lobby that fills seats with bots after a countdown. 4. One tick loop | Connection lifecycle, health checks | done 2026-10-18 |
+| S3 | Server runs the match | 1. Remote fields fed by inputs. 2. Late and "future" inputs. 3. A player who stops sending | Queues, ordering, idempotency | done 2026-10-18 |
+| S4 | Client network mode | 1. Same `BattleView`/tiles over the network. 2. Prediction of your own field. 3. Reconcile when the server's fingerprint disagrees | Optimistic updates, reconciliation | done 2026-10-18 (no rollback needed: see decisions) |
+| S5 | Real network | 1. Two browsers. 2. Simulated latency, jitter, loss. 3. Reconnect and resume. 4. Load test with headless bot clients (fields per core, tick p50/p99) | Chaos testing, capacity planning | done 2026-10-18 (no reconnect yet) |
+| S6 | Deploy | 1. Compare Fly.io, Render, a VM + Caddy. 2. TLS (`wss://`). 3. Connect the Pages build | Ops, TLS | Dockerfile ready; the host is the owner's pick (an account) |
 
 ### S0 brief (from the owner)
 
@@ -91,6 +91,21 @@ A first draft of a fix exists but is set aside so the owner designs first:
 `git stash list` → "S0 draft: detmath.ts". Open it only after step 4's
 design.
 
+## Playing online (the demo)
+
+- **On your Wi-Fi:** `npm run build && npm run build:server && npm start`,
+  then friends on the same Wi-Fi open `http://<this PC's IP>:8787` →
+  ONLINE. (Dev instead: `npm run server` + `npm run dev`; Vite proxies
+  `/ws`.) Empty seats are bots; START NOW or wait 30 s.
+- **Over the internet:** deploy the `Dockerfile` to a container host
+  (Fly.io, Render, Railway…): one URL, TLS from the host (`wss://`). Or a
+  quick tunnel from this PC (e.g. Cloudflare's `cloudflared tunnel --url
+  http://localhost:8787`) for an evening with friends.
+- **Test without friends:** `npm run net:bots -- --clients 7` joins 7 bot
+  clients; add `--lag 120 --jitter 80` for a bad network, `--go` to start.
+- Client and server must be the same build (the hello checks it): restart
+  `npm run server` after pulling or committing.
+
 ## Starting a milestone chat
 
 Open a new chat in this repo and paste (change the milestone):
@@ -110,6 +125,34 @@ measurements, glossary), and leave the owner's summary section ready.
 ## Journal
 
 ### Decisions
+
+- **2026-10-18 — S1–S5: how online play works (built in one push, owner's
+  "continue until playable").**
+  - **The client never sends state, only inputs** tagged with their step,
+    plus how far it has played (`upTo`) and a fingerprint every second.
+    The server's copy of each person's field (`server/RemoteSeat.ts`)
+    advances only from those, so it knows the field without trusting it.
+  - **Messages to a field take a round trip:** the server numbers them
+    (seq); the device applies each at its next step and reports "seq N at
+    step S"; the copy applies the server's own copy at S. The device picks
+    the step, so prediction is never wrong and nothing ever rolls back
+    (S4's "reconcile" isn't needed; a fingerprint mismatch is reported as
+    a desync, a bug). Rejected: the server picking a future step (the
+    device may already be past it → rollback machinery).
+  - **What the server refuses** (and then hands the seat to a bot): steps
+    backwards, steps ahead of real time (speed hack), message reports out
+    of order or later than 180 of the device's steps (dodging attacks),
+    5 s of silence (closed tab, dead phone). Inputs are rebuilt by
+    `parseClient`; a SEND without energy does nothing in the copy.
+  - **JSON, 10 Hz tiles:** ~3.7 KB per tiles message → ~36 KB/s down per
+    player, ~1 KB/s up. Fine for phones; binary or deltas later if needed.
+  - **One Node process serves the game and the socket** (same origin: no
+    CORS, one TLS certificate). Plain `ws`, one room; matchmaking and many
+    rooms are phase 3.
+  - **Online, no pause** (your field would stop while attacks wait), and a
+    hidden tab stops your field: after 5 s a bot takes over.
+  - **Not built:** reconnect/resume (a dropped player is replaced by a
+    bot), several rooms, accounts.
 
 - **2026-10-15 — S0 step 4: the rules use our own sin/cos/exp (owner
   picked A).** fdlibm ports written with exact operations only
@@ -191,6 +234,17 @@ replays them and re-asks every `Math.sin`/`Math.exp` input the rules used.
   run on Node. The guard test then found `** 3` in the glide easing (pow):
   replaced by multiplications, a last-bit rule change on Node (recording
   re-made; golden master unchanged at 3 decimals).
+- **2026-10-18 — Online, 8 bot clients on one PC:** first match 324
+  desyncs, all from the fingerprint covering the `outgoing` outbox (the
+  server's match empties a copy's outbox, the device never does): now
+  skipped like `events`, 0 desyncs since. Server step p50 0.12–0.19 ms,
+  p99 0.9–1.6 ms (budget 16.7 ms). Break-it with `--lag 80 --jitter 40`:
+  5 of 8 kicked ("step went backwards", "didn't apply a message in time")
+  because the fake-lag helper reordered messages (one setTimeout each);
+  with one ordered queue, `--lag 120 --jitter 80` (RTT 300–380 ms): 0
+  kicked, 0 desyncs, places 1–8.
+- **2026-10-18 — Browser + 3 bot clients + 4 server bots:** the lobby,
+  START NOW, the dock and the game run online in the dev build.
 - _Not measured: iPhone (JavaScriptCore). No faithful way on Windows; with
   the rules on exact operations only it should match by construction —
   open the lab on an iPhone when one is around._
@@ -208,6 +262,13 @@ backend idea it maps to._
 | Fingerprint | 8-hex hash of the whole field state (`fingerprint(field)`) | Replica checksum, ETag |
 | Checkpoint | A fingerprint taken every 60 steps during a replay | Periodic consistency check |
 | Recording | Inputs + Node's fingerprints + Node's Math answers, replayed by the lab | Golden dataset / contract test fixture |
+| Prediction | Your field runs on your device at once; the server checks it later | Optimistic update |
+| Authoritative server | The server's copy decides KOs, attacks and places | Source of truth / system of record |
+| Remote seat | The server's copy of one person's field, fed by their inputs | Replica fed by a change stream |
+| seq / message report | Numbered server→field messages, applied by the device and reported back | Acknowledged delivery, idempotency key |
+| Heartbeat | ws ping every 10 s; a socket that misses one is closed | Health check / liveness probe |
+| Takeover | A bot plays on for a person who left or misbehaved | Failover |
+| Outbox | A list a component fills for someone else to empty (`events`, `outgoing`) | Transactional outbox |
 | Guard test | A test that scans the rule files for engine math (`math/detmath.test.ts`) | Architecture fitness function / lint rule |
 | fdlibm | Sun's portable math library; our `sin`/`exp` are ports of it using exact ops only | A pinned, vendored dependency instead of the platform's |
 | Last bit (ulp) | The smallest step between two floats; engines may round `sin`/`exp` one ulp apart | Floating-point non-determinism across platforms |
