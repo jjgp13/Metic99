@@ -204,7 +204,7 @@ docs/learning/        The owner's learning: HOW_WE_LEARN.md (the science),
 .claude/skills/explain-change/  How Claude explains every change
 docs/ART_SPEC.md      3D art style, budgets, axes, pipeline
 docs/MULTIPLAYER_DESIGN.md  Battle-royale design: energy, attacks, backend plan
-docs/SOLO_MODES_DESIGN.md   Story mode plan: 10 levels + bosses, Endless (draft)
+docs/SOLO_MODES_DESIGN.md   Story mode plan: 10 scrolling levels + bosses, Endless
   env.d.ts            Types for Vite `import.meta.env` (Supabase env vars)
 ```
 
@@ -797,7 +797,8 @@ dMatch)`; it is 0 in solo play.
 
 14. [ ] **Solo modes: STORY + ENDLESS** — 10 notebook-page levels, each
        with a new monster and a boss; today's game becomes ENDLESS. Plan
-       and open questions: `docs/SOLO_MODES_DESIGN.md` (draft, 2026-10-18).
+       and milestones L1–L8: `docs/SOLO_MODES_DESIGN.md` (decided
+       2026-10-18; first slice = L1–L4, level 1 with its boss).
 
 ## Conventions
 
@@ -829,6 +830,16 @@ dMatch)`; it is 0 in solo play.
 ## Decision Log
 
 Newest first. Format: `YYYY-MM-DD — decision — rationale`.
+
+- **2026-10-18 — Story mode decided (docs/SOLO_MODES_DESIGN.md).** 10
+  levels, a kid's imagined nature worlds (dirt, pond, treetops, swamp,
+  cave, volcano, sky, snow, night sky, bedroom), each a scrolling page that
+  ends at a boss (path = timer, 3–4 min: fairer than a kill quota, which can
+  stall slow players). Arcade rules (owner): lives carry over, game over =
+  back to level 1. Power picked before each level; ships stay looks. Sums
+  only in levels 1–2, then more operations and 4+ ball sums. Scores per
+  level and per run. Today's PLAY becomes ENDLESS. Open: practice mode,
+  story panels between levels.
 
 - **2026-10-18 — Art direction: pencil doodles on notebook paper (owner's
   pick of two prototypes).** Built both side by side: A = the 3D models
