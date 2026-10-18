@@ -25,6 +25,8 @@ One row per concept. Add new rows at the bottom.
 | Barrel module | A file that only re-exports others | `config/constants.ts` | code style | 2026-10-08 | readability refactor |
 | Design tokens | Named colors/sizes used instead of raw values | `config/palette.ts` | code style | 2026-10-08 | readability refactor |
 | Single writer | Each piece of shared state has exactly one owner that changes it | `CONCEPTS.md` vs `REVIEWS.md`; `Field.apply` is the only way to change a field | design | 2026-10-08 | quiz setup |
+| Interface with two implementations | Callers depend on what a part can do, so another part can stand in for it | `FieldView` (`scenes/fieldView.ts`): World3D or DoodleWorld | design | 2026-10-18 | doodle art prototype |
+| Pre-rendering (cache) | Draw an expensive picture once, then copy it every frame | `drawFrames` (`renderDoodle/pencil.ts`), the boil frames | game dev | 2026-10-18 | doodle art prototype |
 
 ## In the code, not studied yet
 

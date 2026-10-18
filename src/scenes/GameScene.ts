@@ -1,10 +1,8 @@
 import Phaser from "phaser";
 import { MATCH, TARGET_STRATEGIES, type TargetStrategy } from "../config/constants";
 import { inputMode } from "../config/inputMode";
-import { selectedShip } from "../config/ships";
 import type { InkEvent } from "../handwriting/inkReader";
 import type Alien from "../objects/Alien";
-import World3D, { getWorld3D } from "../render3d/World3D";
 import { isLeaderboardEnabled, startMatch } from "../services/leaderboard";
 import { rankFor, recordRun } from "../services/masteryStats";
 import { hitRecord, initPlaytestLog, logRun, type InputSource, type RunExtras } from "../services/playtestLog";
@@ -26,6 +24,7 @@ import { Reticle } from "../ui/hud/Reticle";
 import { SendButton } from "../ui/hud/SendButton";
 import { TopHud } from "../ui/hud/TopHud";
 import { onKeyDown } from "../ui/keyboard";
+import { createFieldView, type FieldView } from "./fieldView";
 import { setUpRun } from "./runSetup";
 
 /**
@@ -37,10 +36,11 @@ import { setUpRun } from "./runSetup";
  * - the rules live in `Field` (sim/, no Phaser) and change only through
  *   `field.apply(input)` and `field.step()`;
  * - the HUD is made of components in ui/hud/, each owning its own objects;
- * - the playfield is drawn in 3D by World3D from a snapshot each frame.
+ * - the playfield is drawn from a snapshot each frame by a FieldView: in 3D
+ *   by World3D, or in pencil by DoodleWorld (`?art=doodle`).
  *
  * Each frame: run the rules in fixed steps (SimClock), turn what happened
- * (field events) into sound and pops, let the HUD read the field, draw 3D.
+ * (field events) into sound and pops, let the HUD read the field, draw the field.
  */
 export default class GameScene extends Phaser.Scene {
   // --- The run (rebuilt in create(): Phaser reuses the scene object) ---
@@ -60,7 +60,7 @@ export default class GameScene extends Phaser.Scene {
   private newHighScore = false;
 
   // --- The screen ---
-  private world!: World3D;
+  private world!: FieldView;
   private topHud!: TopHud;
   private popups!: Popups;
   private ducker!: Ducker;
@@ -113,9 +113,8 @@ export default class GameScene extends Phaser.Scene {
 
   /** Build every part of the screen, back to front. */
   private buildScreen(): void {
-    // The 3D playfield renders on its own canvas under Phaser's.
-    this.world = getWorld3D();
-    this.world.begin(this.textures, this.game.canvas, selectedShip().model);
+    // The playfield renders on its own canvas under Phaser's.
+    this.world = createFieldView(this);
 
     this.ducker = new Ducker(this);
     this.topHud = new TopHud(this, this.ducker, {
@@ -146,7 +145,7 @@ export default class GameScene extends Phaser.Scene {
   }
 
   update(time: number, delta: number): void {
-    // Pause and game over freeze the rules, but the 3D view keeps rendering
+    // Pause and game over freeze the rules, but the field view keeps rendering
     // (stars drift, the last explosion finishes, pause hides the aliens).
     if (!this.paused && !this.gameOver) {
       this.clock.advance(delta, () => this.step());
@@ -176,7 +175,8 @@ export default class GameScene extends Phaser.Scene {
     const f = this.field;
     this.topHud.setDifficulty(f.difficulty.d);
     this.answer.refresh(f);
-    this.reticle.update(f.target?.active ? f.target : null, this.clock.alpha, delta);
+    const target = f.target?.active && !this.world.drawsTarget ? f.target : null;
+    this.reticle.update(target, this.clock.alpha, delta);
     this.ducker.update(f.aliens, this.clock.alpha, delta);
     this.energyHud.update(f);
     this.sendButton?.update();
@@ -196,7 +196,7 @@ export default class GameScene extends Phaser.Scene {
     for (const view of this.battleViews) view.update(frame);
   }
 
-  /** Draw the 3D field `alpha` of the way between the last two steps. */
+  /** Draw the field `alpha` of the way between the last two steps. */
   private renderWorld(time: number, delta: number): void {
     const f = this.field;
     const alpha = this.clock.alpha;
@@ -211,6 +211,7 @@ export default class GameScene extends Phaser.Scene {
         aliensHidden: this.paused,
         shipShield: f.power.shieldArmed,
         answer: hidden ? null : this.answer.view,
+        target: !hidden && f.target?.active ? f.target : null,
       },
       time,
       delta,
@@ -280,7 +281,7 @@ export default class GameScene extends Phaser.Scene {
     this.world.explode(alien.x, alien.y, alien);
   }
 
-  /** Shake the HUD camera and the 3D view together. */
+  /** Shake the HUD camera and the field view together. */
   private shake(durationMs: number, intensity: number): void {
     this.cameras.main.shake(durationMs, intensity);
     this.world.shake(durationMs, intensity);

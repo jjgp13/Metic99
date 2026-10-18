@@ -7,7 +7,10 @@ import GameScene from "./scenes/GameScene";
 import NameEntryScene from "./scenes/NameEntryScene";
 import LeaderboardScene from "./scenes/LeaderboardScene";
 import HandwritingLabScene from "./scenes/HandwritingLabScene";
+import { artMode } from "./config/artMode";
+import { DOODLE } from "./config/constants";
 import { getWorld3D } from "./render3d/World3D";
+import { loadDoodleFont } from "./renderDoodle/font";
 
 /**
  * Phaser entry point.
@@ -48,7 +51,17 @@ const config: Phaser.Types.Core.GameConfig = {
   ],
 };
 
-const game = new Phaser.Game(config);
+function startGame(): void {
+  const game = new Phaser.Game(config);
+  // Dev-only console handle for inspecting the running game (stripped from builds).
+  if (import.meta.env.DEV) Object.assign(window, { __metic: { game, world: getWorld3D } });
+}
 
-// Dev-only console handle for inspecting the running game (stripped from builds).
-if (import.meta.env.DEV) Object.assign(window, { __metic: { game, world: getWorld3D } });
+// The doodle art (`?art=doodle`) needs its handwriting font before any text
+// is drawn, and puts the menus on paper too.
+if (artMode() === "doodle") {
+  document.body.style.background = DOODLE.PAPER;
+  void loadDoodleFont().then(startGame);
+} else {
+  startGame();
+}
