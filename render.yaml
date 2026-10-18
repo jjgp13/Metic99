@@ -1,0 +1,13 @@
+# Render Blueprint (docs/NETCODE.md, S6): one web service built from the
+# Dockerfile. Render gives it an https:// address and passes WebSockets
+# through (wss://), sets PORT, and checks /health before sending traffic.
+# Free plan: the service sleeps after ~15 min without visitors and takes
+# about a minute to wake on the next visit.
+services:
+  - type: web
+    name: metic99
+    runtime: docker
+    plan: free
+    branch: claude/netcode-s0-determinism
+    healthCheckPath: /health
+    autoDeploy: true
