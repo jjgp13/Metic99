@@ -59,4 +59,6 @@ export const BULLET = {
 export const RECOVERY = {
   FREEZE_MS: 3000, // field is completely frozen for this long after a hit
   POST_HIT_FACTOR: 0.8, // field speed multiplier once movement resumes
+  // Presentation only: the ship's destruction plays before GAME OVER shows.
+  GAME_OVER_DELAY_MS: 1600,
 } as const;

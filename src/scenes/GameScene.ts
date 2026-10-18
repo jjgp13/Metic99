@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { MATCH, TARGET_STRATEGIES, type TargetStrategy } from "../config/constants";
+import { MATCH, RECOVERY, TARGET_STRATEGIES, type TargetStrategy } from "../config/constants";
 import { inputMode } from "../config/inputMode";
 import type { InkEvent } from "../handwriting/inkReader";
 import type Alien from "../objects/Alien";
@@ -210,6 +210,8 @@ export default class GameScene extends Phaser.Scene {
         alpha,
         aliensHidden: this.paused,
         shipShield: f.power.shieldArmed,
+        shipHurt: Math.min(1, f.freezeLeftMs / RECOVERY.FREEZE_MS),
+        shipDown: f.knockedOut,
         answer: hidden ? null : this.answer.view,
         target: !hidden && f.target?.active ? f.target : null,
       },
@@ -271,7 +273,8 @@ export default class GameScene extends Phaser.Scene {
         this.shake(150, 0.01);
         break;
       case "knockedOut":
-        this.endGame();
+        // Let the ship's destruction play before GAME OVER covers the field.
+        this.time.delayedCall(RECOVERY.GAME_OVER_DELAY_MS, () => this.endGame());
         break;
     }
   }

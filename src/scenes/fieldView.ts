@@ -34,7 +34,7 @@ export interface FieldView {
 export function createFieldView(scene: Phaser.Scene): FieldView {
   if (artMode() === "doodle") {
     const doodle = getDoodleWorld();
-    doodle.begin(scene.game.canvas);
+    doodle.begin(scene.game.canvas, selectedShip().model);
     return doodle;
   }
   const world = getWorld3D();

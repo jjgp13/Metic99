@@ -27,6 +27,8 @@ One row per concept. Add new rows at the bottom.
 | Single writer | Each piece of shared state has exactly one owner that changes it | `CONCEPTS.md` vs `REVIEWS.md`; `Field.apply` is the only way to change a field | design | 2026-10-08 | quiz setup |
 | Interface with two implementations | Callers depend on what a part can do, so another part can stand in for it | `FieldView` (`scenes/fieldView.ts`): World3D or DoodleWorld | design | 2026-10-18 | doodle art prototype |
 | Pre-rendering (cache) | Draw an expensive picture once, then copy it every frame | `drawFrames` (`renderDoodle/pencil.ts`), the boil frames | game dev | 2026-10-18 | doodle art prototype |
+| Edge detection (state change) | Notice the moment something happens by comparing a value with last frame's, so the view needs no new event | `DoodleWorld.drawShip`: `shipHurt` jumps up = a hit | game dev | 2026-10-18 | ship doodles + hit animation |
+| Presentation delay | Let an animation play before the next screen, without slowing the rules | `RECOVERY.GAME_OVER_DELAY_MS` + `time.delayedCall` in `GameScene` | game dev | 2026-10-18 | ship doodles + hit animation |
 
 ## In the code, not studied yet
 

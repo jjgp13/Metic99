@@ -1,11 +1,13 @@
 import Phaser from "phaser";
-import { GAME, POWERS, POWER_KINDS, RENDER3D } from "../config/constants";
+import { DOODLE, GAME, POWERS, POWER_KINDS, RENDER3D } from "../config/constants";
+import { artMode } from "../config/artMode";
 import { selectPower, selectedPower } from "../config/powers";
 import { selectShip, selectedShip } from "../config/ships";
 import { storedHighScore } from "../services/masteryStats";
 import { onKeyDown } from "../ui/keyboard";
 import { PALETTE, css } from "../config/palette";
 import { textStyle } from "../ui/theme";
+import { shipIconFrames } from "../renderDoodle/shipIcons";
 
 /**
  * Title / main menu. The first scene the player sees: a ship picker (a look
@@ -69,15 +71,37 @@ export default class MenuScene extends Phaser.Scene {
   private makeShipPicker(x: number, y: number): void {
     const ships = RENDER3D.SHIPS;
     let index = ships.indexOf(selectedShip());
-    const icon = this.add.image(x, y, `icon:${ships[index].model}`).setDisplaySize(96, 96);
+    const icon = this.add.image(x, y, `icon:${ships[index].model}`);
     const name = this.add
       .text(x, y + 58, ships[index].name, textStyle(18, PALETTE.GOLD))
       .setOrigin(0.5);
 
+    // Doodle art: the ship's own doodle, drawn at 2× for a sharp picture and
+    // flipping through its boil frames like in play. 3D art: the model's icon.
+    const doodle = artMode() === "doodle";
+    let frame = 0;
+    const show = () => {
+      const model = ships[index].model;
+      if (!doodle) return icon.setTexture(`icon:${model}`).setDisplaySize(96, 96);
+      const keys = shipIconFrames(this.textures, model, 192);
+      icon.setTexture(keys[frame % keys.length]).setScale(0.5);
+    };
+    show();
+    if (doodle) {
+      this.time.addEvent({
+        delay: 1000 / DOODLE.BOIL_FPS,
+        loop: true,
+        callback: () => {
+          frame++;
+          show();
+        },
+      });
+    }
+
     const step = (dir: number) => {
       index = (index + dir + ships.length) % ships.length;
       selectShip(ships[index]);
-      icon.setTexture(`icon:${ships[index].model}`).setDisplaySize(96, 96);
+      show();
       name.setText(ships[index].name);
       this.sound.play("blip", { volume: 0.4 });
     };

@@ -22,22 +22,28 @@ function eyes(p: Pencil, dx: number, y: number, size: number): void {
   }
 }
 
-export const SHIP: DoodleRecipe = {
+/** Engine flames under a ship; they flicker as the boil frames go round. */
+function flames(p: Pencil, t: number, xs: number[], y: number): void {
+  xs.forEach((x, i) => {
+    const len = 7 + 4 * Math.abs(Math.sin(TAU * t * 2 + i));
+    p.curve(
+      [
+        [x, y],
+        [x + 2, y + 2 + len / 2],
+        [x, y + 2 + len],
+      ],
+      { stroke: INK.flame, strokeWidth: 1.6 },
+    );
+  });
+}
+
+/** FALCON: a fat hull with swept wings and a round canopy. */
+export const FALCON: DoodleRecipe = {
   w: 48,
   h: 52,
   draw(p, t) {
-    // Flames first, so the hull covers their roots; they flicker every frame.
-    for (const side of [-1, 1]) {
-      const len = 7 + 4 * Math.abs(Math.sin(TAU * t * 2 + side));
-      p.curve(
-        [
-          [side * 5, 11],
-          [side * 5 + 2, 13 + len / 2],
-          [side * 5, 13 + len],
-        ],
-        { stroke: INK.darter, strokeWidth: 1.6 },
-      );
-    }
+    // Flames first, so the hull covers their roots.
+    flames(p, t, [-5, 5], 11);
     for (const side of [-1, 1]) {
       const wing: Point[] = [
         [6, -2],
@@ -45,7 +51,7 @@ export const SHIP: DoodleRecipe = {
         [18, 14],
         [6, 9],
       ];
-      p.shape(side > 0 ? wing : mirror(wing), INK.ship);
+      p.shape(side > 0 ? wing : mirror(wing), INK.falcon);
     }
     p.shape(
       [
@@ -56,10 +62,81 @@ export const SHIP: DoodleRecipe = {
         [-7, 9],
         [-6, -7],
       ],
-      INK.ship,
+      INK.falcon,
       { hachureAngle: 50 },
     );
-    p.ellipse(0, -5, 6, 10, undefined, { stroke: INK.swooper, strokeWidth: 1.4 });
+    p.ellipse(0, -5, 6, 10, undefined, { stroke: INK.canopy, strokeWidth: 1.4 });
+  },
+};
+
+/** DART: a long thin needle on a wide delta wing, one engine. */
+export const DART: DoodleRecipe = {
+  w: 50,
+  h: 62,
+  draw(p, t) {
+    flames(p, t, [0], 15);
+    const delta: Point[] = [
+      [0, -10],
+      [21, 13],
+      [14, 15],
+      [0, 10],
+    ];
+    for (const side of [-1, 1]) p.shape(side > 0 ? delta : mirror(delta), INK.dart, { hachureAngle: 20 });
+    p.shape(
+      [
+        [0, -27],
+        [4, -12],
+        [4, 15],
+        [-4, 15],
+        [-4, -12],
+      ],
+      INK.dart,
+      { hachureAngle: 70 },
+    );
+    for (const side of [-1, 1]) p.line(side * 16, 13, side * 18, 3, { strokeWidth: 1.2 }); // wingtip fins
+    p.ellipse(0, -12, 4, 9, undefined, { stroke: INK.canopy, strokeWidth: 1.3 });
+  },
+};
+
+/** POD: a round chunky saucer with two side pods and a bubble canopy. */
+export const POD: DoodleRecipe = {
+  w: 58,
+  h: 52,
+  draw(p, t) {
+    flames(p, t, [-18, 18], 13);
+    for (const side of [-1, 1]) p.ellipse(side * 18, 3, 12, 20, INK.pod, { hachureAngle: 30 });
+    p.circle(0, 0, 32, INK.pod, { hachureAngle: -60 });
+    p.circle(0, -2, 15, DOODLE.PAPER, { fillStyle: "solid", stroke: INK.canopy, strokeWidth: 1.4 });
+    p.curve(
+      [
+        [-4, -5],
+        [-2, -7],
+        [1, -7.5],
+      ],
+      { strokeWidth: 0.9 },
+    ); // a glint on the canopy
+  },
+};
+
+/** The player's ships by model name (RENDER3D.SHIPS). */
+export const SHIPS: Record<string, DoodleRecipe> = {
+  ship_player: FALCON,
+  ship_dart: DART,
+  ship_pod: POD,
+};
+
+/** A cartoon star circling a dazed ship after a hit. */
+export const DIZZY_STAR: DoodleRecipe = {
+  w: 16,
+  h: 16,
+  draw(p) {
+    const star: Point[] = [];
+    for (let i = 0; i < 10; i++) {
+      const a = -Math.PI / 2 + (i / 10) * TAU;
+      const r = i % 2 ? 2.6 : 6;
+      star.push([Math.cos(a) * r, Math.sin(a) * r]);
+    }
+    p.shape(star, DOODLE.TARGET, { fillStyle: "solid", strokeWidth: 1, roughness: 0.6 });
   },
 };
 

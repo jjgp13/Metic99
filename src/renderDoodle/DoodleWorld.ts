@@ -1,7 +1,7 @@
 import rough from "roughjs";
 import type { RoughCanvas } from "roughjs/bin/canvas";
 import type { Drawable } from "roughjs/bin/core";
-import { DOODLE, ENEMY, GAME, MODEL_BOXES, PLAYER } from "../config/constants";
+import { DOODLE, ENEMY, GAME, MODEL_BOXES, PLAYER, RECOVERY } from "../config/constants";
 import type Alien from "../objects/Alien";
 import { Shielded } from "../objects/abilities";
 import type { AnswerView, InkPoint } from "../render3d/AnswerStars";
@@ -22,14 +22,34 @@ interface AlienLook {
   popLeft: number;
 }
 
-/** A scribble burst where an alien died. */
+/** A scribble burst where an alien died (or the ship blew up). */
 interface Burst {
   x: number;
   y: number;
+  radius: number;
   age: number;
   shapes: Drawable[];
   word: string;
   specks: { x: number; y: number; vx: number; vy: number }[];
+}
+
+/** A word written next to the ship when it's hit ("ouch!"), floating up. */
+interface ShipWord {
+  text: string;
+  x: number;
+  age: number;
+}
+
+/** One half of the destroyed ship, tumbling off the page. */
+interface ShipPiece {
+  /** -1 = left half, +1 = right half. */
+  side: number;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  angle: number;
+  spin: number;
 }
 
 /** The answer that was just solved, fading out with a tick. */
@@ -81,6 +101,13 @@ export default class DoodleWorld {
   private target: Alien | null = null;
   private targetAge = 0;
   private shipTilt = 0;
+  private shipModel = "ship_player";
+  /** Last frame's `shipHurt`, to notice the moment of a hit. */
+  private lastHurt = 0;
+  private kickLeft = 0;
+  private shipWords: ShipWord[] = [];
+  /** Set once the ship is destroyed: its halves, and how long ago. */
+  private wreck: { pieces: ShipPiece[]; age: number } | null = null;
   private shakeLeft = 0;
   private shakeIntensity = 0;
 
@@ -97,8 +124,13 @@ export default class DoodleWorld {
   }
 
   /** Start drawing a run, aligned under Phaser's canvas. */
-  public begin(phaserCanvas: HTMLCanvasElement): void {
+  public begin(phaserCanvas: HTMLCanvasElement, shipModel: string): void {
     this.phaserCanvas = phaserCanvas;
+    this.shipModel = shipModel;
+    this.lastHurt = 0;
+    this.kickLeft = 0;
+    this.shipWords = [];
+    this.wreck = null;
     this.looks.clear();
     this.bursts = [];
     this.solved = null;
@@ -136,16 +168,20 @@ export default class DoodleWorld {
     this.drawAliens(aliens, s.alpha, boil, delta);
     this.drawTarget(s, boil, delta);
     this.drawBullets(s, boil);
-    this.drawShip(s, boil, delta);
+    this.drawShip(s, time, boil, delta);
     this.drawBursts(delta);
+    this.drawShipWords(delta);
     for (const a of aliens) this.drawBalls(a, s.alpha, boil, delta);
   }
 
   /** Burst into a pencil scribble at logical (x, y). */
   public explode(x: number, y: number, alien?: Alien): void {
     const ink = alien ? this.inkFor(alien) : DOODLE.INK.darter;
+    this.addBurst(x, y, ink, DOODLE.BURST_RADIUS, DOODLE.BURST_WORDS);
+  }
+
+  private addBurst(x: number, y: number, ink: string, r: number, words: readonly string[]): void {
     const gen = this.rc.generator;
-    const r = DOODLE.BURST_RADIUS;
     const star: Point[] = [];
     const spin = Math.random() * Math.PI;
     for (let i = 0; i < 16; i++) {
@@ -181,8 +217,7 @@ export default class DoodleWorld {
       const v = 60 + Math.random() * 120;
       return { x: 0, y: 0, vx: Math.cos(a) * v, vy: Math.sin(a) * v };
     });
-    const words = DOODLE.BURST_WORDS;
-    this.bursts.push({ x, y, age: 0, shapes, word: words[Math.floor(Math.random() * words.length)], specks });
+    this.bursts.push({ x, y, radius: r, age: 0, shapes, word: pick(words), specks });
   }
 
   public answerSolved(text: string): void {
@@ -314,17 +349,114 @@ export default class DoodleWorld {
     }
   }
 
-  private drawShip(s: WorldSnapshot, boil: number, delta: number): void {
+  /**
+   * The ship: leaning toward its target; knocked down, blinking and dazed
+   * (stars circling) while the field is frozen after a hit; snapped in two
+   * once the last life is gone.
+   */
+  private drawShip(s: WorldSnapshot, time: number, boil: number, delta: number): void {
+    if (s.shipDown) return this.drawWreck(s.shipX, delta);
+    if (s.shipHurt > this.lastHurt + 0.01) this.onShipHit(s.shipX);
+    this.lastHurt = s.shipHurt;
+
     const lean =
       s.shipTargetX === null ? 0 : Math.max(-1, Math.min(1, (s.shipTargetX - s.shipX) / 60)) * 0.25;
     this.shipTilt += (lean - this.shipTilt) * Math.min(1, (delta / 1000) * 10);
+    this.kickLeft = Math.max(0, this.kickLeft - delta);
+    // Knocked down at once, then springs back (ease out).
+    const kick = DOODLE.HURT_KICK_PX * (this.kickLeft / DOODLE.HURT_KICK_MS) ** 2;
+    const blinkOff = s.shipHurt > 0 && Math.floor((time / 1000) * DOODLE.HURT_BLINK_HZ * 2) % 2 === 1;
+
     const ctx = this.ctx;
     ctx.save();
-    ctx.translate(s.shipX, PLAYER.Y);
-    ctx.rotate(this.shipTilt);
-    this.drawSprite("ship", () => R.SHIP, boil);
+    ctx.globalAlpha = blinkOff ? 0.3 : 1;
+    ctx.translate(s.shipX, PLAYER.Y + kick);
+    ctx.rotate(this.shipTilt + (kick / DOODLE.HURT_KICK_PX) * 0.3);
+    this.drawSprite(this.shipKey(), () => this.shipRecipe(), boil);
     ctx.restore();
+    if (s.shipHurt > 0) this.drawDizzy(s.shipX, time, s.shipHurt, boil);
     if (s.shipShield) this.drawAt("shipShield", () => R.loop(52, 52, DOODLE.SHIP_SHIELD, 2.2), boil, s.shipX, PLAYER.Y);
+  }
+
+  private onShipHit(x: number): void {
+    this.kickLeft = DOODLE.HURT_KICK_MS;
+    this.shipWords.push({ text: pick(DOODLE.HURT_WORDS), x: x + 26, age: 0 });
+  }
+
+  /** Cartoon stars circling above the dazed ship; they fade out at the end. */
+  private drawDizzy(x: number, time: number, hurt: number, boil: number): void {
+    const ctx = this.ctx;
+    const n = DOODLE.DIZZY_STARS;
+    const turn = (time / 1000) * DOODLE.DIZZY_TURNS_PER_S * Math.PI * 2;
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, hurt * 5);
+    for (let i = 0; i < n; i++) {
+      const a = turn + (i / n) * Math.PI * 2;
+      const sx = x + Math.cos(a) * DOODLE.DIZZY_RADIUS;
+      const sy = PLAYER.Y - 30 + Math.sin(a) * DOODLE.DIZZY_RADIUS * 0.3;
+      this.drawAt("dizzy", () => R.DIZZY_STAR, boil + i, sx, sy);
+    }
+    ctx.restore();
+  }
+
+  /** The destroyed ship: a big burst, then its two halves tumble down. */
+  private drawWreck(x: number, delta: number): void {
+    if (!this.wreck) {
+      this.addBurst(x, PLAYER.Y, DOODLE.INK.flame, DOODLE.DOWN_BURST_RADIUS, DOODLE.DOWN_WORDS);
+      this.shake(400, 0.02);
+      const v = DOODLE.DOWN_PIECE_SPEED;
+      this.wreck = {
+        age: 0,
+        pieces: [-1, 1].map((side) => ({
+          side,
+          x,
+          y: PLAYER.Y,
+          vx: side * v * (0.8 + Math.random() * 0.4),
+          vy: -v * (1 + Math.random() * 0.5),
+          angle: this.shipTilt,
+          spin: side * DOODLE.DOWN_PIECE_SPIN * (0.7 + Math.random() * 0.6),
+        })),
+      };
+    }
+    const w = this.wreck;
+    const dt = delta / 1000;
+    w.age += delta;
+    const recipe = this.shipRecipe();
+    const ctx = this.ctx;
+    for (const p of w.pieces) {
+      p.vy += DOODLE.DOWN_GRAVITY * dt;
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.angle += p.spin * dt;
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, 1 - w.age / RECOVERY.GAME_OVER_DELAY_MS);
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.angle);
+      // Keep only this piece's half of the doodle.
+      ctx.beginPath();
+      ctx.rect(p.side < 0 ? -recipe.w / 2 : 0, -recipe.h / 2, recipe.w / 2, recipe.h);
+      ctx.clip();
+      this.drawSprite(this.shipKey(), () => recipe, 0);
+      ctx.restore();
+    }
+  }
+
+  /** "ouch!" next to the ship, floating up and fading. */
+  private drawShipWords(delta: number): void {
+    const ctx = this.ctx;
+    const life = DOODLE.BURST_MS * 1.5;
+    ctx.font = `22px "${DOODLE.FONT}", cursive`;
+    ctx.textAlign = "center";
+    ctx.fillStyle = DOODLE.ANSWER_COLOR.wrong;
+    for (const w of this.shipWords) {
+      w.age += delta;
+      const k = w.age / life;
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, 1 - k);
+      ctx.fillText(w.text, w.x, PLAYER.Y - 26 - 24 * k);
+      ctx.restore();
+    }
+    this.shipWords = this.shipWords.filter((w) => w.age < life);
   }
 
   /** The typed answer, written big and faint on the paper behind the field. */
@@ -400,7 +532,7 @@ export default class DoodleWorld {
       }
       ctx.font = `18px "${DOODLE.FONT}", cursive`;
       ctx.textAlign = "center";
-      ctx.fillText(b.word, 0, -DOODLE.BURST_RADIUS * grow - 10 - 10 * k);
+      ctx.fillText(b.word, 0, -b.radius * grow - 10 - 10 * k);
       ctx.restore();
     }
     this.bursts = this.bursts.filter((b) => b.age < DOODLE.BURST_MS);
@@ -428,6 +560,14 @@ export default class DoodleWorld {
     this.ctx.translate(x, y);
     this.drawSprite(key, recipe, tick);
     this.ctx.restore();
+  }
+
+  private shipKey(): string {
+    return `ship:${this.shipModel}`;
+  }
+
+  private shipRecipe(): DoodleRecipe {
+    return R.SHIPS[this.shipModel] ?? R.FALCON;
   }
 
   private alienKey(a: Alien): string {
@@ -476,6 +616,8 @@ export default class DoodleWorld {
     }
   }
 }
+
+const pick = (words: readonly string[]) => words[Math.floor(Math.random() * words.length)];
 
 /** A small stable number for a string (seeds a doodle's wobble). */
 function hash(text: string): number {

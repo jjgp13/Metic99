@@ -57,6 +57,8 @@ loop. See the Decision Log.
   drawn on a 2D canvas under Phaser's. The rules don't know which view draws:
   GameScene talks to a `FieldView` (`scenes/fieldView.ts`) that DoodleWorld
   and World3D both fill from the same snapshot; `?art=3d` picks the 3D view.
+  Each ship has its own doodle (`SHIPS` in `recipes.ts`), also shown in the
+  menu picker (`renderDoodle/shipIcons.ts`).
 - **Three.js** — the older 3D view of the playfield (`src/render3d/`, `?art=3d`). Chosen
   over Babylon.js / Unity WebGL for desktop + phone browsers: small bundle
   (~150 kB gz), fast mobile load, and plain TS that a future Node game server can
@@ -695,6 +697,10 @@ Green=multiplication, Yellow=division.
   absolute speed still climbs over time. The ship can still fire during the
   freeze (so a frozen board can be cleared). The freeze is a countdown that
   only runs while unpaused, so pausing doesn't eat it.
+  The ship shows it (doodle view): knocked down with an "ouch!", then blinks
+  with stars circling it for the freeze. The last hit snaps it in two
+  ("CRASH!"), and GAME OVER waits `RECOVERY.GAME_OVER_DELAY_MS` (1.6 s,
+  presentation only) so the destruction is seen.
 
 ## Difficulty design
 
@@ -826,6 +832,8 @@ Newest first. Format: `YYYY-MM-DD — decision — rationale`.
   the handwriting input, and is lighter (+15 kB, ~0.2 ms/frame). B is the
   default; the 3D view stays behind `?art=3d` (both fill `FieldView`).
   Prototype A stays on its local branch, unmerged.
+  Same day: the three ships got their own doodles (all three drew FALCON),
+  and the ship got hit / dazed / destroyed animations (owner's ask).
 
 - **2026-10-08 — Reviews move to a dedicated quiz chat (owner's design).**
   One chat per feature teaches; one long-lived chat quizzes (`/quiz`, and a

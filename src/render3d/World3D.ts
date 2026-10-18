@@ -24,6 +24,10 @@ export interface WorldSnapshot {
   aliensHidden: boolean;
   /** The SHIELD power is armed: draw a bubble around the ship. */
   shipShield: boolean;
+  /** How much of the post-hit freeze is left (1 right after a hit, 0 = fine). */
+  shipHurt: number;
+  /** The last life is gone: the ship is destroyed. */
+  shipDown: boolean;
   /** The answer the background stars spell out, or null. */
   answer: AnswerView | null;
   /** The alien the typed answer points at (lock-on), or null. */

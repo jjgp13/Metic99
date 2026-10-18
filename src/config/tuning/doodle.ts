@@ -33,7 +33,12 @@ export const DOODLE = {
     strafer: "#c93d9a",
     swooper: "#2a8f9e",
     drifter: "#8e4fd8",
-    ship: "#7d6bd6",
+    // The player's ships, one doodle each (picked on the menu).
+    falcon: "#7d6bd6",
+    dart: "#5f6b7d",
+    pod: "#c07a3e",
+    canopy: "#2a8f9e",
+    flame: "#f08a2c",
   } as Record<string, string>,
   /** Ability aliens wear a generic doodle in their model's color. */
   ABILITY_INK: {
@@ -77,4 +82,19 @@ export const DOODLE = {
   BURST_RADIUS: 30,
   BURST_SPECKS: 12,
   BURST_WORDS: ["pop!", "zap!", "boom", "pow!"],
+
+  // The ship when an alien gets through.
+  HURT_KICK_PX: 14, // the ship is knocked down this far, then springs back
+  HURT_KICK_MS: 260,
+  HURT_BLINK_HZ: 8, // blinks while the field is frozen after a hit
+  HURT_WORDS: ["ouch!", "oof!", "ow!"],
+  DIZZY_STARS: 3, // stars circling the dazed ship
+  DIZZY_RADIUS: 22,
+  DIZZY_TURNS_PER_S: 0.8,
+  // Knocked out: the ship snaps in two and the halves tumble off.
+  DOWN_BURST_RADIUS: 46,
+  DOWN_PIECE_SPEED: 70, // px/s sideways
+  DOWN_PIECE_SPIN: 2.6, // rad/s
+  DOWN_GRAVITY: 260, // px/s²
+  DOWN_WORDS: ["KABOOM!", "CRASH!", "BOOM!"],
 } as const;
