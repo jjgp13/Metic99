@@ -230,6 +230,24 @@ fits here, and **what we didn't do**.
 - **Caution:** two domain files must not export the same name; TypeScript
   reports it as an error in the barrel.
 
+### 2.16 Backward-compatible migration (expand first, then deploy)
+
+- **What:** change the database so the game *already deployed* keeps
+  working, and only then ship the game that needs the change.
+- **Where:** `supabase/story-boards.sql`: the new `scores.level` column has
+  a default (0 = Endless), and `start_match` / `submit_run` / `get_rank`
+  gained a `p_level` parameter that defaults to 0, so the old calls still
+  mean "Endless". `services/leaderboard.ts` leaves `p_level` out for
+  Endless.
+- **Why:** the database and the game are deployed separately, so for a
+  while one of them is old. A column without a default, or a renamed
+  function, would break every score submitted in that gap.
+- **Instead of:** a new table per mode (`stage_scores`): the old game is
+  untouched, but every function then exists twice and must be kept in step.
+- **Caution:** a function is *replaced* (drop + create), not overloaded:
+  two versions that both accept the old arguments make the RPC call
+  ambiguous.
+
 ---
 
 ## 3. Where to start when you want to…

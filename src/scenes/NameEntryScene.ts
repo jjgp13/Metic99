@@ -1,25 +1,47 @@
 import Phaser from "phaser";
 import { GAME, LEADERBOARD, STORAGE } from "../config/constants";
-import { submitScore } from "../services/leaderboard";
+import { type Board, submitScore } from "../services/leaderboard";
 import { onKeyDown } from "../ui/keyboard";
 import { PALETTE } from "../config/palette";
 import { textStyle } from "../ui/theme";
+
+/** One score to submit, on one board. */
+export interface BoardScore {
+  board: Board;
+  score: number;
+  /** How the rank on this board is named after submitting ("stage 1"). */
+  label: string;
+}
 
 interface NameEntryData {
   score: number;
   /** Whether this run is a new personal best (drives the headline). */
   personalBest?: boolean;
+  /** Headline when it isn't a personal best (default GAME OVER). */
+  headline?: string;
+  /** Where the scores go: the first board is shown afterwards, the others
+   * get a rank line under it (a story run: its total, then each stage).
+   * Default: `score` on the Endless board. */
+  boards?: BoardScore[];
+  /** The board screen's heading and where it goes back to. */
+  title?: string;
+  back?: string;
 }
 
 /**
  * Classic arcade initials entry. The player first picks how many initials to use
  * (3–6) with a length selector, then sets each slot to A–Z / 0–9 via touch
  * arrows, the on-screen keypad of letters, or the physical keyboard. On confirm
- * it submits to the global leaderboard and hands off to the board.
+ * it submits to the global leaderboard (one board or several) and hands off
+ * to the board.
  */
 export default class NameEntryScene extends Phaser.Scene {
   private score = 0;
   private personalBest = false;
+  private headline = "GAME OVER";
+  private boards: BoardScore[] = [];
+  private title?: string;
+  private back?: string;
 
   /** Char index per slot, kept at NAME_LEN_MAX so values survive length changes. */
   private slotIdx: number[] = [];
@@ -42,6 +64,10 @@ export default class NameEntryScene extends Phaser.Scene {
   init(data: NameEntryData): void {
     this.score = data.score ?? 0;
     this.personalBest = Boolean(data.personalBest);
+    this.headline = data.headline ?? "GAME OVER";
+    this.boards = data.boards?.length ? data.boards : [{ board: LEADERBOARD.ENDLESS_BOARD, score: this.score, label: "" }];
+    this.title = data.title;
+    this.back = data.back;
     this.slotIdx = this.defaultInitials();
     this.nameLen = this.defaultLength();
     this.slotText = [];
@@ -54,7 +80,7 @@ export default class NameEntryScene extends Phaser.Scene {
     const cx = GAME.WIDTH / 2;
 
     this.add
-      .text(cx, 90, this.personalBest ? "NEW HIGH SCORE!" : "GAME OVER", textStyle(34, this.personalBest ? PALETTE.GOLD : PALETTE.DANGER))
+      .text(cx, 90, this.personalBest ? "NEW HIGH SCORE!" : this.headline, textStyle(34, this.personalBest ? PALETTE.GOLD : PALETTE.DANGER))
       .setOrigin(0.5);
 
     this.add
@@ -257,11 +283,13 @@ export default class NameEntryScene extends Phaser.Scene {
     }
     this.status.setText("Submitting…");
 
-    submitScore(name, this.score)
-      .then((result) => {
+    const [main, ...others] = this.boards;
+    const board = { title: this.title, back: this.back, board: main.board, playerName: name, score: main.score };
+    this.submitAll(name, main, others)
+      .then(({ result, note }) => {
         this.scene.start("LeaderboardScene", {
-          playerName: name,
-          score: this.score,
+          ...board,
+          note,
           rank: result.rank,
           top: result.top,
           ok: result.ok,
@@ -269,13 +297,19 @@ export default class NameEntryScene extends Phaser.Scene {
         });
       })
       .catch(() => {
-        this.scene.start("LeaderboardScene", {
-          playerName: name,
-          score: this.score,
-          rank: 0,
-          top: [],
-          ok: false,
-        });
+        this.scene.start("LeaderboardScene", { ...board, rank: 0, top: [], ok: false });
       });
+  }
+
+  /** Submit the main board, then the others one by one; their ranks become
+   * one line ("stage 1 #4 · stage 2 #9"). */
+  private async submitAll(name: string, main: BoardScore, others: BoardScore[]) {
+    const result = await submitScore(name, main.score, main.board);
+    const ranks: string[] = [];
+    for (const other of others) {
+      const r = await submitScore(name, other.score, other.board);
+      if (r.ok && r.rank > 0) ranks.push(`${other.label} #${r.rank}`);
+    }
+    return { result, note: ranks.join(" · ") };
   }
 }

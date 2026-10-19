@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import { GAME, LEADERBOARD } from "../config/constants";
-import { ScoreRow, getTop, isLeaderboardEnabled } from "../services/leaderboard";
+import { type Board, ScoreRow, getTop, isLeaderboardEnabled } from "../services/leaderboard";
 import { PALETTE } from "../config/palette";
 import { textStyle } from "../ui/theme";
 
@@ -8,6 +8,15 @@ interface LeaderboardData {
   /** When true the scene was opened from the menu to browse the board, so it
    * fetches the top scores itself and offers BACK instead of "play again". */
   browse?: boolean;
+  /** Which board (default Endless) and its heading. */
+  board?: Board;
+  title?: string;
+  /** Browse: the player's own best on this board, to compare (0 = none). */
+  yourBest?: number;
+  /** Post-run: one more line under the rank (a story run's stage ranks). */
+  note?: string;
+  /** The scene to go back to (default the menu). */
+  back?: string;
   playerName?: string;
   score?: number;
   rank?: number;
@@ -17,15 +26,21 @@ interface LeaderboardData {
 }
 
 /**
- * Global high-score board. Two modes:
+ * Global high-score board, for one board (Endless, a story stage or a whole
+ * story run). Two modes:
  *   - post-run  (from NameEntryScene): highlights the player's submitted run and
- *     shows their world rank; tap/Enter returns to the menu.
- *   - browse    (from MenuScene): fetches and shows the top scores; BACK returns
- *     to the menu.
+ *     shows their world rank; tap/Enter goes back.
+ *   - browse    (from the menu or the story map): fetches and shows the top
+ *     scores; BACK goes back.
  */
 export default class LeaderboardScene extends Phaser.Scene {
   private result!: {
     browse: boolean;
+    board: Board;
+    title: string;
+    yourBest: number;
+    note: string;
+    back: string;
     playerName: string;
     score: number;
     rank: number;
@@ -42,6 +57,11 @@ export default class LeaderboardScene extends Phaser.Scene {
   init(data: LeaderboardData): void {
     this.result = {
       browse: Boolean(data.browse),
+      board: data.board ?? LEADERBOARD.ENDLESS_BOARD,
+      title: data.title ?? "HIGH SCORES",
+      yourBest: data.yourBest ?? 0,
+      note: data.note ?? "",
+      back: data.back ?? "MenuScene",
       playerName: data.playerName ?? "",
       score: data.score ?? 0,
       rank: data.rank ?? 0,
@@ -56,8 +76,13 @@ export default class LeaderboardScene extends Phaser.Scene {
     const cx = GAME.WIDTH / 2;
 
     this.add
-      .text(cx, 70, "HIGH SCORES", textStyle(30, PALETTE.GOLD))
+      .text(cx, 70, this.result.title, textStyle(30, PALETTE.GOLD))
       .setOrigin(0.5);
+
+    const sub = this.result.browse
+      ? this.result.yourBest > 0 ? `your best: ${this.result.yourBest}` : ""
+      : this.result.note;
+    if (sub) this.add.text(cx, 134, sub, textStyle(14, PALETTE.TEXT_MUTED)).setOrigin(0.5);
 
     if (!this.result.browse) {
       if (this.result.ok && this.result.rank > 0) {
@@ -75,13 +100,13 @@ export default class LeaderboardScene extends Phaser.Scene {
       // Browsing from the menu: fetch the board ourselves.
       if (!isLeaderboardEnabled()) {
         this.add
-          .text(cx, 200, "Leaderboard unavailable", textStyle(16, PALETTE.TEXT_MUTED))
+          .text(cx, 200, "World scores are offline", textStyle(16, PALETTE.TEXT_MUTED))
           .setOrigin(0.5);
       } else {
         const loading = this.add
           .text(cx, 200, "Loading…", textStyle(16, PALETTE.TEXT_MUTED))
           .setOrigin(0.5);
-        getTop()
+        getTop(this.result.board)
           .then((rows) => {
             loading.destroy();
             this.result.top = rows;
@@ -98,7 +123,7 @@ export default class LeaderboardScene extends Phaser.Scene {
       .text(cx, GAME.HEIGHT - 50, label, textStyle(14, PALETTE.TEXT_MUTED))
       .setOrigin(0.5);
 
-    // Both modes return to the menu.
+    // Both modes go back where they came from.
     this.input.keyboard?.once("keydown-ENTER", () => this.toMenu());
     this.input.keyboard?.once("keydown-ESC", () => this.toMenu());
     this.input.keyboard?.once("keydown-SPACE", () => this.toMenu());
@@ -114,7 +139,7 @@ export default class LeaderboardScene extends Phaser.Scene {
     this.rowObjects = [];
 
     const rows = this.result.top.slice(0, LEADERBOARD.TOP_N);
-    const top = 160;
+    const top = 166;
     const lineH = 24;
     const leftX = cx - 150;
     const rightX = cx + 150;
@@ -158,6 +183,6 @@ export default class LeaderboardScene extends Phaser.Scene {
   }
 
   private toMenu(): void {
-    this.scene.start("MenuScene");
+    this.scene.start(this.result.back);
   }
 }

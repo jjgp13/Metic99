@@ -12,6 +12,8 @@ export interface StoryRun {
   level: number;
   lives: number;
   score: number;
+  /** Points scored in each level already finished (for the stage boards). */
+  levelScores: number[];
 }
 
 /** Which mode GameScene was started in. */

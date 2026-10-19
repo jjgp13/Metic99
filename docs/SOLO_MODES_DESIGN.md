@@ -106,12 +106,17 @@ Every new monster follows the content checklist in `MULTIPLAYER_DESIGN.md`
 - **Power:** picked on a "pick your power" card **before each level**, so
   each world can be tackled with a different tool. Ships stay a look only
   (Decision Log 2026-09-29).
-- **Leaderboards:** a score per level, plus the full-run score, on the world
-  leaderboard (the `scores` table gains a `level` column, 0 = Endless, with a
-  per-level plausibility cap in `submit_run`).
-- **Proposed, not decided:** *practice* any level already reached from the
-  table of contents, scoring only on that level's board, so the hard levels
-  can be trained without replaying the run.
+- **Leaderboards (built, L5):** a score per level, plus the full-run score,
+  on the world leaderboard: the `scores` table gains a `level` column (0 =
+  Endless, 1–10 = stage, 99 = whole run) with a per-board cap in
+  `submit_run` (`supabase/story-boards.sql`). A stage's score is the points
+  scored in it; the run's boards are submitted together after one name
+  entry when the run ends.
+- **Story map (built, L5; owner 2026-10-18):** the STORY button opens a map
+  with one island per stage. Reached islands show the best score for the
+  stage (tap = its world board); stages not reached are a "?". **No
+  practice mode:** every run starts at island 1, the map only shows how
+  far you got.
 
 ## 7. How it fits the code
 
@@ -170,7 +175,7 @@ Bosses fight by a **mechanic** (`objects/bosses.ts`; "burrow" = the mole).
 | L2 ✓ | Spawn director seam (refactor only) | golden master unchanged |
 | L3 ✓ | Level engine: `LEVELS` data, scrolling page + props, progress bar, level-complete card, lives carried over | level 1 playable to the end of the path |
 | L4 ✓ | Boss phase + Giant Mole | level 1 complete |
-| L5 | Table of contents + per-level and full-run scores | runs save and restart at level 1 |
+| L5 ✓ | Story map + per-level and full-run scores | runs save and restart at level 1 |
 | L6 | Levels 2–5 (pond, treetops, swamp, cave), subtraction, 4-ball rows, Bouncer, Heart balloon | bots clear them at the target rates |
 | L7 | Levels 6–10, multiplication | same |
 | L8 | Story bots report + balance pass; leaderboard `level` column | `npm run bots -- --story` |
@@ -193,5 +198,8 @@ doodles), story scores on the leaderboard, a dev shortcut to a level.
 7. **Levels:** the 10 in §3, in that order, open to change.
 8. **Scores:** per level and per run, on the world leaderboard.
 
-Still open: practice mode (§6); a small story between levels (one doodled
+Decided later (2026-10-18): no practice mode; the story map shows
+progress and opens each stage's board (§6).
+
+Still open: a small story between levels (one doodled
 panel per level) or just themed pages.
