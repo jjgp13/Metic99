@@ -209,6 +209,7 @@ export class Swarm implements AbilityHost {
     // ship's travel time (and it can't cost a life).
     for (const alien of this.aliens) {
       if (alien === ctx.held || !alien.active) continue;
+      alien.ability?.steer(alien, fieldDt);
       this.advanceReadable(alien, fieldDt);
       const boss = alien.ability instanceof Boss ? alien.ability : null;
       if (alien.lethal && alien.y >= PLAYER.Y - 6 && !boss?.burrowing) {

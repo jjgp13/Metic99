@@ -45,6 +45,14 @@ export abstract class Ability {
 
   update(_delta: number): void {}
 
+  /**
+   * Called each step on FIELD time (freezes and SLOW hold it), just before
+   * the alien moves, so a creature can script its own moves with
+   * `alien.glideTo` / `alien.hold` (a dragonfly's darts, a frog's leaps).
+   * Not called while the alien is the held target.
+   */
+  steer(_alien: Alien, _delta: number): void {}
+
   /** A bullet hit the alien. Return true to absorb it (the alien survives). */
   onHit(_alien: Alien, _host: AbilityHost): boolean {
     return false;
