@@ -45,6 +45,11 @@ export interface AbilityHost {
    * minion). Returns it, or null (nothing placed) if the field is full or
    * its box at either spot would break the readability rule. */
   spawnMinion?(kind: AlienKind, from: readonly [number, number], to: readonly [number, number], ms: number): Alien | null;
+  /** Story: one of the level's creatures (what `kind` is on its page) appears
+   * at (x, y) with a new sum, e.g. a toy a boss flings out. Returns it, or
+   * null (nothing placed) if the field is full or its box there would break
+   * the readability rule. Optional: hosts without levels (test fakes) skip it. */
+  spawnCreature?(kind: AlienKind, x: number, y: number): Alien | null;
 }
 
 export abstract class Ability {

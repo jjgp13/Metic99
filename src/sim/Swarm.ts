@@ -319,6 +319,19 @@ export class Swarm implements AbilityHost {
     return minion;
   }
 
+  spawnCreature(kind: AlienKind, x: number, y: number): Alien | null {
+    const diff = this.difficulty;
+    if (this.aliens.filter((a) => a.active && a.lethal).length >= diff.maxOnScreen) return null;
+    const balls = kind === "lumberer" ? ENEMY.HARD_BALL_THRESHOLD : DIFFICULTY.MIN_BALLS;
+    const sum = this.rollSum(this.rng, balls, balls, diff.maxDigit);
+    if (!sum) return null;
+    // Already where it lands: a strafer's band and a swooper's lane are here.
+    const alien = this.makeAlien(this.rng, { kind, sum, x, y, pace: diff, bandY: y, laneX: x });
+    if (!this.aliens.every((o) => !o.active || !alien.overlaps(o))) return null;
+    this.addAlien(alien);
+    return alien;
+  }
+
   // ---------------------------------------------------------------------------
   // Readability
   // ---------------------------------------------------------------------------

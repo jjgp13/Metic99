@@ -406,6 +406,35 @@ While both halves are up no minions come (the boss phase allows 2 unsolved).
 Bots (20 seeds): see the AGENTS.md Decision Log. Planned math: + and −
 (subtraction comes as its own shared piece).
 
+### Level 10: THE KID'S BEDROOM, the finale (built 2026-10-19, sums only)
+`config/levels/bedroom.ts` (rules), `objects/bedroom.ts` (its traits and
+boss), `renderDoodle/levels/bedroom.ts` (looks), `sim/bedroom.test.ts`.
+Path 160 s (the owner found long paths boring), d 0.8 → 0.95, seed 1010.
+Warm lamp-lit paper with toy blocks, crayons, socks, a braided rug, star
+stickers and a moon night light. At night the toys come alive:
+| Creature | Kind | Personality |
+| --- | --- | --- |
+| Toy soldier | darter, ×0.6 | his drum and his hat badge are the numbers ("chain"); trait `bedroom_windup`: marches, runs down (slower and slower), stands still while his key is wound, marches on; comes in lines of 3 (`MARCH`, 25%) that stop and start together |
+| Jack-in-the-box | strafer | shut, his numbers are inside; trait `bedroom_jack`: cranks (shakes at the end: the telegraph), then POP: the jack's eyes (the numbers) spring out and the box jumps 80 px closer; out 2.1 s, then he squeezes back in. It moves only when it pops |
+| Rubber ball | swooper | two painted spots are the numbers ("eyes"); trait `bedroom_bounce`: rolls in from a side, then bounces down 44 px a bounce, off the page's edges and off other toys |
+| Teddy bear | lumberer, ×0.8 | three tummy buttons (`cluster`): the page's hard sums; trait `bedroom_nap`: waddles side to side, yawns, then naps 1.5 s (holds still) |
+| Paper plane (bonus) | drifter | a number on each wing ("wings"); trait `bedroom_loop`: loops the loop every 2.6 s; the nod to the earlier sky levels |
+
+**Boss, UNDER-THE-BED MONSTER** (mechanic `bedroom_underbed`, 3-ball
+sums): a bed creeping down the page with the monster under it. Only its
+three eyes (the numbers) peek out of the dark, and they duck back in on a
+rhythm (real time, like the Blinker). After each answer it scoots across
+and up and, as it comes back up, flings a toy out beside the bed (a
+soldier, then a ball…: `AbilityHost.spawnCreature`). Its 4th answer flips
+the bed: **OUT FROM UNDER THE BED** (`BossDef.PART`, plain "burrow"), the
+monster in full, 3 more answers, no hiding, so faster (×0.32 vs the bed's
+×0.18: 7 answers in all, the slowest boss). Beating it ends the story (the
+last level in `LEVELS`).
+Bots (20 seeds, 3 fresh lives): rookie 0/20 (out at ~27% of the path),
+pilot 1/20 (~67%), ace 20/20 (2.5 lives left); pilots are hit most by teddy
+bears, then balls and soldiers. Jacks never hit anyone: they hide, and
+they are slow. Planned math once operations land: all four, mixed.
+
 ## 9. Decisions (owner, 2026-10-18)
 
 1. **Math:** levels 1–2 sums only; operations widen as levels go on; sum

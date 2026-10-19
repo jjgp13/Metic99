@@ -9,6 +9,7 @@ import { Dragon } from "./dragon";
 import { RainDrop, StormCloud } from "./stormCloud";
 import { Yeti } from "./yeti";
 import { Moon } from "./moon";
+import { UnderTheBed } from "./bedroom";
 
 /**
  * How each story boss fights (BossDef.MECHANIC). `Boss` is the base: it
@@ -28,6 +29,7 @@ export const BOSS_MECHANICS: Record<string, (def: BossDef) => Boss> = {
   sky_raindrop: (def) => new RainDrop(def),
   snow_stomp: (def) => new Yeti(def),
   night_phases: (def) => new Moon(def),
+  bedroom_underbed: (def) => new UnderTheBed(def),
 };
 
 export function createBoss(def: BossDef): Boss {
