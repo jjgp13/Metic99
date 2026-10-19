@@ -169,6 +169,7 @@ field (`BossLook.under`: the troll's lamp beam).
 | --- | --- | --- | --- |
 | 1 | THE BACKYARD | ✓ beetles (eyes, march), worms (chain), butterfly (wings fold); GIANT MOLE | rookie 16, pilot 20, ace 20 |
 | 5 | THE DARK CAVE | ✓ bats (hang → wake → drop), glowworms (chain, glow on/off), mine cart (wheels = numbers); CAVE TROLL (numbers only in a swinging lamp's beam) | rookie 2, pilot 18, ace 20 |
+| 8 | THE SNOWY MOUNTAIN | ✓ penguins (lean → belly-slide, march), snowballs (pick up a number), ice blocks (no brakes), snowflake (gusts); YETI (stomps, throws snowballs) | rookie 0, pilot 6, ace 20 |
 
 **Level 5, THE DARK CAVE** (`config/levels/cave.ts`, 200 s, d 0.45 → 0.6,
 sums only; + / − planned). Grey stone page (mid-grey, so pencil and the
@@ -207,6 +208,10 @@ white number balls still win) with stalactites, rocks, crystals, drips.
 3. New rules only if needed: a trait (an Ability class + one line in
    `TRAITS`), a boss mechanic (subclass `Boss` + one line in
    `BOSS_MECHANICS`), a layout (BALL_LAYOUTS + `Alien.boxFor`/`ballOffset`).
+   A creature whose sum grows gets `SpeciesDef.BOX` (a row box that fits
+   its last ball) and calls `AbilityHost.addBall`; a boss that throws or
+   calls minions uses `AbilityHost.spawnMinion` (the level's creature of
+   that kind). Both host methods are optional (stand-in hosts may skip them).
    More balls than the d range gives: `LevelDef.MAX_BALLS` (3+ ball sums
    ride on lumberers, one on screen at a time).
    A level's own rule classes can live in `src/objects/<page>.ts`. Hooks
@@ -228,7 +233,7 @@ white number balls still win) with stalactites, rocks, crystals, drips.
 | L4 ✓ | Boss phase + Giant Mole | level 1 complete |
 | L5 ✓ | Story map + per-level and full-run scores | runs save and restart at level 1 |
 | L6 ✓ | Levels 2–5 (pond, treetops, swamp, cave), 4-ball rows (`cluster`); still to do: subtraction, Bouncer, Heart balloon | bots clear them at the target rates |
-| L7 | Levels 6–10 (volcano ✓, sky ✓), multiplication | same |
+| L7 | Levels 6–10 (volcano ✓, sky ✓, snow ✓), multiplication | same |
 | L8 | Story bots report + balance pass; leaderboard `level` column | `npm run bots -- --story` |
 
 L1–L4 is the smallest playable slice: one full level with a boss, to judge
@@ -286,6 +291,44 @@ swallows at ×1 left pilots 1/20, 3-bow kites at ×1 hit even aces, raindrops
 at ×0.9 cost pilots ~13 lives in the boss phase. Rules
 `config/levels/sky.ts`; looks `renderDoodle/levels/sky.ts`; test
 `sim/sky.test.ts`.
+### Level 8, THE SNOWY MOUNTAIN (built 2026-10-19, sums only)
+`config/levels/snow.ts` + `renderDoodle/levels/snow.ts`; rules in
+`objects/snowTraits.ts` and `objects/yeti.ts`; test `sim/snow.test.ts`.
+135 s of path, d 0.7 → 0.85. Cold white page (slate, frost grey and teal:
+no blue, the sum balls' color) with snowflakes, pines, snowy rocks, peaks,
+drifts and ski tracks. The theme is the slope: everything slides, rolls
+and gathers speed, so every creature says "answer me early", each in its
+own way. Planned math (mixed operations) waits for the shared piece.
+- **Penguin** (darter ×0.4, "chain": the numbers sit on its white belly,
+  trait `snow_slide`, marches in lines of 3 on 30% of spawns): waddles for
+  1.9 s, stops and leans forward with its flippers swept back (0.5 s, the
+  telegraph, holding still), belly-slides 70 px in 0.38 s, gets up. All on
+  field time inside `Ability.pace`, so a line slides together.
+- **Snowball** (swooper ×0.75, its own row box sized for 3 balls, trait
+  `snow_grow`): rolls in from a side, then down, swelling as it goes; once
+  past y 250 it picks up one more number (`AbilityHost.addBall`: its old
+  numbers stay, so a player who already added them just adds one more),
+  then rolls at half pace (a harder sum moves slower: owner's rule).
+- **Ice block** (3-ball lumberer, numbers frozen inside, trait
+  `snow_ice`): no brakes: 0.4× its kind's pace at the top, rising steadily
+  to 1.0× at the ship's line; low down it sweats and grows speed lines.
+- **Snowflake** (the bonus drifter, "eyes", trait `snow_gust`): calm for
+  2.2 s at 0.45× (read it then), then a 0.9 s gust at 2.2× (it turns).
+- **YETI** (mechanic `snow_stomp`, 7 answers of 3 balls, ×0.17, the slowest
+  boss: owner's rule): walks 45 px, raises its fists (1 s, it shakes), then
+  STOMPS (rings of shaking snow) and throws a snowball to the roomier side
+  (`AbilityHost.spawnMinion`; one of its snowballs up at a time, kept above
+  the grow line so it lands as a 2-ball sum). Its own sum never changes.
+  After an answer it dives into a drift (horns poking out) and bursts out on
+  the other side. An ace answers it every ~3 s and rarely sees a stomp;
+  slower players face its snowballs.
+- Tuning by bots (20 seeds, 3 fresh lives): first try (snowballs growing at
+  y 235 at full speed, ice up to 1.4×) cleared pilots 0/12, grown snowballs
+  and ice blocks causing nearly every hit. Slower snowballs that grow at
+  250 and roll at half pace afterwards, and ice from 0.4× to 1.0×: rookie
+  0/20 (out at ~45% of the path), pilot 6/20, ace 20/20 (2.5 lives left);
+  pilots' hits: ice 26, penguins 14, snowballs 13. Hard for pilots, as a
+  late level should be (the volcano: pilot 9/12 on the same script).
 
 ### Level 2, THE POND (built 2026-10-18)
 

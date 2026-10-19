@@ -290,6 +290,35 @@ export class Swarm implements AbilityHost {
     return part;
   }
 
+  addBall(alien: Alien): boolean {
+    const max = this.difficulty.maxDigit;
+    const start = this.rng.int(1, max);
+    for (let k = 0; k < max; k++) {
+      const digit = ((start - 1 + k) % max) + 1;
+      const result = alien.result + digit;
+      if (this.byResult.has(result)) continue;
+      this.byResult.delete(alien.result);
+      alien.setSum([...alien.digits, digit], result, this.elapsedMs);
+      this.byResult.set(result, alien);
+      return true;
+    }
+    return false;
+  }
+
+  spawnMinion(kind: AlienKind, from: readonly [number, number], to: readonly [number, number], ms: number): Alien | null {
+    const diff = this.difficulty;
+    if (this.aliens.filter((a) => a.active && a.lethal).length >= diff.maxOnScreen) return null;
+    const sum = this.rollSum(this.rng, DIFFICULTY.MIN_BALLS, DIFFICULTY.MIN_BALLS, diff.maxDigit);
+    if (!sum) return null;
+    const minion = this.makeAlien(this.rng, { kind, sum, x: from[0], y: from[1], pace: diff });
+    const landing = this.makeAlien(this.rng, { kind, sum, x: to[0], y: to[1], pace: diff });
+    const clear = (a: Alien) => this.aliens.every((o) => !o.active || !a.overlaps(o));
+    if (!clear(minion) || !clear(landing)) return null;
+    minion.glideTo(to[0], to[1], ms);
+    this.addAlien(minion);
+    return minion;
+  }
+
   // ---------------------------------------------------------------------------
   // Readability
   // ---------------------------------------------------------------------------
@@ -424,7 +453,7 @@ export class Swarm implements AbilityHost {
           : species?.TRAIT
             ? TRAITS[species.TRAIT]?.()
             : undefined,
-      box: boss?.BOX,
+      box: boss?.BOX ?? species?.BOX,
       sentBy: spec.sentBy,
       layout: species?.LAYOUT,
       species: species?.NAME,

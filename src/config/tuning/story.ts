@@ -58,6 +58,10 @@ export interface SpeciesDef {
   /** × its kind's speed (default 1): a creature whose trait makes it harder
    * to beat moves slower (owner's rule, like ABILITY.SPEED). */
   SPEED?: number;
+  /** Readability box instead of its kind's, with its balls in a row (like
+   * BossDef.BOX): a creature whose sum grows (AbilityHost.addBall) gets a
+   * box that already fits its last ball, so growing never breaks the rule. */
+  BOX?: { HALF_W: number; BALLS_Y: number; BOTTOM: number };
   /** Sometimes comes in a marching line, in step: up to SIZE of them, with
    * chance CHANCE per spawn (a line skips the unsolved cap but not the
    * threat budget). */

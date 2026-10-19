@@ -7,6 +7,7 @@ import { MudHalf, MudMonster } from "./swamp";
 import { CaveTroll } from "./caveTroll";
 import { Dragon } from "./dragon";
 import { RainDrop, StormCloud } from "./stormCloud";
+import { Yeti } from "./yeti";
 
 /**
  * How each story boss fights (BossDef.MECHANIC). `Boss` is the base: it
@@ -24,6 +25,7 @@ export const BOSS_MECHANICS: Record<string, (def: BossDef) => Boss> = {
   breath: (def) => new Dragon(def),
   sky_storm: (def) => new StormCloud(def),
   sky_raindrop: (def) => new RainDrop(def),
+  snow_stomp: (def) => new Yeti(def),
 };
 
 export function createBoss(def: BossDef): Boss {
