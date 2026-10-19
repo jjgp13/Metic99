@@ -28,6 +28,8 @@ export interface WorldSnapshot {
   shipHurt: number;
   /** The last life is gone: the ship is destroyed. */
   shipDown: boolean;
+  /** Story: the level's page and how far it has scrolled (null in Endless). */
+  page: { id: string; scrolledPx: number; lengthPx: number } | null;
   /** The answer the background stars spell out, or null. */
   answer: AnswerView | null;
   /** The alien the typed answer points at (lock-on), or null. */

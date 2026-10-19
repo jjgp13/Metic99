@@ -3,9 +3,10 @@ import type { RoughCanvas } from "roughjs/bin/canvas";
 import type { Drawable } from "roughjs/bin/core";
 import { DOODLE, ENEMY, GAME, MODEL_BOXES, PLAYER, RECOVERY } from "../config/constants";
 import type Alien from "../objects/Alien";
-import { Shielded } from "../objects/abilities";
+import { Boss, Shielded } from "../objects/abilities";
 import type { AnswerView, InkPoint } from "../render3d/AnswerStars";
 import type { WorldSnapshot } from "../render3d/World3D";
+import { PAGES, drawPageTile, layOutProps, type PlacedProp } from "./pages";
 import { drawPaper } from "./paper";
 import { drawFrames, type DoodleRecipe, type Point } from "./pencil";
 import * as R from "./recipes";
@@ -66,6 +67,11 @@ const KIND_RECIPES: Record<string, DoodleRecipe> = {
   drifter: R.DRIFTER,
 };
 
+/** Story bosses by model (config/tuning/story.ts). */
+const BOSS_RECIPES: Record<string, DoodleRecipe> = {
+  boss_mole: R.MOLE,
+};
+
 const isShieldUp = (a: Alien) => a.ability instanceof Shielded && a.ability.shieldUp;
 /** Visual-only randomness (allowed: it never touches the rules). */
 const randomSeed = () => 1 + Math.floor(Math.random() * 2 ** 30);
@@ -93,6 +99,10 @@ export default class DoodleWorld {
   /** Scale the cached doodles were drawn at (redrawn if the screen changes a lot). */
   private spriteScale = 0;
   private paper: HTMLCanvasElement | null = null;
+  /** Story: the level's page (tiles as it scrolls) and its props. */
+  private pageId: string | null = null;
+  private pageTile: HTMLCanvasElement | null = null;
+  private props: PlacedProp[] = [];
   private readonly sprites = new Map<string, HTMLCanvasElement[]>();
 
   private readonly looks = new Map<Alien, AlienLook>();
@@ -131,6 +141,9 @@ export default class DoodleWorld {
     this.kickLeft = 0;
     this.shipWords = [];
     this.wreck = null;
+    this.pageId = null;
+    this.pageTile = null;
+    this.props = [];
     this.looks.clear();
     this.bursts = [];
     this.solved = null;
@@ -149,7 +162,8 @@ export default class DoodleWorld {
     this.syncCanvasRect();
     const ctx = this.ctx;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    if (this.paper) ctx.drawImage(this.paper, 0, 0);
+    if (s.page) this.drawPage(s.page);
+    else if (this.paper) ctx.drawImage(this.paper, 0, 0);
 
     let dx = 0;
     let dy = 0;
@@ -172,6 +186,64 @@ export default class DoodleWorld {
     this.drawBursts(delta);
     this.drawShipWords(delta);
     for (const a of aliens) this.drawBalls(a, s.alpha, boil, delta);
+    for (const a of aliens) if (a.ability instanceof Boss) this.drawBossPips(a, a.ability, s.alpha);
+  }
+
+  /**
+   * Story: the level's page, scrolled `scrolledPx` down, with its props. The
+   * tile repeats every screen height, so two copies cover the view.
+   */
+  private drawPage(page: { id: string; scrolledPx: number; lengthPx: number }): void {
+    const def = PAGES[page.id];
+    if (!def) {
+      if (this.paper) this.ctx.drawImage(this.paper, 0, 0);
+      return;
+    }
+    if (this.pageId !== page.id) {
+      this.pageId = page.id;
+      this.pageTile = null;
+      this.props = layOutProps(page.id, def, page.lengthPx);
+    }
+    this.pageTile ??= drawPageTile(def, this.scale);
+    const ctx = this.ctx;
+    const tileH = this.pageTile.height;
+    const offset = (page.scrolledPx * this.scale) % tileH;
+    ctx.drawImage(this.pageTile, 0, offset - tileH);
+    ctx.drawImage(this.pageTile, 0, offset);
+
+    ctx.save();
+    ctx.setTransform(this.scale, 0, 0, this.scale, 0, 0);
+    ctx.globalAlpha = DOODLE.PAGE_PROP_ALPHA;
+    for (const prop of this.props) {
+      const y = page.scrolledPx - prop.pathY;
+      if (y < -prop.recipe.h || y > GAME.HEIGHT + prop.recipe.h) continue;
+      ctx.save();
+      ctx.translate(prop.x, y);
+      ctx.rotate(prop.angle);
+      this.drawSprite(prop.key, () => prop.recipe, 0);
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+
+  /** A boss's answers left, as pips under its body (hollow = answered). */
+  private drawBossPips(a: Alien, boss: Boss, alpha: number): void {
+    if (boss.burrowing) return;
+    const ctx = this.ctx;
+    const n = boss.def.HP;
+    const gap = DOODLE.BOSS_PIP_GAP;
+    const y = a.viewY(alpha) + a.bottom + 10;
+    ctx.save();
+    ctx.lineWidth = 1.4;
+    ctx.strokeStyle = DOODLE.GRAPHITE;
+    ctx.fillStyle = DOODLE.ANSWER_COLOR.wrong;
+    for (let i = 0; i < n; i++) {
+      ctx.beginPath();
+      ctx.arc(a.viewX(alpha) + (i - (n - 1) / 2) * gap, y, DOODLE.BOSS_PIP_R, 0, Math.PI * 2);
+      if (i < boss.hp) ctx.fill();
+      ctx.stroke();
+    }
+    ctx.restore();
   }
 
   /** Burst into a pencil scribble at logical (x, y). */
@@ -308,6 +380,8 @@ export default class DoodleWorld {
     look.popLeft = Math.max(0, look.popLeft - delta);
     const pop = 1 + 0.5 * (look.popLeft / DOODLE.BALL_POP_MS);
     const ring = DOODLE.BALL_RING[a.ballTexture] ?? DOODLE.BALL_RING.blueBalls;
+    // A burrowing boss is underground: its numbers are hidden with it.
+    if (a.ability instanceof Boss && a.ability.burrowing) return;
     const cover = a.ability?.cover ?? 0;
     const r = ENEMY.BALL_RADIUS;
     const rowY = a.viewY(alpha) - (a.top - r);
@@ -571,10 +645,14 @@ export default class DoodleWorld {
   }
 
   private alienKey(a: Alien): string {
+    if (a.ability instanceof Boss) return `boss:${a.model}:${a.ability.burrowing ? "dig" : "up"}`;
     return a.model ? `blob:${a.model}` : `alien:${a.kind}`;
   }
 
   private alienRecipe(a: Alien): DoodleRecipe {
+    if (a.ability instanceof Boss && a.model && BOSS_RECIPES[a.model]) {
+      return a.ability.burrowing ? R.DIRT_MOUND : BOSS_RECIPES[a.model];
+    }
     if (a.model) return R.blob(MODEL_BOXES[a.model]?.HALF_W ?? a.halfW, this.inkFor(a));
     return KIND_RECIPES[a.kind] ?? R.blob(a.halfW, this.inkFor(a));
   }
@@ -609,6 +687,7 @@ export default class DoodleWorld {
     c.height = Math.max(1, Math.round(r.height * dpr));
     this.scale = c.width / GAME.WIDTH;
     this.paper = drawPaper(this.scale);
+    this.pageTile = null;
     // Redraw the doodles only when the size changed a lot (they stay sharp).
     if (Math.abs(this.scale - this.spriteScale) > this.spriteScale * 0.2) {
       this.spriteScale = this.scale;

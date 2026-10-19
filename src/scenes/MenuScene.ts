@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { DOODLE, GAME, POWERS, POWER_KINDS, RENDER3D } from "../config/constants";
+import { DOODLE, GAME, POWERS, POWER_KINDS, RENDER3D, STORY } from "../config/constants";
 import { artMode } from "../config/artMode";
 import { selectPower, selectedPower } from "../config/powers";
 import { selectShip, selectedShip } from "../config/ships";
@@ -11,9 +11,10 @@ import { shipIconFrames } from "../renderDoodle/shipIcons";
 
 /**
  * Title / main menu. The first scene the player sees: a ship picker (a look
- * only), a power picker (the one power used in play), then PLAY or BATTLE
- * (you + 7 bots), HOW TO PLAY and SCORES. Buttons are large pointer targets
- * (mobile-friendly); ←/→ change ship, ↑/↓ change power and Enter plays.
+ * only), a power picker (the one power used in play), then STORY, ENDLESS or
+ * BATTLE (you + 7 bots), HOW TO PLAY and SCORES. Buttons are large pointer
+ * targets (mobile-friendly); ←/→ change ship, ↑/↓ change power and Enter
+ * plays ENDLESS.
  */
 export default class MenuScene extends Phaser.Scene {
   constructor() {
@@ -50,9 +51,13 @@ export default class MenuScene extends Phaser.Scene {
     this.makeShipPicker(cx, 296);
     this.makePowerPicker(cx, 432);
 
-    this.makeButton(cx - 68, 522, "PLAY", () => this.scene.start("GameScene"), 124);
+    // Story: 10 levels with bosses, lives carried over (docs/SOLO_MODES_DESIGN.md).
+    const story = { level: 0, lives: STORY.LIVES, score: 0 };
+    this.makeButton(cx - 154, 522, "STORY", () => this.scene.start("GameScene", { story }), 144);
+    // Endless: play until your lives run out (the world leaderboard).
+    this.makeButton(cx, 522, "ENDLESS", () => this.scene.start("GameScene"), 144);
     // Battle royale vs bots (docs/MULTIPLAYER_DESIGN.md): you + 7 bots, one life.
-    this.makeButton(cx + 68, 522, "BATTLE", () => this.scene.start("GameScene", { battle: true }), 124);
+    this.makeButton(cx + 154, 522, "BATTLE", () => this.scene.start("GameScene", { battle: true }), 144);
     this.makeButton(cx, 582, "HOW TO PLAY", () => this.scene.start("HowToPlayScene"));
     this.makeButton(cx, 642, "SCORES", () =>
       this.scene.start("LeaderboardScene", { browse: true }),

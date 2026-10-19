@@ -88,7 +88,7 @@ src/
     constants.ts      Re-exports every tuning file (import constants from here)
     tuning/           Tuning numbers, one file per domain: game, monsters,
                       difficulty, scoring, powers, answer, battle, bots,
-                      storage, render3d
+                      storage, render3d, doodle, story (LEVELS + bosses)
     palette.ts        Named UI colors (PALETTE.GOLD, .ATTACK…) + css()
     difficulty.ts     Logistic difficulty curve
     ships.ts          Player's ship choice (menu picker, saved in localStorage)
@@ -103,7 +103,8 @@ src/
                       Field (or the battle Match) at a fixed 60 Hz (SimClock),
                       turns its events into sound and HUD calls, and hands
                       World3D a snapshot every frame.
-    runSetup.ts       A run's seed + Field or Match (+ dev URL params)
+    runSetup.ts       A run's seed + Field or Match, or a story level
+                      (`StoryRun`: level, lives, score) (+ dev URL params)
     NameEntryScene.ts Arcade 5-char initials entry shown at game over
     LeaderboardScene.ts Global top-N board; dual-mode (post-run / menu browse)
     HandwritingLabScene.ts `?lab=draw`: records real handwriting, exports JSON
@@ -153,7 +154,11 @@ src/
                       fired, solved, hit, power, blasted, shielded,
                       knockedOut).
     Swarm.ts          The aliens inside a Field: game clock, seeded spawners,
-                      movement + readability guard, AbilityHost.
+                      movement + readability guard, AbilityHost. Asks its
+                      SpawnDirector what to spawn.
+    director.ts       SpawnDirector (strategy): EndlessDirector = today's
+                      curve; LevelDirector = a story level's path, roster
+                      and boss.
     Match.ts          Battle match: N Fields on one seed stepped together, bots
                       per seat, KOs, placement, standing messages (pressure),
                       targeting, KO credit, badges, attack delivery, and
@@ -177,8 +182,10 @@ src/
                       state with update/onHit/onKilled hooks + `AbilityHost`.
     Bullet.ts         Pure bullet state {x, y, active}.
   renderDoodle/        The default view: DoodleWorld (FieldView), recipes.ts
-                      (one short stroke recipe per ship/monster), pencil.ts
-                      (Rough.js + pre-drawn boil frames), paper.ts, font.ts
+                      (one short stroke recipe per ship/monster/boss),
+                      pencil.ts (Rough.js + pre-drawn boil frames), paper.ts,
+                      pages.ts (story pages: tinted paper + faint props that
+                      scroll), shipIcons.ts, font.ts
   render3d/
     World3D.ts        Three.js view: camera, lights, starfield, ship/alien/bullet
                       meshes, voxel-debris explosions, shake. Page-wide singleton.
@@ -237,9 +244,10 @@ docs/SOLO_MODES_DESIGN.md   Story mode plan: 10 scrolling levels + bosses, Endle
   (baked in at build, public by design). `isLeaderboardEnabled()` is true only
   when both are present, so the game **builds and runs locally without them** —
   game over just returns to the menu instead of routing to name entry.
-- **Navigation:** `BootScene` → `MenuScene` (ship picker ◀ ▶ / ←→, then PLAY /
-  BATTLE (beta) / HOW TO PLAY / SCORES). PLAY →
-  `GameScene`; BATTLE → `GameScene` with `{ battle: true }` (no leaderboard); HOW TO PLAY → `HowToPlayScene`; SCORES → `LeaderboardScene` in
+- **Navigation:** `BootScene` → `MenuScene` (ship picker ◀ ▶ / ←→, then STORY /
+  ENDLESS / BATTLE (beta) / HOW TO PLAY / SCORES). STORY → `GameScene` with
+  `{ story: { level: 0, lives, score } }` (no leaderboard yet); ENDLESS (and
+  Enter) → `GameScene`; BATTLE → `GameScene` with `{ battle: true }` (no leaderboard); HOW TO PLAY → `HowToPlayScene`; SCORES → `LeaderboardScene` in
   **browse** mode (fetches `getTop()` itself, BACK → menu).
 - Game-over flow (when enabled): GAME OVER overlay → `NameEntryScene` (3–6 char
   length selector + initials) → `submitScore` (via the match gate) →
@@ -590,6 +598,22 @@ Green=multiplication, Yellow=division.
     banner.
   - **Play-testing (dev only):** `?ability=blinker,shielded,splitter` makes
     every allowed spawn one of the listed abilities, ignoring unlocks.
+- **Story mode** (`config/tuning/story.ts`, docs/SOLO_MODES_DESIGN.md):
+  levels are data (`LEVELS`: page, seed, path length, difficulty range,
+  roster, drifters, boss). Swarm asks a `SpawnDirector` (`sim/director.ts`)
+  what to spawn: `LevelDirector` lerps d from `D.FROM` to `D.TO` along the
+  path, which runs on **field time** (freezes and SLOW hold it). At the end
+  of the path no spawns come until the board is clear, then the **boss**
+  comes in; while it's up, one minion at a time (`BOSS_PHASE_UNSOLVED`).
+  The boss (`Boss` ability) takes `HP` answers: each but the last rolls a
+  new sum and burrows to the other side and up (numbers hidden while it
+  digs), then holds still to be read; reaching the ship costs a life and
+  sends it back up; BLAST doesn't touch it. The last answer clears the
+  level (`levelCleared`, a card, then the next level with the same lives
+  and score). Game over = back to the menu (level 1 next time). The top
+  bar shows the path's progress; the page scrolls (`DOODLE.PAGE_*`).
+  Built: level 1, THE BACKYARD (3 min, d 0 → 0.25, beetles + dragonflies,
+  boss GIANT MOLE, 5 answers of 3 balls). Bots: rookie clears 18/20.
 - **Bullets hit only their target.** Results are unique on the field, and each
   bullet carries the alien whose answer fired it (`Bullet.target`); it flies
   through every other alien, so only the solved alien can die or lose its
@@ -798,7 +822,9 @@ dMatch)`; it is 0 in solo play.
 14. [ ] **Solo modes: STORY + ENDLESS** — 10 notebook-page levels, each
        with a new monster and a boss; today's game becomes ENDLESS. Plan
        and milestones L1–L8: `docs/SOLO_MODES_DESIGN.md` (decided
-       2026-10-18; first slice = L1–L4, level 1 with its boss).
+       2026-10-18). [x] L1 menu modes, [x] L2 director seam, [x] L3 level
+       engine (level 1 page + path), [x] L4 boss (Giant Mole); next: L5
+       table of contents + scores, power card before each level.
 
 ## Conventions
 
@@ -830,6 +856,16 @@ dMatch)`; it is 0 in solo play.
 ## Decision Log
 
 Newest first. Format: `YYYY-MM-DD — decision — rationale`.
+
+- **2026-10-18 — Story slice L1–L4: a SpawnDirector, level 1 and the Giant
+  Mole.** Story pacing goes behind a `SpawnDirector` interface (strategy
+  pattern) instead of `if (story)` in Swarm or a copied `StorySwarm` (owner's
+  first pick; a copy would duplicate ~550 lines, against the owner's own
+  "no duplicated code"). Endless/battles unchanged (golden master). Bosses
+  ride on the ability hooks; BLAST can't hit them; reaching the ship costs a
+  life and the boss retreats instead of leaving. Level 1 range set by bots:
+  d 0 → 0.4 let rookies clear 2/20, d 0 → 0.25 clears 18/20 (losing ~1.5
+  lives: lives carry over). Each level has a fixed seed (learnable).
 
 - **2026-10-18 — Story mode decided (docs/SOLO_MODES_DESIGN.md).** 10
   levels, a kid's imagined nature worlds (dirt, pond, treetops, swamp,

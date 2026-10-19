@@ -39,6 +39,9 @@ export const DOODLE = {
     pod: "#c07a3e",
     canopy: "#2a8f9e",
     flame: "#f08a2c",
+    // Story bosses.
+    mole: "#6b5a4e",
+    moleNose: "#e88aa0",
   } as Record<string, string>,
   /** Ability aliens wear a generic doodle in their model's color. */
   ABILITY_INK: {
@@ -97,4 +100,11 @@ export const DOODLE = {
   DOWN_PIECE_SPIN: 2.6, // rad/s
   DOWN_GRAVITY: 260, // px/s²
   DOWN_WORDS: ["KABOOM!", "CRASH!", "BOOM!"],
+
+  // Story pages (renderDoodle/pages.ts): the page scrolls as the path goes by.
+  PAGE_SCROLL_PX_PER_S: 22,
+  PAGE_PROP_ALPHA: 0.5, // props stay faint: the numbers must win
+  // A boss's answers left, as pips under it.
+  BOSS_PIP_R: 4,
+  BOSS_PIP_GAP: 12,
 } as const;

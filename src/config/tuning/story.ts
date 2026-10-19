@@ -41,6 +41,8 @@ export interface LevelDef {
   NAME: string;
   /** The notebook page it's drawn on (renderDoodle/pages.ts). */
   PAGE: string;
+  /** Same seed every attempt: the same aliens come, so a level can be learned. */
+  SEED: number;
   /** Field time (ms) from the start of the path to the boss. */
   PATH_MS: number;
   /** Difficulty d at the start and at the end of the path (paramsAt). */
@@ -84,6 +86,7 @@ export const LEVELS: readonly LevelDef[] = [
   {
     NAME: "THE BACKYARD",
     PAGE: "backyard",
+    SEED: 1001,
     PATH_MS: 180_000,
     // Bots (20 seeds): rookie clears 18/20 losing ~1.5 lives, pilot and ace all.
     D: { FROM: 0, TO: 0.25 },

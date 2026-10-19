@@ -136,17 +136,20 @@ adds one seam and reuses everything else:
 
 | # | Milestone | Done when |
 | --- | --- | --- |
-| L1 | Mode choice (STORY / ENDLESS) in the menu | ENDLESS = today's game |
-| L2 | Spawn director seam (refactor only) | golden master unchanged |
-| L3 | Level engine: `LEVELS` data, scrolling page + props, progress bar, level-complete card, lives carried over | level 1 playable to the end of the path |
-| L4 | Boss phase + Giant Mole | level 1 complete |
+| L1 ✓ | Mode choice (STORY / ENDLESS) in the menu | ENDLESS = today's game |
+| L2 ✓ | Spawn director seam (refactor only) | golden master unchanged |
+| L3 ✓ | Level engine: `LEVELS` data, scrolling page + props, progress bar, level-complete card, lives carried over | level 1 playable to the end of the path |
+| L4 ✓ | Boss phase + Giant Mole | level 1 complete |
 | L5 | Table of contents + per-level and full-run scores | runs save and restart at level 1 |
 | L6 | Levels 2–5 (pond, treetops, swamp, cave), subtraction, 4-ball rows, Bouncer, Heart balloon | bots clear them at the target rates |
 | L7 | Levels 6–10, multiplication | same |
 | L8 | Story bots report + balance pass; leaderboard `level` column | `npm run bots -- --story` |
 
 L1–L4 is the smallest playable slice: one full level with a boss, to judge
-the feel before building ten.
+the feel before building ten. **Built 2026-10-18.** Not in it yet: the
+"pick your power" card before each level (the menu's pick is used), monsters
+re-skinned per page (level 1 still draws the standard darter/swooper
+doodles), story scores on the leaderboard, a dev shortcut to a level.
 
 ## 9. Decisions (owner, 2026-10-18)
 

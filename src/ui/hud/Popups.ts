@@ -84,15 +84,20 @@ export class Popups {
   introduceAbility(kind: AbilityKind): void {
     if (this.introduced.has(kind)) return;
     this.introduced.add(kind);
+    this.banner(ABILITY.INTRO[kind], 15, ABILITY.INTRO_MS);
+  }
+
+  /** A line of text at the top of the field that fades after `ms`. */
+  banner(text: string, size: number, ms: number): void {
     const banner = this.ducker.add(
       this.scene.add
-        .text(GAME.WIDTH / 2, ABILITY.INTRO_Y, ABILITY.INTRO[kind], textStyle(15, PALETTE.GOLD, outline(4)))
+        .text(GAME.WIDTH / 2, ABILITY.INTRO_Y, text, textStyle(size, PALETTE.GOLD, outline(4)))
         .setOrigin(0.5),
     );
     this.scene.tweens.add({
       targets: banner,
       alpha: 0,
-      delay: ABILITY.INTRO_MS,
+      delay: ms,
       duration: 400,
       onComplete: () => banner.destroy(),
     });
