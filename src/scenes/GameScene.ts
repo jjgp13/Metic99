@@ -21,6 +21,7 @@ import { EnergyHud } from "../ui/hud/EnergyHud";
 import { GameOverScreen } from "../ui/hud/GameOverScreen";
 import { InputPanel, type PadKey } from "../ui/hud/InputPanel";
 import { LevelClearCard } from "../ui/hud/LevelClearCard";
+import { LevelMusic } from "./levelMusic";
 import { PauseOverlay } from "../ui/hud/PauseOverlay";
 import { Popups } from "../ui/hud/Popups";
 import { Reticle } from "../ui/hud/Reticle";
@@ -55,6 +56,8 @@ export default class GameScene extends Phaser.Scene {
   private autopilot: Bot | null = null;
   /** Story mode: the run so far (this scene plays its current level). */
   private story: StoryRun | null = null;
+  /** Story mode: the level's music. */
+  private music: LevelMusic | null = null;
   private clock!: SimClock;
   /** What the playtest log records beyond the field (services/playtestLog.ts). */
   private runExtras!: RunExtras;
@@ -126,6 +129,7 @@ export default class GameScene extends Phaser.Scene {
       void startMatch();
     }
     initPlaytestLog();
+    this.music = this.story ? new LevelMusic(this, this.story.level) : null;
     if (this.story) {
       const level = LEVELS[this.story.level];
       this.popups.banner(`LEVEL ${this.story.level + 1} · ${level.NAME}`, 22, STORY.BANNER_MS);
@@ -251,6 +255,7 @@ export default class GameScene extends Phaser.Scene {
     switch (e.type) {
       case "spawned":
         if (e.alien.ability instanceof Boss) {
+          this.music?.boss();
           this.popups.banner(`BOSS · ${e.alien.ability.def.NAME}!`, 26, STORY.BANNER_MS);
           this.shake(300, 0.008);
         } else if (e.alien.species && this.story) {
@@ -441,6 +446,7 @@ export default class GameScene extends Phaser.Scene {
   private togglePause(): void {
     if (this.gameOver) return;
     this.paused = !this.paused;
+    this.music?.pause(this.paused);
     this.reticle.setVisible(!this.paused);
     this.answer.setVisible(!this.paused);
     this.inputPanel.setEnabled(!this.paused);
@@ -455,6 +461,7 @@ export default class GameScene extends Phaser.Scene {
   private endGame(): void {
     if (this.gameOver) return;
     this.gameOver = true;
+    this.music?.stop();
     this.reticle.clear();
     this.inputPanel.setEnabled(false);
     if (import.meta.env.DEV) this.logPaceToConsole();
@@ -512,6 +519,7 @@ export default class GameScene extends Phaser.Scene {
   private clearLevel(): void {
     if (this.gameOver || !this.story) return;
     this.gameOver = true;
+    this.music?.stop();
     this.reticle.clear();
     this.inputPanel.setEnabled(false);
     this.sound.play("explode", { volume: 0.6, rate: 0.6 });

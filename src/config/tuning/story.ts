@@ -89,6 +89,12 @@ export interface LevelDef {
   BOSS: BossDef;
 }
 
+/** Story music (scenes/levelMusic.ts): a path and a boss track per level. */
+export const MUSIC = {
+  VOLUME: 0.35, // under the sound effects
+  FADE_MS: 700, // crossfade to the boss track; fade out at the end
+} as const;
+
 export const STORY = {
   /** Lives for the whole run (arcade: they carry over between levels). */
   LIVES: 3,
