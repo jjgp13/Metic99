@@ -320,6 +320,7 @@ export default class Alien {
       this.holdMs -= delta;
       return;
     }
+    if (this.ability) delta = this.ability.pace(this, delta);
 
     const dt = delta / 1000;
     switch (this.kind) {

@@ -49,6 +49,9 @@ export interface CreatureLook {
 export interface BossLook {
   up: DoodleRecipe;
   hidden?: DoodleRecipe;
+  /** Drawn on the page under every alien while the boss is up (a lamp's
+   * beam, a shadow); `ctx` is in logical px. */
+  under?(ctx: CanvasRenderingContext2D, boss: Alien, alpha: number): void;
 }
 
 /** A prop placed on the page: `pathY` px along the path from the start. */

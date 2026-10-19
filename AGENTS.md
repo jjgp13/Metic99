@@ -623,6 +623,14 @@ Green=multiplication, Yellow=division.
   the numbers and sometimes march in pairs, worms made of numbers, a
   butterfly that folds its wings over its numbers; boss GIANT MOLE, 5
   answers of 3 balls). Bots: rookie clears 16/20, pilot and ace 20/20.
+  Level 5, THE DARK CAVE (200 s, d 0.45 → 0.6): bats hang upside down,
+  wake with a shake and drop (trait `roost`), glowworms on silk threads
+  glow on and off (trait `glow`), a mine cart whose wheels are its numbers;
+  boss CAVE TROLL (6 answers), whose numbers show only in a swinging
+  lamp's beam; the light holds it still (`objects/caveTroll.ts`). Bots:
+  rookie 2/20, pilot 18/20, ace 20/20. Traits can scale or hold their
+  kind's movement with `Ability.pace(alien, delta)`; `update(delta, alien)`
+  gets the alien; a boss look can draw under the field (`BossLook.under`).
 - **Bullets hit only their target.** Results are unique on the field, and each
   bullet carries the alien whose answer fired it (`Bullet.target`); it flies
   through every other alien, so only the solved alien can die or lose its
@@ -865,6 +873,16 @@ dMatch)`; it is 0 in solo play.
 ## Decision Log
 
 Newest first. Format: `YYYY-MM-DD — decision — rationale`.
+
+- **2026-10-18 — Level 5, THE DARK CAVE: creatures by movement, a boss read
+  by lamplight.** Bats hang still (easy read), shake, then drop; glowworms
+  glow on a telegraphed rhythm and move at 60% (they hide: owner's rule);
+  the troll's numbers show only in a steady sweeping beam and it freezes
+  while lit (a beam from the ship was rejected: the ship only moves toward
+  a target, so the player couldn't aim it). New generic hooks, no-ops
+  elsewhere: `Ability.pace` (hold/scale the kind's pattern; complements
+  the pond's `steer`), `update(delta, alien)`, `BossLook.under`. d range
+  0.45 → 0.6, not 0.5 → 0.65: pilots cleared 1/20 at the planned range.
 
 - **2026-10-18 — Creatures with personality; one file per level.** Owner's
   ask: each level's monsters behave differently, not just look different.

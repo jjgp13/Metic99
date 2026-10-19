@@ -1,5 +1,6 @@
 import { WINGS } from "../config/constants";
 import { Ability, blinkCover } from "./abilities";
+import { Glow, Roost } from "./caveTraits";
 
 /**
  * Story creatures' special rules (SpeciesDef.TRAIT): an Ability on the same
@@ -24,4 +25,6 @@ export class Wings extends Ability {
 
 export const TRAITS: Record<string, () => Ability> = {
   wings: () => new Wings(),
+  roost: () => new Roost(),
+  glow: () => new Glow(),
 };

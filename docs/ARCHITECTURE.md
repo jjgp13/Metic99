@@ -137,6 +137,12 @@ fits here, and **what we didn't do**.
   ability never touches the field's code.
 - **Instead of:** `if (alien.kind === "shielded")` scattered through
   `Field` and `Swarm`.
+- **A hook with a default:** `pace(alien, delta)` returns `delta` (move as
+  usual) unless overridden; story traits and bosses use it to hold, slow or
+  speed their kind's movement (`objects/caveTraits.ts` `Roost`: a bat
+  hangs, then drops; `objects/caveTroll.ts`: the troll stands still in the
+  lamp's light). `update(delta, alien)` also gets the alien, for rules that
+  depend on where it is.
 
 ### 2.8 Dependency inversion through small interfaces
 
