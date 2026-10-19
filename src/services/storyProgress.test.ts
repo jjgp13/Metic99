@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { NO_PROGRESS, islandState, mergeLevel, mergeRun, parseProgress } from "./storyProgress";
+import { NO_PROGRESS, islandState, mergeLevel, mergeRun, parseProgress, parseSavedRun } from "./storyProgress";
 
 describe("mergeLevel", () => {
   it("beating a boss opens the next stage and keeps the best score", () => {
@@ -38,5 +38,23 @@ describe("parseProgress", () => {
       bestRun: 0,
     });
     expect(parseProgress(null)).toEqual(NO_PROGRESS);
+  });
+});
+
+describe("saved story run", () => {
+  it("keeps a sensible run", () => {
+    expect(parseSavedRun({ level: 2, lives: 1, score: 1234, levelScores: [400, 834] })).toEqual({
+      level: 2,
+      lives: 1,
+      score: 1234,
+      levelScores: [400, 834],
+    });
+  });
+
+  it("drops a run that can't be played (no lives, bad level, junk)", () => {
+    expect(parseSavedRun({ level: 1, lives: 0, score: 10 })).toBeNull();
+    expect(parseSavedRun({ level: 99, lives: 2, score: 10 })).toBeNull();
+    expect(parseSavedRun("nonsense")).toBeNull();
+    expect(parseSavedRun(null)).toBeNull();
   });
 });

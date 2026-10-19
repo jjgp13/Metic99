@@ -14,6 +14,7 @@ export const STORAGE = {
   INPUT_MODE: "metic-input", // "keys" (keypad) or "draw" (handwriting pad)
   HW_LAB: "metic-hw-lab", // handwriting lab samples in progress (?lab=draw)
   STORY: "metic-story", // story map: furthest stage reached, best scores (JSON)
+  STORY_SAVE: "metic-story-save", // the story run in progress: level, lives, score (JSON)
 } as const;
 
 /** Arcade global leaderboard (Supabase-backed). */

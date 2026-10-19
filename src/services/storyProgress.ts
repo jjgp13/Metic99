@@ -82,6 +82,59 @@ export function parseProgress(value: unknown): StoryProgress {
   };
 }
 
+/**
+ * The story run in progress, saved when each level starts (and when one is
+ * cleared, as the next level), so a run left in the middle continues from
+ * the start of that level with the lives and score it had there. A game
+ * over or the end of the story deletes it.
+ */
+export interface SavedRun {
+  /** Index into LEVELS of the level to play next. */
+  level: number;
+  lives: number;
+  score: number;
+  /** Points scored in each level already finished. */
+  levelScores: number[];
+}
+
+export function saveRun(run: SavedRun): void {
+  try {
+    localStorage.setItem(STORAGE.STORY_SAVE, JSON.stringify(run));
+  } catch {
+    // Not saved (private mode / quota): the run just can't be continued.
+  }
+}
+
+export function loadSavedRun(): SavedRun | null {
+  try {
+    const raw = localStorage.getItem(STORAGE.STORY_SAVE);
+    return raw ? parseSavedRun(JSON.parse(raw)) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function clearSavedRun(): void {
+  try {
+    localStorage.removeItem(STORAGE.STORY_SAVE);
+  } catch {
+    // Nothing to clear.
+  }
+}
+
+/** A saved run from storage, or null if it doesn't make sense (no lives left,
+ * a level that doesn't exist): a hand-edited value must not start a broken run. */
+export function parseSavedRun(value: unknown): SavedRun | null {
+  const v = (value ?? {}) as Partial<Record<keyof SavedRun, unknown>>;
+  const whole = (n: unknown) => (typeof n === "number" && Number.isFinite(n) && n >= 0 ? Math.floor(n) : -1);
+  const level = whole(v.level);
+  const lives = whole(v.lives);
+  const score = whole(v.score);
+  if (level < 0 || level >= STORY.STAGES || lives < 1 || lives > STORY.LIVES || score < 0) return null;
+  const levelScores = Array.isArray(v.levelScores) ? v.levelScores.map(whole).map((n) => Math.max(0, n)) : [];
+  return { level, lives, score, levelScores: levelScores.slice(0, level) };
+}
+
 function save(progress: StoryProgress): void {
   try {
     localStorage.setItem(STORAGE.STORY, JSON.stringify(progress));

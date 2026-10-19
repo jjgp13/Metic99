@@ -128,6 +128,12 @@ export const STORY_MAP = {
     [132, 112],
     [338, 118],
   ] as const,
+  /** After a level is cleared the ship flies to the next island this long,
+   * then waits for a tap to start it. */
+  TRAVEL_MS: 1600,
+  /** Where the ship hovers next to its island. */
+  SHIP_DX: 52,
+  SHIP_DY: -24,
   /** An island's doodle box (logical px), drawn at 2× for a sharp picture. */
   ISLAND_W: 112,
   ISLAND_H: 66,

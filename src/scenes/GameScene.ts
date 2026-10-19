@@ -7,7 +7,7 @@ import { ABILITY_KINDS, Boss, type AbilityKind } from "../objects/abilities";
 import { isLeaderboardEnabled, stageBoard, startMatch } from "../services/leaderboard";
 import { rankFor, recordRun } from "../services/masteryStats";
 import { hitRecord, initPlaytestLog, logRun, type InputSource, type RunExtras } from "../services/playtestLog";
-import { recordLevel, recordStoryRun } from "../services/storyProgress";
+import { clearSavedRun, recordLevel, recordStoryRun, saveRun as saveStoryRun } from "../services/storyProgress";
 import type { Bot } from "../sim/Bot";
 import { ANSWER_MAX_DIGITS, type Field, type FieldEvent, type FieldInput } from "../sim/Field";
 import type { Match, MatchEvent } from "../sim/Match";
@@ -130,6 +130,8 @@ export default class GameScene extends Phaser.Scene {
     }
     initPlaytestLog();
     this.music = this.story ? new LevelMusic(this, this.story.level) : null;
+    // Story: a run left in the middle continues from the start of this level.
+    if (this.story) saveStoryRun(this.story);
     if (this.story) {
       const level = LEVELS[this.story.level];
       this.popups.banner(`LEVEL ${this.story.level + 1} · ${level.NAME}`, 22, STORY.BANNER_MS);
@@ -156,7 +158,11 @@ export default class GameScene extends Phaser.Scene {
     this.sendButton = this.match ? new SendButton(this, this.field, (cost) => this.sendAttack(cost)) : null;
     this.energyHud = new EnergyHud(this, this.field, { battle: this.match !== null, onPower: () => this.usePower() });
     this.popups = new Popups(this, this.ducker);
-    this.pauseOverlay = new PauseOverlay(this, () => this.togglePause());
+    this.pauseOverlay = new PauseOverlay(
+      this,
+      () => this.togglePause(),
+      this.story ? () => this.scene.start("StoryMapScene") : null,
+    );
 
     this.unseenMatchEvents = [];
     this.battleViews = this.match
@@ -470,6 +476,7 @@ export default class GameScene extends Phaser.Scene {
     const { mastery, newHighScore } = recordRun(f);
     this.newHighScore = newHighScore;
     if (this.story) {
+      clearSavedRun(); // arcade rules: a game over sends the next run to island 1
       recordLevel(this.story.level, f.score - f.startScore, false);
       this.newHighScore = recordStoryRun(f.score);
     }
@@ -528,6 +535,8 @@ export default class GameScene extends Phaser.Scene {
     recordLevel(this.story.level, f.score - f.startScore, true);
     // The last level built: the run ends here (the next stage isn't built yet).
     if (!hasNext) this.newHighScore = recordStoryRun(f.score);
+    if (hasNext) saveStoryRun(this.nextRun());
+    else clearSavedRun();
     new LevelClearCard(this, {
       number: this.story.level + 1,
       name: LEVELS[this.story.level].NAME,
@@ -539,6 +548,18 @@ export default class GameScene extends Phaser.Scene {
     this.saveRun(() => {});
     this.leaveAllowedAt = this.time.now + STORY.CLEAR_MIN_MS;
     this.input.on("pointerdown", () => this.leaveGameOver());
+  }
+
+  /** Story: the run as it goes into the next level (after a clear). */
+  private nextRun(): StoryRun {
+    const f = this.field;
+    const story = this.story!;
+    return {
+      level: story.level + 1,
+      lives: f.lives,
+      score: f.score,
+      levelScores: [...story.levelScores, f.score - f.startScore],
+    };
   }
 
   /** Story: the level's page and how far it has scrolled, for the field view. */
@@ -565,7 +586,8 @@ export default class GameScene extends Phaser.Scene {
       const next = this.story.level + 1;
       const levelScores = [...this.story.levelScores, f.score - f.startScore];
       if (f.cleared && next < LEVELS.length) {
-        this.scene.restart({ story: { level: next, lives: f.lives, score: f.score, levelScores } });
+        // Back to the map: the ship flies to the next island, then a tap starts it.
+        this.scene.start("StoryMapScene", { travelTo: next });
       } else if (isLeaderboardEnabled()) {
         this.scene.start("NameEntryScene", {
           score: f.score,
