@@ -41,6 +41,7 @@ One row per concept. Add new rows at the bottom.
 | Functional core, imperative shell | Decide in pure functions (easy to test), and keep reading/writing storage in a thin outer layer | `mergeLevel` / `recordLevel` in `services/storyProgress.ts` (like `masteryStats.ts`) | design | 2026-10-18 | story map (L5) |
 | Don't trust stored data | Data read back from storage (or the network) is checked and cleaned before use, so a bad value can't break the screen | `parseProgress` in `services/storyProgress.ts` | engineering | 2026-10-18 | story map (L5) |
 | Backward-compatible migration | Change the database so the old client still works (new column with a default, new parameters with defaults), then deploy the new client | `supabase/story-boards.sql` (`level` default 0, `p_level default 0`) | backend | 2026-10-18 | story map (L5) |
+| Default implementation | A base class method returns the usual answer, so only the one subclass that needs another answer overrides it, and every caller stays the same | `Ability.ballCover(i, n)` returns `cover`; only `Moon` lights its balls one by one | design | 2026-10-19 | level 9, the night sky |
 
 ## In the code, not studied yet
 

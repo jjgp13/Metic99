@@ -62,7 +62,7 @@ A kid's imagination of nature and the elements, doodled in a notebook.
 | 6 | Volcano (fire) | fireflies, lava drips | Dragon | + multiplication |
 | 7 | Windy sky (air) | birds, kites, paper planes | Storm Cloud | × mixed |
 | 8 | Snowy mountain | penguins, snowballs | Yeti | mixed |
-| 9 | Night sky | comets, aliens (the original game) | The Moon | everything |
+| 9 ✓ | Night sky | invaders (the original game), comets, UFOs, a shooting star | The Moon (numbers only where it's lit) | everything (sums for now) |
 | 10 | The kid's bedroom | toys come alive | Under-the-Bed Monster | everything |
 
 Ending idea: it was all the kid's homework doodles.
@@ -228,7 +228,7 @@ white number balls still win) with stalactites, rocks, crystals, drips.
 | L4 ✓ | Boss phase + Giant Mole | level 1 complete |
 | L5 ✓ | Story map + per-level and full-run scores | runs save and restart at level 1 |
 | L6 ✓ | Levels 2–5 (pond, treetops, swamp, cave), 4-ball rows (`cluster`); still to do: subtraction, Bouncer, Heart balloon | bots clear them at the target rates |
-| L7 | Levels 6–10 (volcano ✓), multiplication | same |
+| L7 | Levels 6–10 (volcano ✓, night sky ✓), multiplication | same |
 | L8 | Story bots report + balance pass; leaderboard `level` column | `npm run bots -- --story` |
 
 L1–L4 is the smallest playable slice: one full level with a boss, to judge
@@ -252,6 +252,34 @@ three creatures. Rules `config/levels/volcano.ts`, `objects/volcanoTraits.ts`,
 "pick your power" card before each level (the menu's pick is used), monsters
 re-skinned per page (level 1 still draws the standard darter/swooper
 doodles), story scores on the leaderboard, a dev shortcut to a level.
+
+**Level 9, THE NIGHT SKY (built 2026-10-19, on its own branch):** d 0.75 →
+0.9 over 140 s, sums only (all four operations wait for the shared
+operations piece). Creatures: **invaders** (darters, "eyes", a nod to the
+original Metic: they move only in steps on a beat, down / two steps one way
+/ down / two back, like Space Invaders; 60% come in a **row of 3** side by
+side (`MARCH.ROW`) that steps together; the beat quickens up to 50% as they
+come down; trait `night_march`), **big invaders** (3-ball lumberers, same
+march on a slower beat; `night_bigMarch`), **comets** (swoopers, "chain":
+the numbers ride in the tail; once in from the side they keep flying on a
+slant and bounce off the edges and off other creatures; ×0.9;
+`night_bounce`), **UFOs** (strafers, ×0.95: every 1.3 s of patrol their
+lights spin, then they vanish and reappear 120 px toward the roomier side;
+`night_warp`), and the bonus **shooting star** (drifter, "eyes": crosses
+1.7× faster, falling a little, and burns out from 45% to 80% of the way:
+make a wish in time; `night_wish`). Boss **THE MOON** (mechanic
+`night_phases`, 6 answers of 3 balls, ×0.3): a shadow sweeps across its
+face (full → waning from the left → new → waxing out to the right) and its
+numbers show only where it's lit, so they go dark one by one; each answer
+makes the full moon shorter and the dark longer; after an answer it slips
+behind a cloud. Bots (20 seeds, 3 fresh lives): rookie 0/20 (out at ~30% of
+the path), pilot 8/20, ace 20/20 (2.5 lives left); comets cause about half
+of the hits. The Moon never reaches the ship in bot runs: it is a reading
+(memory) fight, ~30–45 s. Shared changes, all no-ops elsewhere:
+`SpeciesDef.MARCH.ROW` (Swarm `marchInRow`), `Ability.ballCover(i, n)` (per
+ball cover, default = `cover`; DoodleWorld draws it per ball). Rules
+`config/levels/night.ts`, `objects/nightTraits.ts`, `objects/moon.ts`;
+looks `renderDoodle/levels/night.ts`; test `sim/night.test.ts`.
 
 ### Level 2, THE POND (built 2026-10-18)
 

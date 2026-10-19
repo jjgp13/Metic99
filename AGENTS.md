@@ -711,6 +711,12 @@ Green=multiplication, Yellow=division.
   Level 6, THE VOLCANO: lava drips that drop in hops, fireflies that go
   dark together, lava tortoises (answer the shell first), a hopping spark;
   boss DRAGON, whose fire breath re-rolls its sum (docs/SOLO_MODES_DESIGN.md).
+  Level 9, THE NIGHT SKY (140 s, d 0.75 → 0.9): invaders that step on a
+  beat in rows of three (Space Invaders, a nod to the original Metic),
+  comets that bounce off the edges, UFOs that warp, a shooting star that
+  burns out; boss THE MOON, whose numbers show only where it's lit
+  (`Ability.ballCover`: per-ball cover). Bots: rookie 0/20, pilot 8/20,
+  ace 20/20.
 - **Bullets hit only their target.** Results are unique on the field, and each
   bullet carries the alien whose answer fired it (`Bullet.target`); it flies
   through every other alien, so only the solved alien can die or lose its
@@ -959,6 +965,17 @@ dMatch)`; it is 0 in solo play.
 ## Decision Log
 
 Newest first. Format: `YYYY-MM-DD — decision — rationale`.
+
+- **2026-10-19 — Level 9, THE NIGHT SKY: invaders march in rows, the Moon
+  is read by its light.** Invaders are scripted steps (glide + hold, field
+  time) on a beat that quickens lower down, and a march can now come side by
+  side (`MARCH.ROW`) as well as in a line. The Moon's shadow covers its
+  numbers one by one (`Ability.ballCover(i, n)`, default = `cover`), chosen
+  over a gravity pull on other creatures (traits can't see the field) and
+  over phases that change its ball count (the readability box follows it).
+  Bots set the numbers: pilots cleared 12–16/20 at first; faster invader
+  beat, rows on 60% of spawns, comets ×0.9 and the Moon ×0.3 give rookie
+  0/20, pilot 8/20, ace 20/20.
 
 - **2026-10-19 — Owner's first story playtest: faster start, pushback,
   music, map flow, saves, public logs.** Levels 1–2 felt long and easy
