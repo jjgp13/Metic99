@@ -120,11 +120,14 @@ export type AlienKind = keyof typeof MONSTERS;
  * +y toward the player):
  * - "eyes" (beetle): the two balls are its eyes, side by side at its front;
  * - "chain" (worm): its body is the balls, in a column above its head;
- * - "wings" (butterfly): one ball on each wing.
+ * - "wings" (butterfly): one ball on each wing;
+ * - "cluster" (frog): spots on its back, in rows of 2 going up from the body
+ *   center (any count; an odd last ball sits in the middle), so 3–4+ ball
+ *   sums stay compact.
  * "eyes" and "wings" need exactly 2 balls; with any other count the alien
  * falls back to "row".
  */
-export type BallLayout = "row" | "eyes" | "chain" | "wings";
+export type BallLayout = "row" | "eyes" | "chain" | "wings" | "cluster";
 
 export const BALL_LAYOUTS = {
   eyes: { HALF_W: 20, TOP: 20, BOTTOM: 22, EYE_DX: 10, EYE_Y: 8 },
@@ -132,6 +135,9 @@ export const BALL_LAYOUTS = {
   // adds WIGGLE_PX each side, the view's wriggle.
   chain: { FIRST_Y: -8, GAP: 18, BOTTOM: 16, WIGGLE_PX: 3 },
   wings: { HALF_W: 30, TOP: 24, BOTTOM: 25, WING_DX: 16, WING_Y: -4 },
+  // Row j of balls sits at y = FIRST_Y - j × GAP_Y, its two balls GAP_X
+  // apart; the body around them adds SIDE px each side and TOP px above.
+  cluster: { FIRST_Y: -2, GAP_X: 22, GAP_Y: 20, SIDE: 8, TOP: 6, BOTTOM: 26 },
 } as const;
 
 /**

@@ -179,7 +179,9 @@ src/
                       `ability`; `glideTo`/`hold` override the pattern for
                       scripted moves (knockback, splits).
     abilities.ts      Monster abilities (Blinker, Shielded, Splitter): pure
-                      state with update/onHit/onKilled hooks + `AbilityHost`.
+                      state with update/steer/onHit/onKilled hooks + `AbilityHost`.
+    traits.ts, bosses.ts  Story registries: creature traits, boss mechanics.
+    pondCreatures.ts  Level 2's rules: Hop, Dart, Dive traits + the BigFrog.
     Bullet.ts         Pure bullet state {x, y, active}.
   renderDoodle/        The default view: DoodleWorld (FieldView), recipes.ts
                       (one short stroke recipe per ship/monster/boss),
@@ -623,6 +625,16 @@ Green=multiplication, Yellow=division.
   the numbers and sometimes march in pairs, worms made of numbers, a
   butterfly that folds its wings over its numbers; boss GIANT MOLE, 5
   answers of 3 balls). Bots: rookie clears 16/20, pilot and ace 20/20.
+  Level 2, THE POND (3:20, d 0.1 → 0.28, sums of 2–4 balls via
+  `LevelDef.MAX_BALLS`): goldfish whose numbers are bubbles, swimming in
+  schools of 3; dragonflies whose eyes are the numbers, darting down in
+  zips with hovers (trait `dart`); frogs with 3–4 spots (`cluster` layout)
+  that sit longer the more spots they carry (trait `hop`); a duck that dives
+  and pops up further along (trait `dive`); boss BIG FROG (6 answers of 4
+  balls, `leap`: sits, croaks, leaps from pad to pad). Rules for the pond's
+  traits/boss in `objects/pondCreatures.ts`; they move themselves through
+  `Ability.steer(alien, fieldDelta)` (field time). Bots: rookie 11/20,
+  pilot and ace 20/20.
 - **Bullets hit only their target.** Results are unique on the field, and each
   bullet carries the alien whose answer fired it (`Bullet.target`); it flies
   through every other alien, so only the solved alien can die or lose its
@@ -832,7 +844,7 @@ dMatch)`; it is 0 in solo play.
        with a new monster and a boss; today's game becomes ENDLESS. Plan
        and milestones L1–L8: `docs/SOLO_MODES_DESIGN.md` (decided
        2026-10-18). [x] L1 menu modes, [x] L2 director seam, [x] L3 level
-       engine (level 1 page + path), [x] L4 boss (Giant Mole); next: L5
+       engine (level 1 page + path), [x] L4 boss (Giant Mole), level 2 the pond (Big Frog); next: L5
        table of contents + scores, power card before each level.
 
 ## Conventions
@@ -865,6 +877,16 @@ dMatch)`; it is 0 in solo play.
 ## Decision Log
 
 Newest first. Format: `YYYY-MM-DD — decision — rationale`.
+
+- **2026-10-18 — Level 2, THE POND, and three small generic rules.**
+  `Ability.steer(alien, fieldDelta)` lets a trait or boss script its own
+  moves on field time (`update` runs on real time, so it can't drive
+  movement fairly under FREEZE/SLOW); `LevelDef.MAX_BALLS` lets a level
+  carry 3–4 ball sums below the d that would give them; the `cluster`
+  layout keeps 3–4+ balls compact (rows of 2). The owner's speed rule
+  applied to creatures: a frog sits 250 ms longer per spot. Bots set the
+  range: d 0.2 → 0.35 cleared rookies 0/20 (fish schools + frogs), d 0.1
+  → 0.28 with schools on 15% of fish spawns clears 11/20 (level 1: 16/20).
 
 - **2026-10-18 — Creatures with personality; one file per level.** Owner's
   ask: each level's monsters behave differently, not just look different.

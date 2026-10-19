@@ -145,7 +145,11 @@ Each level turns the monster kinds into its own creatures
 - a **march** (`MARCH: { SIZE, CHANCE }`): sometimes comes in a line, in
   step; a line skips the unsolved cap but obeys the threat budget;
 - an **intro** line shown the first time it appears.
-Bosses fight by a **mechanic** (`objects/bosses.ts`; "burrow" = the mole).
+Bosses fight by a **mechanic** (`objects/bosses.ts`; "burrow" = the mole,
+"leap" = the Big Frog). A trait or boss that moves in its own way (darts,
+dives, leaps) scripts it in `Ability.steer(alien, fieldDelta)` with
+`alien.glideTo` / `alien.hold`; `steer` runs on field time, so freezes and
+SLOW hold it like any other movement.
 
 ### Adding a level (one file each, so levels can be built in parallel)
 
@@ -158,6 +162,8 @@ Bosses fight by a **mechanic** (`objects/bosses.ts`; "burrow" = the mole).
 3. New rules only if needed: a trait (an Ability class + one line in
    `TRAITS`), a boss mechanic (subclass `Boss` + one line in
    `BOSS_MECHANICS`), a layout (BALL_LAYOUTS + `Alien.boxFor`/`ballOffset`).
+   More balls than the d range gives: `LevelDef.MAX_BALLS` (3+ ball sums
+   ride on lumberers, one on screen at a time).
 4. Check: `story.test.ts`-style run (every creature appears, no box
    overlaps), bots per level (rookie mostly clears early levels), the level
    played in the browser (`?bot=ace`), golden master unchanged.
@@ -171,7 +177,7 @@ Bosses fight by a **mechanic** (`objects/bosses.ts`; "burrow" = the mole).
 | L3 ✓ | Level engine: `LEVELS` data, scrolling page + props, progress bar, level-complete card, lives carried over | level 1 playable to the end of the path |
 | L4 ✓ | Boss phase + Giant Mole | level 1 complete |
 | L5 | Table of contents + per-level and full-run scores | runs save and restart at level 1 |
-| L6 | Levels 2–5 (pond, treetops, swamp, cave), subtraction, 4-ball rows, Bouncer, Heart balloon | bots clear them at the target rates |
+| L6 | Levels 2–5 (pond ✓, treetops, swamp, cave), subtraction, 4-ball rows (✓ `cluster`), Bouncer, Heart balloon | bots clear them at the target rates |
 | L7 | Levels 6–10, multiplication | same |
 | L8 | Story bots report + balance pass; leaderboard `level` column | `npm run bots -- --story` |
 
@@ -180,6 +186,26 @@ the feel before building ten. **Built 2026-10-18.** Not in it yet: the
 "pick your power" card before each level (the menu's pick is used), monsters
 re-skinned per page (level 1 still draws the standard darter/swooper
 doodles), story scores on the leaderboard, a dev shortcut to a level.
+
+### Level 2, THE POND (built 2026-10-18)
+
+`config/levels/pond.ts` + `renderDoodle/levels/pond.ts`, rules for its
+traits and boss in `objects/pondCreatures.ts`. 3:20 of path, d 0.1 → 0.28,
+sums of 2–4 balls (`MAX_BALLS: 4`).
+
+| Creature | Kind | Personality |
+| --- | --- | --- |
+| Goldfish | darter | its numbers are the bubbles it blows (chain layout, wobbling); swims in **schools of 3** (march, 15%) |
+| Dragonfly | strafer | its big eyes are its numbers; patrols and buzzes, then **darts down in zips, hovering between them** (trait `dart`) |
+| Frog | lumberer (3–4 balls) | its spots are its numbers (`cluster` layout); hops, and **sits longer the more spots it has** (trait `hop`, +250 ms per ball) |
+| Duck (bonus) | drifter | a number on each wing; paddles across, tips its head down, then **dives** (numbers hidden) and pops up 70 px on (trait `dive`) |
+| **BIG FROG** | boss, `leap` | 6 answers of 4 balls; leaps onto the page, then **sits, croaks (shakes: the telegraph), and leaps** down and across to the next pad (~13 px/s, slower than the mole: more answers); each answer but the last sends it jumping back up, numbers hidden in the air |
+
+Bots (20 seeds, 3 fresh lives): rookie clears 11/20, pilot 20/20, ace 20/20
+(level 1: 16/20, 20/20, 20/20). Fish cause most hits. Ideas left for later:
+a tongue that grabs (needs a way for a boss to act on the ship or a
+minion), croaks that call tadpole minions (needs an `AbilityHost` call to
+spawn one of the level's creatures).
 
 ## 9. Decisions (owner, 2026-10-18)
 

@@ -198,6 +198,11 @@ export default class Alien {
         const topBall = L.FIRST_Y - (this.ballCount - 1) * L.GAP;
         return { halfW: r + L.WIGGLE_PX, top: -topBall + r, bottom: L.BOTTOM };
       }
+      case "cluster": {
+        const L = BALL_LAYOUTS.cluster;
+        const topRow = L.FIRST_Y - (Math.ceil(this.ballCount / 2) - 1) * L.GAP_Y;
+        return { halfW: L.GAP_X / 2 + r + L.SIDE, top: -topRow + r + L.TOP, bottom: L.BOTTOM };
+      }
       case "row": {
         const ballRowHalf = ((this.ballCount - 1) * ENEMY.BALL_SPACING) / 2 + r;
         return { halfW: Math.max(kindBox.HALF_W, ballRowHalf), top: kindBox.BALLS_Y + r, bottom: kindBox.BOTTOM };
@@ -214,6 +219,12 @@ export default class Alien {
         return [(i === 0 ? -1 : 1) * BALL_LAYOUTS.wings.WING_DX, BALL_LAYOUTS.wings.WING_Y];
       case "chain":
         return [0, BALL_LAYOUTS.chain.FIRST_Y - i * BALL_LAYOUTS.chain.GAP];
+      case "cluster": {
+        const L = BALL_LAYOUTS.cluster;
+        const row = Math.floor(i / 2);
+        const alone = i === this.ballCount - 1 && i % 2 === 0; // odd ball out
+        return [alone ? 0 : (i % 2 === 0 ? -1 : 1) * (L.GAP_X / 2), L.FIRST_Y - row * L.GAP_Y];
+      }
       case "row":
         return [(i - (this.ballCount - 1) / 2) * ENEMY.BALL_SPACING, -(this.top - ENEMY.BALL_RADIUS)];
     }
