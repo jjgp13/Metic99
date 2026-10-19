@@ -651,9 +651,15 @@ Green=multiplication, Yellow=division.
   **Story map** (`StoryMapScene`, `STORY_MAP`, owner's design): 10 islands
   (`STORY.STAGES`) up a notebook page joined by a pencil trail. A stage is
   reached once the previous boss is beaten (`services/storyProgress.ts`,
-  `STORAGE.STORY`): reached islands are shaded with a sketch of their world
-  and the best score under them (a flag = boss beaten, the ship sits on the
-  furthest one); the rest are a dashed "?". Built levels come from LEVELS; a
+  `STORAGE.STORY`). The ship sits on the island of the run in progress
+  (`runStage`: the saved run's level, island 1 when there is none, so after
+  a game over); islands this run has reached are shaded in color with a
+  sketch of their world, islands reached only in an earlier run are the same
+  sketch in gray pencil until this run gets there again (`islandView`), and
+  the rest are a dashed "?". Every reached island shows its best score (a
+  flag = its boss ever beaten); the trail is solid up to the run's island and
+  is rubbed out around every label, so it never crosses a name or a score
+  (`STORY_MAP.LABEL_CLEAR_PX`). Built levels come from LEVELS; a
   reached stage that isn't built yet says "coming soon". Islands are not
   entry points: PLAY always starts at island 1 (no practice mode).
   **Creatures** (`LevelDef.SPECIES`): a level turns monster kinds into its
@@ -985,6 +991,15 @@ dMatch)`; it is 0 in solo play.
 ## Decision Log
 
 Newest first. Format: `YYYY-MM-DD — decision — rationale`.
+
+- **2026-10-19 — Story map shows this run, not the furthest ever (owner's
+  playtest).** "Reached in this run" comes from the saved run alone (its
+  level; none = island 1), chosen over a new `runFurthest` field in the
+  progress (owner's pick): two stored copies of one fact can disagree.
+  Islands reached only before are gray pencil (owner's pick over faded or
+  dashed), keeping their score, flag and board. Labels stay readable by
+  erasing the trail around them (chosen over a paper backing, which hides the
+  ruled lines).
 
 - **2026-10-19 — Level 7, THE WINDY SKY: one wind, a storm that rains
   minions.** The page's wind is a rhythm on the game clock shared by every

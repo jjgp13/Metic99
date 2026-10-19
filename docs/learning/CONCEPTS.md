@@ -44,6 +44,7 @@ One row per concept. Add new rows at the bottom.
 | Optional interface method | Add a method to an interface as optional (`addBall?(…)`, called with `?.`) so every existing implementation and stand-in still compiles | `AbilityHost.addBall` / `spawnMinion` (`objects/abilities.ts`) | design | 2026-10-19 | level 8, snowy mountain |
 | Invariant fixed at construction | A value computed once in the constructor (the readability box) can't follow later changes, so plan for the biggest case up front | `SpeciesDef.BOX` for the snowball that grows from 2 to 3 balls | design | 2026-10-19 | level 8, snowy mountain |
 | Default implementation | A base class method returns the usual answer, so only the one subclass that needs another answer overrides it, and every caller stays the same | `Ability.ballCover(i, n)` returns `cover`; only `Moon` lights its balls one by one | design | 2026-10-19 | level 9, the night sky |
+| Single source of truth (derived state) | Compute a fact from the one record that already holds it instead of storing a copy that can drift | `runStage(saved)` in `services/storyProgress.ts`: the saved run says where the run is, no `runFurthest` | design | 2026-10-19 | story map fixes |
 
 ## In the code, not studied yet
 

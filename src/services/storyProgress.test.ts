@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { NO_PROGRESS, islandState, mergeLevel, mergeRun, parseProgress, parseSavedRun } from "./storyProgress";
+import { NO_PROGRESS, islandView, mergeLevel, mergeRun, parseProgress, parseSavedRun, runStage } from "./storyProgress";
 
 describe("mergeLevel", () => {
   it("beating a boss opens the next stage and keeps the best score", () => {
@@ -23,10 +23,32 @@ describe("mergeRun", () => {
   });
 });
 
-describe("islandState", () => {
-  it("cleared below the furthest stage, reached at it, unreached past it", () => {
-    const p = { ...NO_PROGRESS, furthest: 2 };
-    expect([0, 1, 2, 3].map((s) => islandState(p, s))).toEqual(["cleared", "cleared", "reached", "unreached"]);
+describe("islandView", () => {
+  // The owner's playtest: an earlier run reached stage 8 (index 7).
+  const far = { furthest: 7, best: [9, 9, 9, 9, 9, 9, 9, 9], bestRun: 72 };
+  const looks = (atStage: number) => Array.from({ length: 10 }, (_, s) => islandView(far, atStage, s).look);
+
+  it("after a game over (no saved run) only island 1 is this run's; the rest reached before are gray", () => {
+    expect(runStage(null)).toBe(0);
+    expect(looks(runStage(null))).toEqual(["run", ...Array(7).fill("before"), "unreached", "unreached"]);
+  });
+
+  it("a saved run colors every island up to its level", () => {
+    const at = runStage({ level: 3, lives: 2, score: 900, levelScores: [1, 2, 3] });
+    expect(looks(at)).toEqual(["run", "run", "run", "run", "before", "before", "before", "before", "unreached", "unreached"]);
+  });
+
+  it("flags every boss ever beaten, gray or not", () => {
+    expect(Array.from({ length: 9 }, (_, s) => islandView(far, 0, s).flag)).toEqual([
+      ...Array(7).fill(true),
+      false,
+      false,
+    ]);
+  });
+
+  it("a first run: islands are this run's or unreached, never gray", () => {
+    const first = mergeLevel(mergeLevel(NO_PROGRESS, 0, 100, true), 1, 200, true);
+    expect([0, 1, 2, 3].map((s) => islandView(first, 2, s).look)).toEqual(["run", "run", "run", "unreached"]);
   });
 });
 

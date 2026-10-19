@@ -138,6 +138,12 @@ export const STORY_MAP = {
   /** Where the ship hovers next to its island. */
   SHIP_DX: 52,
   SHIP_DY: -24,
+  /** An island reached only in an earlier run is redrawn in gray pencil:
+   * its colors turn gray, this much lighter (0 = as dark, 1 = white). */
+  BEFORE_LIGHTEN: 0.35,
+  /** The trail stops this far (px) around each island's name and score, so
+   * it never runs through them. */
+  LABEL_CLEAR_PX: 5,
   /** An island's doodle box (logical px), drawn at 2× for a sharp picture. */
   ISLAND_W: 112,
   ISLAND_H: 66,
