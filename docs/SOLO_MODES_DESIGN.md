@@ -142,6 +142,8 @@ Each level turns the monster kinds into its own creatures
   body is the balls, any count), "wings" (butterfly: a ball on each wing);
 - a **trait** (`objects/traits.ts`): an Ability on the usual hooks, e.g.
   "wings" folds the wings over the numbers on a rhythm (like the Blinker);
+  a trait's `pace(alien, delta)` can hold, slow or speed its kind's
+  movement (the cave's bat hangs, then drops);
 - a **march** (`MARCH: { SIZE, CHANCE }`): sometimes comes in a line, in
   step; a line skips the unsolved cap but obeys the threat budget;
 - an **intro** line shown the first time it appears.
@@ -150,6 +152,41 @@ Bosses fight by a **mechanic** (`objects/bosses.ts`; "burrow" = the mole,
 dives, leaps) scripts it in `Ability.steer(alien, fieldDelta)` with
 `alien.glideTo` / `alien.hold`; `steer` runs on field time, so freezes and
 SLOW hold it like any other movement.
+"lamp" = the cave troll). A boss's look may draw on the page under the
+field (`BossLook.under`: the troll's lamp beam).
+
+### Level status
+
+| # | Level | Built | Bots (20 seeds, starting there, 3 lives) |
+| --- | --- | --- | --- |
+| 1 | THE BACKYARD | ✓ beetles (eyes, march), worms (chain), butterfly (wings fold); GIANT MOLE | rookie 16, pilot 20, ace 20 |
+| 5 | THE DARK CAVE | ✓ bats (hang → wake → drop), glowworms (chain, glow on/off), mine cart (wheels = numbers); CAVE TROLL (numbers only in a swinging lamp's beam) | rookie 2, pilot 18, ace 20 |
+
+**Level 5, THE DARK CAVE** (`config/levels/cave.ts`, 200 s, d 0.45 → 0.6,
+sums only; + / − planned). Grey stone page (mid-grey, so pencil and the
+white number balls still win) with stalactites, rocks, crystals, drips.
+- **Bat** (strafer, "wings" layout, trait "roost"): flies to the ceiling and
+  hangs upside down, still, wings wrapped round its numbers (3.4 s to read
+  it), wakes with a shake (0.7 s, the telegraph), then drops at 65% of a
+  strafer's dive, fluttering side to side. Always readable: the danger is
+  the drop.
+- **Glowworm** (darter for 2 balls, swinging on its silk thread; lumberer
+  for 3, lowering itself in jerks; "chain" layout, trait "glow"): its
+  segments are its numbers and glow on a fixed rhythm (3.2 s lit, 0.7 s
+  flicker, 1 s dark; the first glow 4.2 s). It hides, so it moves at 60%.
+- **Mine cart** (the drifter, "eyes" layout): rattles across on rails; its
+  two wheels are its numbers.
+- **CAVE TROLL** (mechanic "lamp", 6 answers of 3 balls, speed 0.3): a lamp
+  above the page sweeps its beam back and forth at a steady speed (±56°,
+  7 s there and back). The troll's numbers show only while its whole ball
+  row is in the beam (fading at the edge), and the light stuns it: it
+  stands still while lit and stomps on in the dark, 12% faster per answer.
+  Fair because the beam is visible and steady (you see it coming), the sum
+  never changes until answered (type it from memory), and the lamp keeps
+  swinging during FREEZE. Each answer: it staggers across and up, hidden.
+- Tuning by bots: d 0.5 → 0.65 left pilots 1/20 (darter glowworms caused
+  most hits); glowworms at 60% pace, d 0.45 → 0.6, a wider and slower beam
+  and a slower troll gave the table above.
 
 ### Adding a level (one file each, so levels can be built in parallel)
 
@@ -182,7 +219,7 @@ SLOW hold it like any other movement.
 | L3 ✓ | Level engine: `LEVELS` data, scrolling page + props, progress bar, level-complete card, lives carried over | level 1 playable to the end of the path |
 | L4 ✓ | Boss phase + Giant Mole | level 1 complete |
 | L5 | Table of contents + per-level and full-run scores | runs save and restart at level 1 |
-| L6 | Levels 2–5 (pond ✓, treetops ✓, swamp ✓, cave), subtraction, 4-ball rows (✓ `cluster`), Bouncer, Heart balloon | bots clear them at the target rates |
+| L6 | Levels 2–5 (pond ✓, treetops ✓, swamp ✓, cave ✓), subtraction, 4-ball rows (✓ `cluster`), Bouncer, Heart balloon | bots clear them at the target rates |
 | L7 | Levels 6–10, multiplication | same |
 | L8 | Story bots report + balance pass; leaderboard `level` column | `npm run bots -- --story` |
 

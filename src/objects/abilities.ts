@@ -47,7 +47,19 @@ export abstract class Ability {
     return (ABILITY.SCORE_MULT as Record<string, number>)[this.kind] ?? 1;
   }
 
-  update(_delta: number): void {}
+  /** Per sim step on real time; `alien` is the one wearing it (for rules
+   * that depend on where it is, like a boss read only in a beam of light). */
+  update(_delta: number, _alien?: Alien): void {}
+
+  /**
+   * How many ms of its kind's movement pattern the alien runs this step
+   * (field time). The default runs it as is; an ability can hold the alien
+   * (0), slow or speed it, or nudge it and switch its `mode` itself (a bat
+   * hanging from the ceiling, then dropping).
+   */
+  pace(_alien: Alien, delta: number): number {
+    return delta;
+  }
 
   /**
    * Called each step on FIELD time (freezes and SLOW hold it), just before

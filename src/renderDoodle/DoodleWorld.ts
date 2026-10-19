@@ -6,7 +6,7 @@ import type Alien from "../objects/Alien";
 import { Boss, Shielded } from "../objects/abilities";
 import type { AnswerView, InkPoint } from "../render3d/AnswerStars";
 import type { WorldSnapshot } from "../render3d/World3D";
-import { PAGES, drawPageTile, layOutProps, type CreatureLook, type PlacedProp } from "./pages";
+import { PAGES, drawPageTile, layOutProps, type BossLook, type CreatureLook, type PlacedProp } from "./pages";
 import { drawPaper } from "./paper";
 import { drawFrames, type DoodleRecipe, type Point } from "./pencil";
 import * as R from "./recipes";
@@ -172,8 +172,9 @@ export default class DoodleWorld {
     const boil = Math.floor((time / 1000) * DOODLE.BOIL_FPS);
 
     // Back to front; the number balls go last, so nothing ever covers a sum.
-    this.drawAnswer(s.answer, delta);
     const aliens = s.aliensHidden ? [] : s.aliens.filter((a) => a.active);
+    for (const a of aliens) this.bossLook(a)?.under?.(ctx, a, s.alpha);
+    this.drawAnswer(s.answer, delta);
     this.drawAliens(aliens, s.alpha, boil, delta);
     this.drawTarget(s, boil, delta);
     this.drawBullets(s, boil);
@@ -657,8 +658,13 @@ export default class DoodleWorld {
     return a.species && this.pageId ? PAGES[this.pageId]?.creatures[a.species] : undefined;
   }
 
+  /** Story: how the page draws this boss, if `a` is one. */
+  private bossLook(a: Alien): BossLook | undefined {
+    return a.ability instanceof Boss && a.model && this.pageId ? PAGES[this.pageId]?.bosses[a.model] : undefined;
+  }
+
   private alienRecipe(a: Alien): DoodleRecipe {
-    const boss = a.ability instanceof Boss && a.model && this.pageId ? PAGES[this.pageId]?.bosses[a.model] : undefined;
+    const boss = this.bossLook(a);
     if (boss && a.ability instanceof Boss) return a.ability.burrowing ? (boss.hidden ?? boss.up) : boss.up;
     const creature = this.creature(a);
     if (creature) return creature.recipe(a);

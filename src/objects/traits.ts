@@ -3,6 +3,7 @@ import { Dart, Dive, Hop } from "./pondCreatures";
 import { HeadTurn, Hover, Leap } from "./treetopsTraits";
 import { Ability, Shielded, blinkCover } from "./abilities";
 import { Glow, Peek, SlimeSplit } from "./swamp";
+import { Glowworm, Roost } from "./caveTraits";
 
 /**
  * Story creatures' special rules (SpeciesDef.TRAIT): an Ability on the same
@@ -36,5 +37,7 @@ export const TRAITS: Record<string, () => Ability> = {
   split: () => new SlimeSplit(),
   shell: () => new Shielded(),
   peek: () => new Peek(),
+  roost: () => new Roost(),
+  glowworm: () => new Glowworm(),
   glow: () => new Glow(),
 };
