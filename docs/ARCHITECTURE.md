@@ -157,8 +157,10 @@ fits here, and **what we didn't do**.
 - **What:** a piece of code asks for an *interface* describing exactly what
   it needs, not for the concrete class.
 - **Where:**
-  - `AbilityHost` (abilities may only `rerollSum` and `spawnSplitling`;
-    `Swarm` implements it);
+  - `AbilityHost` (abilities may only `rerollSum`, `spawnSplitling`,
+    `spawnBossPart` and, optionally, `spawnCreature`; `Swarm` implements
+    it). An optional member (`spawnCreature?`) extends an interface
+    without breaking its old implementers (test fakes); callers use `?.()`;
   - `BattleView` / `BattleActions` (`ui/battleViews.ts`): battle views get
     tiles + events and may only `aimAt` / `aimBy`;
   - HUD components (`ui/hud/`) get only what they need in their
