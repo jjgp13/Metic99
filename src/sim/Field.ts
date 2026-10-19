@@ -234,6 +234,9 @@ export class Field {
    * scene can't eat it), then runs at POST_HIT_FACTOR for the rest of the run. */
   freezeLeftMs = 0;
   private postHitSlow = false;
+  /** Hit recovery: ms left of pushing the monsters back up the field. */
+  private pushbackLeftMs = 0;
+  private pushedLastStep = false;
   /** Players still in the battle, from the match (null in solo play). */
   standing: { alive: number; total: number } | null = null;
   /** Battle: where this player's attacks go (the match reads it). */
@@ -288,6 +291,11 @@ export class Field {
 
   get aliens(): readonly Alien[] {
     return this.swarm.aliens;
+  }
+
+  /** Hit recovery pushed the monsters back up the field in the last step. */
+  get recovering(): boolean {
+    return this.pushedLastStep;
   }
 
   /** Story: how far along the level's path (0..1); null in Endless. */
@@ -455,6 +463,7 @@ export class Field {
       else this.loseLife(e.alien);
     }
     if (this.knockedOut) return;
+    this.pushBack(dt);
 
     // Slide the ship toward the target and fire when lined up. Don't fire again
     // while a bullet is already in flight toward this locked target — only
@@ -677,6 +686,22 @@ export class Field {
     this.events.push({ type: "blasted", aliens });
   }
 
+  /**
+   * Hit recovery: while the field is frozen after a hit, every monster
+   * slides back up the field, all by the same amount, so their readability
+   * boxes keep their gaps. It runs on game time (the
+   * freeze stops field time) and after the swarm's step, so the view still
+   * draws the slide smoothly between steps.
+   */
+  private pushBack(dt: number): void {
+    this.pushedLastStep = this.pushbackLeftMs > 0;
+    if (!this.pushedLastStep) return;
+    const step = Math.min(dt, this.pushbackLeftMs);
+    this.pushbackLeftMs -= step;
+    const dy = (RECOVERY.PUSHBACK_PX * step) / RECOVERY.PUSHBACK_MS;
+    for (const a of this.aliens) if (a.active) a.y -= dy;
+  }
+
   /** points = BASE * ballCountBonus * speedBonus * difficultyMult * comboMult. */
   private computeScore(ballCount: number, solveMs: number): number {
     const ballBonus = SCORE.BALL_COUNT_BONUS[ballCount] ?? 1;
@@ -704,9 +729,11 @@ export class Field {
       this.events.push({ type: "knockedOut" });
       return;
     }
-    // Freeze the whole field for a few seconds so the player can recover, then
-    // run at a reduced speed for the rest of the run (difficulty keeps ramping).
+    // Freeze the whole field for a few seconds so the player can recover, push
+    // the monsters back up a little, then run at a reduced speed for the rest
+    // of the run (difficulty keeps ramping).
     this.freezeLeftMs = RECOVERY.FREEZE_MS;
+    this.pushbackLeftMs = RECOVERY.PUSHBACK_MS;
     this.postHitSlow = true;
   }
 }

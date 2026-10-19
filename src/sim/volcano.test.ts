@@ -84,7 +84,8 @@ describe("story level 6: the volcano", () => {
       for (const a of field.aliens) {
         if (!a.active || !(a.ability instanceof Hops) || a.species !== "lava drip" || !before.has(a)) continue;
         drips.add(a);
-        if (a.ability.phase !== "hop") {
+        // (Hit recovery pushes every monster back up; that isn't the drip moving.)
+        if (a.ability.phase !== "hop" && !field.recovering) {
           expect(a.y).toBe(before.get(a)); // a resting drip holds still
           resting++;
         }
@@ -106,16 +107,24 @@ describe("story level 6: the volcano", () => {
     const boss = field.boss!;
     expect(boss.ability).toBeInstanceOf(Dragon);
     const dragon = boss.ability as Dragon;
-    // Nobody answers now: the dragon walks, winds up and breathes.
+    // Nobody answers now: the dragon walks, winds up and breathes. A breath
+    // whose inhale was interrupted by a hit (whose pushback already lifts
+    // the dragon) doesn't count: wait for a clean one.
     let inhaledAt: number | null = null;
     let yAtBreath = 0;
-    const version = boss.sumVersion;
-    while (boss.sumVersion === version && field.steps < 100_000) {
+    let version = boss.sumVersion;
+    let clean = true;
+    for (;;) {
       field.step(STEP);
+      if (field.recovering) clean = false;
       if (boss.mode === "windup") {
         inhaledAt ??= field.steps;
         yAtBreath = boss.y;
       }
+      if (boss.sumVersion === version) continue;
+      if (clean || field.steps > 100_000) break;
+      version = boss.sumVersion;
+      clean = true;
     }
     expect(inhaledAt).not.toBeNull();
     expect(dragon.breathing).toBe(true);

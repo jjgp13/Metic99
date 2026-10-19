@@ -52,7 +52,8 @@ describe("story level 5: the dark cave", () => {
         if (phases[phases.length - 1] !== phase) phases.push(phase);
         seen.set(a, phases);
         const prev = last.get(a);
-        if (phase === "hang" && prev && (prev[0] !== a.x || prev[1] !== a.y)) movedWhileHanging++;
+        // (Hit recovery pushes every monster back up; that isn't the bat moving.)
+        if (phase === "hang" && prev && !field.recovering && (prev[0] !== a.x || prev[1] !== a.y)) movedWhileHanging++;
         if (phase === "wake") expect(a.mode).toBe("windup");
         if (phase === "drop") expect(a.mode).toBe("dive");
         if (phase === "hang") last.set(a, [a.x, a.y]);
