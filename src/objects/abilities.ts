@@ -54,6 +54,12 @@ export abstract class Ability {
   /** How hidden the number balls are: 0 = readable, 1 = fully covered. */
   cover = 0;
 
+  /** How hidden ball `i` of `n` is (0..1). The same as `cover` for every
+   * ball, unless an ability hides them one by one (the Moon's shadow). */
+  ballCover(_i: number, _n: number): number {
+    return this.cover;
+  }
+
   /** Kill score multiplier (on top of the normal formula). */
   get scoreMult(): number {
     return (ABILITY.SCORE_MULT as Record<string, number>)[this.kind] ?? 1;

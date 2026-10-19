@@ -7,9 +7,10 @@ import { CAVE } from "./cave";
 import { VOLCANO } from "./volcano";
 import { SKY } from "./sky";
 import { SNOW } from "./snow";
+import { NIGHT } from "./night";
 
 /**
  * The story, in order (docs/SOLO_MODES_DESIGN.md §3). Each level is its own
  * file in this folder; a new level adds its file and one line here.
  */
-export const LEVELS: readonly LevelDef[] = [BACKYARD, POND, TREETOPS, SWAMP, CAVE, VOLCANO, SKY, SNOW];
+export const LEVELS: readonly LevelDef[] = [BACKYARD, POND, TREETOPS, SWAMP, CAVE, VOLCANO, SKY, SNOW, NIGHT];
