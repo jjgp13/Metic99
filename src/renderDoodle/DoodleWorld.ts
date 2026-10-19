@@ -399,18 +399,19 @@ export default class DoodleWorld {
       this.drawSprite(`ball:${a.ballTexture}`, () => R.ballRing(ring), boil + look.phase + i);
       ctx.fillStyle = DOODLE.BALL_INK;
       ctx.fillText(String(a.digits[i]), 0, 1);
-      if (cover > 0) {
+      const ballCover = a.ability?.ballCover(i, n) ?? 0;
+      if (ballCover > 0) {
         // The Blinker's eyelid: pencil shading pulled down over the digit.
         ctx.beginPath();
         ctx.arc(0, 0, r + 0.5, 0, Math.PI * 2);
         ctx.clip();
         ctx.fillStyle = creature?.coverInk ?? DOODLE.GRAPHITE_LIGHT;
-        ctx.fillRect(-r - 1, -r - 1, 2 * r + 2, (2 * r + 2) * cover);
+        ctx.fillRect(-r - 1, -r - 1, 2 * r + 2, (2 * r + 2) * ballCover);
         ctx.strokeStyle = DOODLE.GRAPHITE;
         ctx.lineWidth = 1.2;
         ctx.beginPath();
-        ctx.moveTo(-r, -r - 1 + (2 * r + 2) * cover);
-        ctx.lineTo(r, -r - 1 + (2 * r + 2) * cover);
+        ctx.moveTo(-r, -r - 1 + (2 * r + 2) * ballCover);
+        ctx.lineTo(r, -r - 1 + (2 * r + 2) * ballCover);
         ctx.stroke();
       }
       ctx.restore();

@@ -60,8 +60,8 @@ export interface SpeciesDef {
   SPEED?: number;
   /** Sometimes comes in a marching line, in step: up to SIZE of them, with
    * chance CHANCE per spawn (a line skips the unsolved cap but not the
-   * threat budget). */
-  MARCH?: { SIZE: number; CHANCE: number };
+   * threat budget). One behind the other, or side by side with ROW. */
+  MARCH?: { SIZE: number; CHANCE: number; ROW?: boolean };
   /** One line shown the first time it appears in a run. */
   INTRO: string;
 }

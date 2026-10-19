@@ -476,18 +476,17 @@ export class Swarm implements AbilityHost {
    * behind it, in its lane and in step. A line is one event: followers skip
    * the unsolved cap (it would keep lines from ever forming early on) but
    * obey the threat budget and the on-screen cap. Each has its own sum.
+   * With MARCH.ROW they come side by side instead (the night's invaders).
    */
   private marchBehind(rng: Rng, leader: Alien, diff: DifficultyParams): void {
     const march = leader.species === null ? undefined : this.director.species(leader.kind)?.MARCH;
     if (!march || !rng.chance(march.CHANCE)) return;
+    if (march.ROW) return this.marchInRow(rng, leader, march.SIZE, diff);
     const size = march.SIZE;
     let ahead = leader;
     for (let i = 1; i < size; i++) {
-      if (this.currentThreat() >= diff.threatBudget) return;
-      if (this.aliens.filter((a) => a.active && a.lethal).length >= diff.maxOnScreen) return;
-      const sum = this.rollSum(rng, leader.ballCount, leader.ballCount, diff.maxDigit);
-      if (!sum) return;
-      const spec = { kind: leader.kind, sum, pace: diff, dir: leader.heading };
+      const spec = this.followerSpec(rng, leader, diff);
+      if (!spec) return;
       const probe = this.makeAlien(rng, { ...spec, x: leader.x, y: 0 });
       const y = ahead.y - ahead.top - ENEMY.READ_GAP - STORY.MARCH_GAP - probe.bottom;
       const follower = this.makeAlien(rng, { ...spec, x: leader.x, y });
@@ -495,6 +494,34 @@ export class Swarm implements AbilityHost {
       this.addAlien(follower);
       ahead = follower;
     }
+  }
+
+  /** Followers beside the leader, at its height: right, left, two right, two
+   * left… (whichever slots fit on the page and are clear). */
+  private marchInRow(rng: Rng, leader: Alien, size: number, diff: DifficultyParams): void {
+    const spacing = 2 * leader.halfW + ENEMY.READ_GAP + STORY.MARCH_GAP;
+    const fits = (x: number) => x - leader.halfW >= ENEMY.SPAWN_EDGE && x + leader.halfW <= GAME.WIDTH - ENEMY.SPAWN_EDGE;
+    const slots = [1, -1, 2, -2, 3, -3].map((k) => leader.x + k * spacing).filter(fits);
+    let placed = 1;
+    for (const x of slots) {
+      if (placed >= size) return;
+      const spec = this.followerSpec(rng, leader, diff);
+      if (!spec) return;
+      const follower = this.makeAlien(rng, { ...spec, x, y: leader.y });
+      if (!this.aliens.every((o) => !o.active || !follower.overlaps(o))) continue;
+      this.addAlien(follower);
+      placed++;
+    }
+  }
+
+  /** A follower of a marching line, or null if the threat budget, the
+   * on-screen cap or the sums run out. */
+  private followerSpec(rng: Rng, leader: Alien, diff: DifficultyParams) {
+    if (this.currentThreat() >= diff.threatBudget) return null;
+    if (this.aliens.filter((a) => a.active && a.lethal).length >= diff.maxOnScreen) return null;
+    const sum = this.rollSum(rng, leader.ballCount, leader.ballCount, diff.maxDigit);
+    if (!sum) return null;
+    return { kind: leader.kind, sum, pace: diff, dir: leader.heading };
   }
 
   /** Story: bring the level's boss in from the top. False if no room yet. */
