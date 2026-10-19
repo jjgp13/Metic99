@@ -71,6 +71,9 @@ export interface LevelDef {
   PATH_MS: number;
   /** Difficulty d at the start and at the end of the path (paramsAt). */
   D: { FROM: number; TO: number };
+  /** Most balls a sum may carry, instead of what the d range gives (3+ ball
+   * sums ride on lumberers, one on screen at a time). */
+  MAX_BALLS?: number;
   TWO_BALL_KINDS: TwoBallWeights;
   ABILITIES: readonly LevelAbility[];
   /** Bonus drifters cross during the path. */

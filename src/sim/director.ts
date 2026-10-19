@@ -90,7 +90,8 @@ export class LevelDirector implements SpawnDirector {
     const p = this.progress(s.fieldMs);
     const { FROM, TO } = this.level.D;
     const d = FROM + (TO - FROM) * p;
-    const params = paramsAt(d, d);
+    const base = paramsAt(d, d);
+    const params = { ...base, maxBalls: this.level.MAX_BALLS ?? base.maxBalls };
     // Boss phase: the boss and a minion or two, no more.
     return p < 1 ? params : { ...params, maxUnsolved: STORY.BOSS_PHASE_UNSOLVED };
   }

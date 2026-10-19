@@ -1,5 +1,7 @@
 import type { BossDef } from "../config/constants";
 import { Boss } from "./abilities";
+import { BigFrog } from "./pondCreatures";
+import type { BigFrogDef } from "../config/levels/pond";
 
 /**
  * How each story boss fights (BossDef.MECHANIC). `Boss` is the base: it
@@ -9,6 +11,7 @@ import { Boss } from "./abilities";
  */
 export const BOSS_MECHANICS: Record<string, (def: BossDef) => Boss> = {
   burrow: (def) => new Boss(def),
+  leap: (def) => new BigFrog(def as BigFrogDef), // the pond's BIG_FROG is a BigFrogDef
 };
 
 export function createBoss(def: BossDef): Boss {

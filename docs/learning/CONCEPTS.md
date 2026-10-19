@@ -40,3 +40,6 @@ been walked through with the owner: model–view separation (§2.1), command
 pattern (§2.2), event queue (§2.5), data-driven strategies (§2.6), hooks for
 abilities (§2.7), small interfaces (§2.8), reconciliation (§2.10). Good
 material for "your turn" tasks and quiz transfer questions.
+| Template method (hook) | A base class calls an empty method at a fixed moment; a subclass fills it in to change one step | `Ability.steer` (called by `Swarm.step`), filled by `Dart`, `Dive`, `Hop`, `BigFrog` | design | 2026-10-18 | level 2, the pond |
+| Real time vs game (field) time | Timers that must stop with FREEZE/SLOW run on the field's clock, not the wall clock | `steer(alien, fieldDelta)` vs `update(delta)` in `objects/abilities.ts` | game dev | 2026-10-18 | level 2, the pond |
+| Tuning by simulation | Pick numbers by running bots many times and measuring, not by guessing | 20-seed bot runs per level (like `src/sim/pond.test.ts`): pond d range 0.2→0.35 = rookies 0/20, 0.1→0.28 = 11/20 | game dev | 2026-10-18 | level 2, the pond |
