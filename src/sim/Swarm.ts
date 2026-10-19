@@ -201,7 +201,7 @@ export class Swarm implements AbilityHost {
 
     // Ability clocks run on real time, not field time: a blinker must not stay
     // shut through the post-hit freeze meant for reading the board.
-    for (const alien of this.aliens) if (alien.active) alien.ability?.update(dt);
+    for (const alien of this.aliens) if (alien.active) alien.ability?.update(dt, alien, this);
 
     // Advance every alien; detect ones that reached the player line. The held
     // target STOPS: once the player has typed its answer it holds position while
@@ -388,7 +388,7 @@ export class Swarm implements AbilityHost {
     // Story: a plain alien of the field's own is its page's creature.
     const plain = !ability && !boss && !spec.model && spec.sentBy === undefined;
     const species = plain ? this.director.species(spec.kind) : null;
-    const speed = boss ? boss.SPEED : ability ? ABILITY.SPEED[ability] : 1;
+    const speed = boss ? boss.SPEED : ability ? ABILITY.SPEED[ability] : (species?.SPEED ?? 1);
     const patrol = ability === "blinker" ? ABILITY.PATROL_MULT : 1;
     return new Alien({
       kind: spec.kind,

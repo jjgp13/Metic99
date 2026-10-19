@@ -7,8 +7,10 @@ import type Alien from "./Alien";
  * (Hider, Orbiter, Worm, …) reuse them instead of adding one-off code to the
  * scene:
  *
- *   update(delta)        per-frame state the renderer reads (e.g. how hidden
- *                        the balls are right now)
+ *   update(delta, alien, host)  per-frame state the renderer reads (e.g. how
+ *                        hidden the balls are right now); traits that move
+ *                        their alien (glide/hold) or change its sum use the
+ *                        alien and host
  *   onHit(alien, host)   a bullet hit it; return true to absorb the shot
  *   onKilled(alien, host) the player destroyed it
  *
@@ -43,7 +45,7 @@ export abstract class Ability {
     return (ABILITY.SCORE_MULT as Record<string, number>)[this.kind] ?? 1;
   }
 
-  update(_delta: number): void {}
+  update(_delta: number, _alien?: Alien, _host?: AbilityHost): void {}
 
   /** A bullet hit the alien. Return true to absorb it (the alien survives). */
   onHit(_alien: Alien, _host: AbilityHost): boolean {

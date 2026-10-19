@@ -623,6 +623,9 @@ Green=multiplication, Yellow=division.
   the numbers and sometimes march in pairs, worms made of numbers, a
   butterfly that folds its wings over its numbers; boss GIANT MOLE, 5
   answers of 3 balls). Bots: rookie clears 16/20, pilot and ace 20/20.
+  Level 6, THE VOLCANO: lava drips that drop in hops, fireflies that go
+  dark together, lava tortoises (answer the shell first), a hopping spark;
+  boss DRAGON, whose fire breath re-rolls its sum (docs/SOLO_MODES_DESIGN.md).
 - **Bullets hit only their target.** Results are unique on the field, and each
   bullet carries the alien whose answer fired it (`Bullet.target`); it flies
   through every other alien, so only the solved alien can die or lose its
@@ -865,6 +868,14 @@ dMatch)`; it is 0 in solo play.
 ## Decision Log
 
 Newest first. Format: `YYYY-MM-DD — decision — rationale`.
+
+- **2026-10-18 — Level 6, THE VOLCANO; traits can move their alien.**
+  Ability `update` now also gets its alien and the host (like onHit), and
+  Alien says when a glide/hold runs (`scripted`): lava drips and the spark
+  move only in hops, in field time, and the Dragon breathes (a new sum)
+  after a telegraphed inhale. `SpeciesDef.SPEED` added for the owner's rule
+  (tortoise answers twice: ×0.45, it caused 90% of hits at ×1; flashing
+  fireflies ×0.8). Bots: rookie 0/20, pilot 14/20, ace 20/20.
 
 - **2026-10-18 — Creatures with personality; one file per level.** Owner's
   ask: each level's monsters behave differently, not just look different.
