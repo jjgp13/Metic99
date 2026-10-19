@@ -1,5 +1,6 @@
 // Story mode (docs/SOLO_MODES_DESIGN.md): levels, bosses, the arcade run.
 // Re-exported by config/constants.ts; see docs/ENGINEERING.md §3.
+import type { AlienKind, BallLayout } from "./monsters";
 
 /** Monster kinds a level's 2-ball spawns pick from (see ENEMY.TWO_BALL_KINDS). */
 type TwoBallWeights = Readonly<Record<"darter" | "strafer" | "swooper", number>>;
@@ -13,8 +14,12 @@ type LevelAbility = "shielded" | "blinker" | "splitter";
  */
 export interface BossDef {
   NAME: string;
-  /** Doodle (and 3D) model; its readability box is in MODEL_BOXES. */
+  /** Its doodle (the level's page draws it by this name). */
   MODEL: string;
+  /** How it fights (objects/bosses.ts); "burrow" = the mole's dig. */
+  MECHANIC: string;
+  /** Readability box, like MONSTERS (its balls ride in a row above it). */
+  BOX: { HALF_W: number; BALLS_Y: number; BOTTOM: number };
   /** Movement pattern it rides on (MONSTERS). */
   KIND: "lumberer";
   /** Answers it takes. */
@@ -36,6 +41,25 @@ export interface BossDef {
   MIN_Y: number;
 }
 
+/**
+ * A creature on a level's page: what a monster kind becomes there, with its
+ * own personality. It keeps the kind's movement; these are the extras.
+ */
+export interface SpeciesDef {
+  /** Its name (the doodle the view draws for it). */
+  NAME: string;
+  /** Where it carries its number balls (BALL_LAYOUTS). */
+  LAYOUT?: BallLayout;
+  /** A special rule it carries (objects/traits.ts), e.g. "wings". */
+  TRAIT?: string;
+  /** Sometimes comes in a marching line, in step: up to SIZE of them, with
+   * chance CHANCE per spawn (a line skips the unsolved cap but not the
+   * threat budget). */
+  MARCH?: { SIZE: number; CHANCE: number };
+  /** One line shown the first time it appears in a run. */
+  INTRO: string;
+}
+
 export interface LevelDef {
   /** Shown in the level banner and on the level-complete card. */
   NAME: string;
@@ -51,6 +75,8 @@ export interface LevelDef {
   ABILITIES: readonly LevelAbility[];
   /** Bonus drifters cross during the path. */
   DRIFTERS: boolean;
+  /** What each monster kind is on this page (kinds not listed stay as they are). */
+  SPECIES: Partial<Record<AlienKind, SpeciesDef>>;
   BOSS: BossDef;
 }
 
@@ -63,37 +89,9 @@ export const STORY = {
   BANNER_MS: 2600,
   /** The level-complete card stays at least this long. */
   CLEAR_MIN_MS: 1500,
+  /** Room between two beetles of a marching line (on top of READ_GAP). */
+  MARCH_GAP: 6,
 } as const;
 
-/** Level 1's boss: a giant mole that digs around the backyard. */
-const GIANT_MOLE: BossDef = {
-  NAME: "GIANT MOLE",
-  MODEL: "boss_mole",
-  KIND: "lumberer",
-  HP: 5,
-  BALLS: 3,
-  SPEED: 0.45,
-  SCORE_MULT: 5,
-  BURROW_UP_PX: 110,
-  BURROW_MS: 800,
-  REVEAL_MS: 900,
-  RETREAT_Y: 140,
-  MIN_Y: 140,
-};
-
-/** The story, in order. Levels 2–10 are planned in docs/SOLO_MODES_DESIGN.md §3. */
-export const LEVELS: readonly LevelDef[] = [
-  {
-    NAME: "THE BACKYARD",
-    PAGE: "backyard",
-    SEED: 1001,
-    PATH_MS: 180_000,
-    // Bots (20 seeds): rookie clears 18/20 losing ~1.5 lives, pilot and ace all.
-    D: { FROM: 0, TO: 0.25 },
-    // Bugs: beetles (darters) and dragonflies (swoopers); no divers yet.
-    TWO_BALL_KINDS: { darter: 0.6, strafer: 0, swooper: 0.4 },
-    ABILITIES: [],
-    DRIFTERS: true,
-    BOSS: GIANT_MOLE,
-  },
-];
+/** The story, in order: one file per level in config/levels/. */
+export { LEVELS } from "../levels";

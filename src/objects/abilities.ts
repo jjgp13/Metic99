@@ -32,9 +32,16 @@ export interface AbilityHost {
 }
 
 export abstract class Ability {
-  abstract readonly kind: AbilityKind | "boss";
+  /** An AbilityKind for the spawnable abilities; story traits and bosses
+   * name themselves ("wings", "boss"). */
+  abstract readonly kind: string;
   /** How hidden the number balls are: 0 = readable, 1 = fully covered. */
   cover = 0;
+
+  /** Kill score multiplier (on top of the normal formula). */
+  get scoreMult(): number {
+    return (ABILITY.SCORE_MULT as Record<string, number>)[this.kind] ?? 1;
+  }
 
   update(_delta: number): void {}
 
@@ -59,27 +66,35 @@ export class Blinker extends Ability {
   private t = 0;
 
   update(delta: number): void {
-    const B = BLINKER;
     this.t += delta;
-    // Shift time so the first open phase lasts FIRST_OPEN_MS.
-    let t = this.t - (B.FIRST_OPEN_MS - B.OPEN_MS);
-    if (t < 0) {
-      this.cover = 0;
-      return;
-    }
-    t %= B.OPEN_MS + B.WARN_MS + B.LID_MS * 2 + B.CLOSED_MS;
-    if (t < B.OPEN_MS) {
-      this.cover = 0;
-    } else if ((t -= B.OPEN_MS) < B.WARN_MS) {
-      this.cover = B.WARN_COVER * Math.abs(Math.sin((Math.PI * B.WARN_FLUTTERS * t) / B.WARN_MS));
-    } else if ((t -= B.WARN_MS) < B.LID_MS) {
-      this.cover = t / B.LID_MS;
-    } else if ((t -= B.LID_MS) < B.CLOSED_MS) {
-      this.cover = 1;
-    } else {
-      this.cover = 1 - (t - B.CLOSED_MS) / B.LID_MS;
-    }
+    this.cover = blinkCover(this.t, BLINKER);
   }
+}
+
+/** A blink rhythm: how long each phase lasts (BLINKER, WINGS). */
+export type BlinkTiming = {
+  FIRST_OPEN_MS: number;
+  OPEN_MS: number;
+  WARN_MS: number;
+  WARN_FLUTTERS: number;
+  WARN_COVER: number;
+  LID_MS: number;
+  CLOSED_MS: number;
+};
+
+/** How covered the balls are `t` ms into a blink rhythm (0 open … 1 shut). */
+export function blinkCover(time: number, B: BlinkTiming): number {
+  // Shift time so the first open phase lasts FIRST_OPEN_MS.
+  let t = time - (B.FIRST_OPEN_MS - B.OPEN_MS);
+  if (t < 0) return 0;
+  t %= B.OPEN_MS + B.WARN_MS + B.LID_MS * 2 + B.CLOSED_MS;
+  if (t < B.OPEN_MS) return 0;
+  if ((t -= B.OPEN_MS) < B.WARN_MS) {
+    return B.WARN_COVER * Math.abs(Math.sin((Math.PI * B.WARN_FLUTTERS * t) / B.WARN_MS));
+  }
+  if ((t -= B.WARN_MS) < B.LID_MS) return t / B.LID_MS;
+  if ((t -= B.LID_MS) < B.CLOSED_MS) return 1;
+  return 1 - (t - B.CLOSED_MS) / B.LID_MS;
 }
 
 /**
@@ -133,6 +148,10 @@ export class Boss extends Ability {
   constructor(readonly def: BossDef) {
     super();
     this.hp = def.HP;
+  }
+
+  get scoreMult(): number {
+    return this.def.SCORE_MULT;
   }
 
   /** It is underground (moving, numbers hidden, can't reach the ship). */

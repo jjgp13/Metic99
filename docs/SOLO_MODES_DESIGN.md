@@ -129,8 +129,38 @@ adds one seam and reuses everything else:
 - **Bots play levels:** `npm run bots -- --story 3` runs each bot level
   through level 3; that is how levels get tuned (e.g. a rookie clears 1–3,
   an ace reaches 10).
-- **Doodles:** monsters, bosses and props are recipes in
-  `renderDoodle/recipes.ts`; the scroll is the view reading level progress.
+- **Doodles:** each level's page, props, creatures and boss doodles live in
+  `renderDoodle/levels/<page>.ts`; the scroll is the view reading level
+  progress.
+
+### Creatures: personality, not just a skin
+
+Each level turns the monster kinds into its own creatures
+(`LevelDef.SPECIES`): a creature keeps its kind's movement and adds
+- a **ball layout** (`BALL_LAYOUTS`, a rule: it sets the readability
+  box): "row", "eyes" (beetle: its eyes are the balls), "chain" (worm: its
+  body is the balls, any count), "wings" (butterfly: a ball on each wing);
+- a **trait** (`objects/traits.ts`): an Ability on the usual hooks, e.g.
+  "wings" folds the wings over the numbers on a rhythm (like the Blinker);
+- a **march** (`MARCH: { SIZE, CHANCE }`): sometimes comes in a line, in
+  step; a line skips the unsolved cap but obeys the threat budget;
+- an **intro** line shown the first time it appears.
+Bosses fight by a **mechanic** (`objects/bosses.ts`; "burrow" = the mole).
+
+### Adding a level (one file each, so levels can be built in parallel)
+
+1. `src/config/levels/<page>.ts`: the `LevelDef` (name, page id, seed,
+   path, d range, kind weights, species, boss with its `BOX`) and one line
+   in `src/config/levels/index.ts` (`LEVELS`, in story order).
+2. `src/renderDoodle/levels/<page>.ts`: the `PageDef` (paper colors,
+   props, a `CreatureLook` per species, a `BossLook` per boss model) and
+   one line in `src/renderDoodle/levels/index.ts`.
+3. New rules only if needed: a trait (an Ability class + one line in
+   `TRAITS`), a boss mechanic (subclass `Boss` + one line in
+   `BOSS_MECHANICS`), a layout (BALL_LAYOUTS + `Alien.boxFor`/`ballOffset`).
+4. Check: `story.test.ts`-style run (every creature appears, no box
+   overlaps), bots per level (rookie mostly clears early levels), the level
+   played in the browser (`?bot=ace`), golden master unchanged.
 
 ## 8. Milestones
 

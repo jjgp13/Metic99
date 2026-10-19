@@ -1,4 +1,4 @@
-import { ENEMY, STORY, type BossDef, type LevelDef } from "../config/constants";
+import { ENEMY, STORY, type AlienKind, type BossDef, type LevelDef, type SpeciesDef } from "../config/constants";
 import { difficultyAt, paramsAt, type DifficultyParams } from "../config/difficulty";
 import { unlockedAbilities, type AbilityKind } from "../objects/abilities";
 
@@ -38,6 +38,8 @@ export interface SpawnDirector {
   progress(fieldMs: number): number | null;
   /** The boss met at the end of the path, or null. */
   readonly boss: BossDef | null;
+  /** What a monster kind is on this page (its personality), or null. */
+  species(kind: AlienKind): SpeciesDef | null;
 }
 
 /** Endless and battles: today's score-led curve, every monster unlocked by d. */
@@ -57,6 +59,10 @@ export class EndlessDirector implements SpawnDirector {
   }
 
   progress(): null {
+    return null;
+  }
+
+  species(): null {
     return null;
   }
 
@@ -99,5 +105,9 @@ export class LevelDirector implements SpawnDirector {
 
   progress(fieldMs: number): number {
     return Math.min(1, fieldMs / this.level.PATH_MS);
+  }
+
+  species(kind: AlienKind): SpeciesDef | null {
+    return this.level.SPECIES[kind] ?? null;
   }
 }

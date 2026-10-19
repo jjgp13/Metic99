@@ -627,11 +627,7 @@ export class Field {
       this.solves.push({ balls: digits.length, ms: solveMs });
     }
 
-    const abilityMult = absorbed || !alien.ability
-      ? 1
-      : alien.ability instanceof Boss
-        ? alien.ability.def.SCORE_MULT
-        : ABILITY.SCORE_MULT[alien.ability.kind as AbilityKind];
+    const abilityMult = absorbed || !alien.ability ? 1 : alien.ability.scoreMult;
     const points = Math.round(this.computeScore(digits.length, solveMs) * abilityMult);
     this.score += points;
     // The bonus drifter adds its burst on top of the normal kill energy.

@@ -157,8 +157,8 @@ src/
                       movement + readability guard, AbilityHost. Asks its
                       SpawnDirector what to spawn.
     director.ts       SpawnDirector (strategy): EndlessDirector = today's
-                      curve; LevelDirector = a story level's path, roster
-                      and boss.
+                      curve; LevelDirector = a story level's path, roster,
+                      creatures and boss.
     Match.ts          Battle match: N Fields on one seed stepped together, bots
                       per seat, KOs, placement, standing messages (pressure),
                       targeting, KO credit, badges, attack delivery, and
@@ -612,8 +612,17 @@ Green=multiplication, Yellow=division.
   level (`levelCleared`, a card, then the next level with the same lives
   and score). Game over = back to the menu (level 1 next time). The top
   bar shows the path's progress; the page scrolls (`DOODLE.PAGE_*`).
-  Built: level 1, THE BACKYARD (3 min, d 0 → 0.25, beetles + dragonflies,
-  boss GIANT MOLE, 5 answers of 3 balls). Bots: rookie clears 18/20.
+  **Creatures** (`LevelDef.SPECIES`): a level turns monster kinds into its
+  own creatures with a ball layout (`BALL_LAYOUTS`: eyes, chain, wings; it
+  sets the readability box), a trait (`objects/traits.ts`), an optional
+  march (lines in step) and an intro line. Bosses fight by a mechanic
+  (`objects/bosses.ts`). One file per level: `config/levels/<page>.ts`
+  (rules) + `renderDoodle/levels/<page>.ts` (looks), each listed in its
+  folder's index (docs/SOLO_MODES_DESIGN.md "Adding a level").
+  Built: level 1, THE BACKYARD (3 min, d 0 → 0.25; beetles whose eyes are
+  the numbers and sometimes march in pairs, worms made of numbers, a
+  butterfly that folds its wings over its numbers; boss GIANT MOLE, 5
+  answers of 3 balls). Bots: rookie clears 16/20, pilot and ace 20/20.
 - **Bullets hit only their target.** Results are unique on the field, and each
   bullet carries the alien whose answer fired it (`Bullet.target`); it flies
   through every other alien, so only the solved alien can die or lose its
@@ -856,6 +865,17 @@ dMatch)`; it is 0 in solo play.
 ## Decision Log
 
 Newest first. Format: `YYYY-MM-DD — decision — rationale`.
+
+- **2026-10-18 — Creatures with personality; one file per level.** Owner's
+  ask: each level's monsters behave differently, not just look different.
+  A creature = a monster kind + a ball layout (beetle eyes, worm chain,
+  butterfly wings: a rule, since it sets the readability box) + a trait
+  (an Ability) + an optional march. Marches skip the unsolved cap (else
+  they never form in level 1, whose cap is 1) but obey the threat budget;
+  bots: lines on every beetle dropped rookies from 18/20 to 8/20, so lines
+  come on 35% of beetle spawns (16/20). Levels moved to one file each
+  (rules + looks) with small registries, so several chats can build levels
+  at once with only one-line merges.
 
 - **2026-10-18 — Story slice L1–L4: a SpawnDirector, level 1 and the Giant
   Mole.** Story pacing goes behind a `SpawnDirector` interface (strategy

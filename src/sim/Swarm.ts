@@ -7,12 +7,15 @@ import {
   MONSTERS,
   PLAYER,
   SPLITTER,
+  STORY,
   type AlienKind,
   type BossDef,
 } from "../config/constants";
 import type { DifficultyParams } from "../config/difficulty";
 import Alien from "../objects/Alien";
 import { Boss, createAbility, type AbilityHost, type AbilityKind } from "../objects/abilities";
+import { createBoss } from "../objects/bosses";
+import { TRAITS } from "../objects/traits";
 import { EndlessDirector, type SpawnDirector } from "./director";
 import { Rng, SpawnStreams } from "./rng";
 
@@ -53,6 +56,8 @@ interface AlienSpec {
   sentBy?: number;
   /** Story: this alien is the level's boss. */
   boss?: BossDef;
+  /** Start heading this way (a marching line keeps in step). */
+  dir?: 1 | -1;
 }
 
 /** What happened to the aliens; `Field` drains them after each step. */
@@ -380,6 +385,9 @@ export class Swarm implements AbilityHost {
    */
   private makeAlien(rng: Rng, spec: AlienSpec): Alien {
     const { ability, pace, boss } = spec;
+    // Story: a plain alien of the field's own is its page's creature.
+    const plain = !ability && !boss && !spec.model && spec.sentBy === undefined;
+    const species = plain ? this.director.species(spec.kind) : null;
     const speed = boss ? boss.SPEED : ability ? ABILITY.SPEED[ability] : 1;
     const patrol = ability === "blinker" ? ABILITY.PATROL_MULT : 1;
     return new Alien({
@@ -398,8 +406,18 @@ export class Swarm implements AbilityHost {
       bandY: spec.bandY,
       laneX: spec.laneX,
       model: boss ? boss.MODEL : ability ? ABILITY.MODEL[ability] : spec.model,
-      ability: boss ? new Boss(boss) : ability ? createAbility(ability) : undefined,
+      ability: boss
+        ? createBoss(boss)
+        : ability
+          ? createAbility(ability)
+          : species?.TRAIT
+            ? TRAITS[species.TRAIT]?.()
+            : undefined,
+      box: boss?.BOX,
       sentBy: spec.sentBy,
+      layout: species?.LAYOUT,
+      species: species?.NAME,
+      dir: spec.dir,
     });
   }
 
@@ -438,7 +456,34 @@ export class Swarm implements AbilityHost {
 
     if (!this.enterFromTop(rng, { kind, sum, pace: diff, bandY, ability })) return false;
     this.spawnStreams.succeeded();
+    if (!ability) this.marchBehind(rng, this.aliens[this.aliens.length - 1], diff);
     return true;
+  }
+
+  /**
+   * Story: a creature that marches (the beetle) brings followers in a line
+   * behind it, in its lane and in step. A line is one event: followers skip
+   * the unsolved cap (it would keep lines from ever forming early on) but
+   * obey the threat budget and the on-screen cap. Each has its own sum.
+   */
+  private marchBehind(rng: Rng, leader: Alien, diff: DifficultyParams): void {
+    const march = leader.species === null ? undefined : this.director.species(leader.kind)?.MARCH;
+    if (!march || !rng.chance(march.CHANCE)) return;
+    const size = march.SIZE;
+    let ahead = leader;
+    for (let i = 1; i < size; i++) {
+      if (this.currentThreat() >= diff.threatBudget) return;
+      if (this.aliens.filter((a) => a.active && a.lethal).length >= diff.maxOnScreen) return;
+      const sum = this.rollSum(rng, leader.ballCount, leader.ballCount, diff.maxDigit);
+      if (!sum) return;
+      const spec = { kind: leader.kind, sum, pace: diff, dir: leader.heading };
+      const probe = this.makeAlien(rng, { ...spec, x: leader.x, y: 0 });
+      const y = ahead.y - ahead.top - ENEMY.READ_GAP - STORY.MARCH_GAP - probe.bottom;
+      const follower = this.makeAlien(rng, { ...spec, x: leader.x, y });
+      if (!this.aliens.every((o) => !o.active || !follower.overlaps(o))) return;
+      this.addAlien(follower);
+      ahead = follower;
+    }
   }
 
   /** Story: bring the level's boss in from the top. False if no room yet. */

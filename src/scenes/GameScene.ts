@@ -3,7 +3,7 @@ import { DOODLE, LEVELS, MATCH, RECOVERY, STORY, TARGET_STRATEGIES, type TargetS
 import { inputMode } from "../config/inputMode";
 import type { InkEvent } from "../handwriting/inkReader";
 import type Alien from "../objects/Alien";
-import { Boss } from "../objects/abilities";
+import { ABILITY_KINDS, Boss, type AbilityKind } from "../objects/abilities";
 import { isLeaderboardEnabled, startMatch } from "../services/leaderboard";
 import { rankFor, recordRun } from "../services/masteryStats";
 import { hitRecord, initPlaytestLog, logRun, type InputSource, type RunExtras } from "../services/playtestLog";
@@ -245,7 +245,12 @@ export default class GameScene extends Phaser.Scene {
         if (e.alien.ability instanceof Boss) {
           this.popups.banner(`BOSS · ${e.alien.ability.def.NAME}!`, 26, STORY.BANNER_MS);
           this.shake(300, 0.008);
-        } else if (e.alien.ability && e.alien.ability.kind !== "boss") this.popups.introduceAbility(e.alien.ability.kind);
+        } else if (e.alien.species && this.story) {
+          const species = LEVELS[this.story.level].SPECIES[e.alien.kind];
+          if (species) this.popups.introduce(species.NAME, species.INTRO);
+        } else if (e.alien.ability && (ABILITY_KINDS as string[]).includes(e.alien.ability.kind)) {
+          this.popups.introduceAbility(e.alien.ability.kind as AbilityKind);
+        }
         break;
       case "fired":
         this.sound.play("shoot", { volume: 0.4 });

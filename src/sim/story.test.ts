@@ -39,6 +39,31 @@ describe("story level 1", () => {
     expect(cleared).toBeGreaterThanOrEqual(3);
   });
 
+  it("brings its creatures, keeps every box readable, and beetles march", () => {
+    const species = new Set<string>();
+    let overlapSteps = 0;
+    let marchers = 0;
+    for (const seed of [1, 2, 3]) {
+      const field = new Field({ seed, level: LEVEL_1, lives: STORY.LIVES });
+      const bot = Bot.forSeat("ace", seed);
+      while (!field.knockedOut && !field.cleared && field.steps < 30_000) {
+        bot.update(field, STEP);
+        field.step(STEP);
+        for (const e of field.takeEvents()) {
+          if (e.type !== "spawned") continue;
+          if (e.alien.species) species.add(e.alien.species);
+          // A follower spawns in the same step as its leader, right above it.
+          if (e.alien.species === "beetle" && e.alien.y < -e.alien.bottom - 10) marchers++;
+        }
+        const live = field.aliens.filter((a) => a.active);
+        if (live.some((a, i) => live.slice(i + 1).some((b) => a.overlaps(b)))) overlapSteps++;
+      }
+    }
+    expect([...species].sort()).toEqual(["beetle", "butterfly", "worm"]);
+    expect(overlapSteps).toBe(0);
+    expect(marchers).toBeGreaterThan(0);
+  });
+
   it("the path holds still while the field is frozen", () => {
     const field = new Field({ seed: 3, level: LEVEL_1 });
     field.freezeLeftMs = 1000;

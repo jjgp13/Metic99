@@ -1,11 +1,15 @@
-import { DOODLE, GAME, type AlienKind } from "../config/constants";
-import type { DoodleRecipe, Point } from "./pencil";
+import { DOODLE, GAME } from "../config/constants";
+import type Alien from "../objects/Alien";
+import type { DoodleRecipe } from "./pencil";
 
 /**
  * Story pages (docs/SOLO_MODES_DESIGN.md §2): each level is drawn on its
  * own notebook page that scrolls down as the level's path goes by, with
  * faint props (pebbles, grass…) doodled on it. The numbers must still win,
  * so props are light pencil drawn at PAGE_PROP_ALPHA.
+ *
+ * Each level's page lives in its own file under renderDoodle/levels/ (with
+ * its creatures and its boss) and is listed in renderDoodle/levels/index.ts.
  */
 export interface PageDef {
   /** Paper tint, rule and margin colors. */
@@ -16,8 +20,35 @@ export interface PageDef {
   props: { recipe: DoodleRecipe; weight: number }[];
   /** Average px of path between two props. */
   propGap: number;
-  /** The page's own monsters: a doodle per movement kind (others keep theirs). */
-  skins: Partial<Record<AlienKind, DoodleRecipe>>;
+  /** How the level's creatures look, by species name (SpeciesDef.NAME). */
+  creatures: Record<string, CreatureLook>;
+  /** How the level's boss looks, by its model (BossDef.MODEL). */
+  bosses: Record<string, BossLook>;
+}
+
+/**
+ * How a creature looks. Its number balls are drawn by the view at
+ * `alien.ballOffset(i)` (its layout, a rule); the doodle is drawn around
+ * them, so a beetle's eyes or a worm's segments ARE the balls.
+ */
+export interface CreatureLook {
+  /** Which cached doodle this alien needs now ("2", "2:folded"…): one per
+   * ball count or state, since the doodle is pre-drawn. */
+  variant(alien: Alien): string;
+  recipe(alien: Alien): DoodleRecipe;
+  /** Ball `i` drawn this far off its place at boil-cycle point `t` (0..1),
+   * e.g. a worm's wriggle; must stay within the layout's box. */
+  ballNudge?(i: number, t: number): readonly [number, number];
+  /** Color laid over the numbers while they're hidden (default graphite). */
+  coverInk?: string;
+  /** Fully hidden numbers aren't drawn at all (a folded butterfly). */
+  hidesBalls?: boolean;
+}
+
+/** A boss's doodle, and the one while it hides (burrowing, diving…). */
+export interface BossLook {
+  up: DoodleRecipe;
+  hidden?: DoodleRecipe;
 }
 
 /** A prop placed on the page: `pathY` px along the path from the start. */
@@ -29,177 +60,7 @@ export interface PlacedProp {
   angle: number;
 }
 
-const TAU = Math.PI * 2;
-const DIRT = "#8a6a4a";
-const GRASS = "#7a9a3a";
-
-const PEBBLES: DoodleRecipe = {
-  w: 34,
-  h: 22,
-  draw(p) {
-    p.ellipse(-6, 2, 14, 10, DIRT, { hachureGap: 3 });
-    p.ellipse(7, -2, 10, 8, undefined);
-    p.ellipse(4, 7, 7, 5, DIRT, { hachureGap: 3 });
-  },
-};
-
-const GRASS_TUFT: DoodleRecipe = {
-  w: 30,
-  h: 26,
-  draw(p) {
-    for (const [x, lean] of [
-      [-6, -5],
-      [-2, -2],
-      [2, 1],
-      [6, 5],
-    ]) {
-      p.curve(
-        [
-          [x, 10],
-          [x + lean * 0.4, 0],
-          [x + lean, -10],
-        ],
-        { stroke: GRASS, strokeWidth: 1.3 },
-      );
-    }
-  },
-};
-
-const DAISY: DoodleRecipe = {
-  w: 26,
-  h: 26,
-  draw(p) {
-    for (let i = 0; i < 6; i++) {
-      const a = (i / 6) * TAU;
-      p.ellipse(Math.cos(a) * 6, Math.sin(a) * 6, 6, 6, undefined, { strokeWidth: 1 });
-    }
-    p.circle(0, 0, 5, "#d9b44a", { fillStyle: "solid", strokeWidth: 0.8 });
-  },
-};
-
-const CLOD: DoodleRecipe = {
-  w: 30,
-  h: 20,
-  draw(p) {
-    const lump: Point[] = [
-      [-11, 4],
-      [-7, -4],
-      [1, -6],
-      [9, -2],
-      [11, 4],
-    ];
-    p.shape(lump, DIRT, { hachureGap: 2.6, hachureAngle: 20 });
-  },
-};
-
-const ANT_TRAIL: DoodleRecipe = {
-  w: 60,
-  h: 20,
-  draw(p) {
-    for (let i = 0; i < 5; i++) {
-      const x = -24 + i * 12;
-      const y = Math.sin(i * 1.3) * 4;
-      p.dot(x, y, 1.6);
-      p.dot(x + 3, y, 1.2);
-    }
-  },
-};
-
-const TWIG: DoodleRecipe = {
-  w: 46,
-  h: 20,
-  draw(p) {
-    p.curve(
-      [
-        [-20, 4],
-        [-4, 0],
-        [18, -4],
-      ],
-      { stroke: DIRT, strokeWidth: 1.8 },
-    );
-    p.line(2, -1, 9, -8, { stroke: DIRT, strokeWidth: 1.2 });
-  },
-};
-
-// --- Backyard monsters (they face down, toward the player) ------------------
-const BUG = { beetle: "#6a4c93", spots: "#e8873a", worm: "#e0879a", wing: "#e8873a", wingDots: "#8e4fd8" };
-
-/** Beetle (moves as a darter): a round shell on six scuttling legs. */
-const BEETLE: DoodleRecipe = {
-  w: 40,
-  h: 48,
-  draw(p, t) {
-    for (const side of [-1, 1]) {
-      for (let i = 0; i < 3; i++) {
-        // Legs on each side step in turn, opposite sides out of phase.
-        const swing = Math.sin(TAU * t + i * 2.1 + (side > 0 ? Math.PI : 0)) * 3;
-        const y = -6 + i * 7;
-        p.line(side * 8, y, side * 17, y + swing, { strokeWidth: 1.2 });
-      }
-    }
-    const wag = Math.sin(TAU * t) * 2;
-    for (const side of [-1, 1]) p.curve([[side * 3, 12], [side * 6 + wag, 18], [side * 9 + wag, 21]], { strokeWidth: 1 });
-    p.ellipse(0, -2, 22, 28, BUG.beetle, { hachureGap: 2.2 });
-    p.line(0, -15, 0, 11, { strokeWidth: 1.1 }); // the split between the wing cases
-    for (const [x, y] of [[-5, -6], [5, -3], [-4, 4]]) p.dot(x, y, 1.8, BUG.spots);
-    p.ellipse(0, 12, 12, 8, DOODLE.GRAPHITE_LIGHT, { fillStyle: "solid" }); // head
-    for (const side of [-1, 1]) p.dot(side * 3, 13, 1.2, DOODLE.PAPER);
-  },
-};
-
-/** Worm (moves as a swooper): a pink segmented worm wriggling as it goes. */
-const WORM: DoodleRecipe = {
-  w: 40,
-  h: 44,
-  draw(p, t) {
-    const n = 6;
-    for (let i = n - 1; i >= 0; i--) {
-      // A wave runs down the body; the tail end wriggles most.
-      const x = Math.sin(TAU * t + i * 1.0) * (1 + (n - 1 - i) * 0.9);
-      const y = 14 - i * 5.5;
-      p.circle(x, y, i === 0 ? 13 : 11 - i * 0.6, BUG.worm, { hachureGap: 2.4, hachureAngle: 60 });
-    }
-    const hx = Math.sin(TAU * t) * 1;
-    for (const side of [-1, 1]) p.dot(hx + side * 2.5, 15, 1.3);
-    p.curve([[hx - 2.5, 18], [hx, 19.5], [hx + 2.5, 18]], { strokeWidth: 0.9 }); // a smile
-  },
-};
-
-/** Butterfly (the bonus drifter): two big wings flapping. */
-const BUTTERFLY: DoodleRecipe = {
-  w: 60,
-  h: 50,
-  draw(p, t) {
-    const open = 0.35 + 0.65 * Math.abs(Math.cos(Math.PI * t)); // one flap per cycle
-    for (const side of [-1, 1]) {
-      const wing = (y: number, w: number, h: number, ink: string) =>
-        p.ellipse(side * (3 + (w / 2) * open), y, w * open, h, ink, { hachureGap: 2.6 });
-      wing(-6, 26, 22, BUG.wing);
-      wing(10, 18, 16, BUG.wing);
-      p.dot(side * (3 + 13 * open), -6, 2.4, BUG.wingDots);
-      p.curve([[side * 1.5, -14], [side * 5, -20], [side * 7, -22]], { strokeWidth: 1 }); // antennae
-    }
-    p.ellipse(0, 0, 5, 26, DOODLE.GRAPHITE, { fillStyle: "solid" });
-  },
-};
-
-export const PAGES: Record<string, PageDef> = {
-  backyard: {
-    skins: { darter: BEETLE, swooper: WORM, drifter: BUTTERFLY },
-    paper: "#f3ead6",
-    rule: "rgba(120, 140, 170, 0.28)",
-    margin: "rgba(214, 84, 84, 0.35)",
-    props: [
-      { recipe: PEBBLES, weight: 3 },
-      { recipe: GRASS_TUFT, weight: 4 },
-      { recipe: DAISY, weight: 1.5 },
-      { recipe: CLOD, weight: 2 },
-      { recipe: ANT_TRAIL, weight: 1 },
-      { recipe: TWIG, weight: 1.5 },
-    ],
-    propGap: 46,
-  },
-};
+export { PAGES } from "./levels";
 
 /**
  * One screen-height of the page's ruled paper that tiles vertically (the

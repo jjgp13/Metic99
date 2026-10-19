@@ -30,6 +30,7 @@ One row per concept. Add new rows at the bottom.
 | Edge detection (state change) | Notice the moment something happens by comparing a value with last frame's, so the view needs no new event | `DoodleWorld.drawShip`: `shipHurt` jumps up = a hit | game dev | 2026-10-18 | ship doodles + hit animation |
 | Strategy pattern | One interface, several interchangeable classes; the caller asks the interface and never checks which one it has | `SpawnDirector` (`sim/director.ts`): `EndlessDirector` or `LevelDirector`, asked by `Swarm` | design | 2026-10-18 | story slice L2 |
 | Content as data | New levels are table entries, not new code, so tuning one never touches the rules | `LEVELS` in `config/tuning/story.ts` | design | 2026-10-18 | story slice L3 |
+| Registry | A table from a name to the code that makes it, so new kinds are added with one line instead of a new `if` | `TRAITS` (`objects/traits.ts`), `BOSS_MECHANICS` (`objects/bosses.ts`), `LEVELS`, `PAGES` | design | 2026-10-18 | creatures with personality |
 | Presentation delay | Let an animation play before the next screen, without slowing the rules | `RECOVERY.GAME_OVER_DELAY_MS` + `time.delayedCall` in `GameScene` | game dev | 2026-10-18 | ship doodles + hit animation |
 
 ## In the code, not studied yet

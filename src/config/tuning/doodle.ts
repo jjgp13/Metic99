@@ -39,9 +39,6 @@ export const DOODLE = {
     pod: "#c07a3e",
     canopy: "#2a8f9e",
     flame: "#f08a2c",
-    // Story bosses.
-    mole: "#6b5a4e",
-    moleNose: "#e88aa0",
   } as Record<string, string>,
   /** Ability aliens wear a generic doodle in their model's color. */
   ABILITY_INK: {

@@ -6,7 +6,7 @@ import type Alien from "../objects/Alien";
 import { Boss, Shielded } from "../objects/abilities";
 import type { AnswerView, InkPoint } from "../render3d/AnswerStars";
 import type { WorldSnapshot } from "../render3d/World3D";
-import { PAGES, drawPageTile, layOutProps, type PlacedProp } from "./pages";
+import { PAGES, drawPageTile, layOutProps, type CreatureLook, type PlacedProp } from "./pages";
 import { drawPaper } from "./paper";
 import { drawFrames, type DoodleRecipe, type Point } from "./pencil";
 import * as R from "./recipes";
@@ -65,11 +65,6 @@ const KIND_RECIPES: Record<string, DoodleRecipe> = {
   strafer: R.STRAFER,
   swooper: R.SWOOPER,
   drifter: R.DRIFTER,
-};
-
-/** Story bosses by model (config/tuning/story.ts). */
-const BOSS_RECIPES: Record<string, DoodleRecipe> = {
-  boss_mole: R.MOLE,
 };
 
 const isShieldUp = (a: Alien) => a.ability instanceof Shielded && a.ability.shieldUp;
@@ -383,17 +378,22 @@ export default class DoodleWorld {
     // A burrowing boss is underground: its numbers are hidden with it.
     if (a.ability instanceof Boss && a.ability.burrowing) return;
     const cover = a.ability?.cover ?? 0;
+    const creature = this.creature(a);
+    if (creature?.hidesBalls && cover >= 1) return;
     const r = ENEMY.BALL_RADIUS;
-    const rowY = a.viewY(alpha) - (a.top - r);
     const n = a.digits.length;
+    // The point of the alien's boil cycle (0..1), so balls move with its body.
+    const tick = boil + look.phase;
+    const t = (((tick % DOODLE.BOIL_FRAMES) + DOODLE.BOIL_FRAMES) % DOODLE.BOIL_FRAMES) / DOODLE.BOIL_FRAMES;
 
     ctx.font = `${DOODLE.BALL_FONT_PX}px "${DOODLE.FONT}", cursive`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     for (let i = 0; i < n; i++) {
-      const bx = a.viewX(alpha) + (i - (n - 1) / 2) * ENEMY.BALL_SPACING;
+      const [ox, oy] = a.ballOffset(i);
+      const [nx, ny] = creature?.ballNudge?.(i, t) ?? [0, 0];
       ctx.save();
-      ctx.translate(bx, rowY);
+      ctx.translate(a.viewX(alpha) + ox + nx, a.viewY(alpha) + oy + ny);
       ctx.scale(pop, pop);
       this.drawSprite(`ball:${a.ballTexture}`, () => R.ballRing(ring), boil + look.phase + i);
       ctx.fillStyle = DOODLE.BALL_INK;
@@ -403,7 +403,7 @@ export default class DoodleWorld {
         ctx.beginPath();
         ctx.arc(0, 0, r + 0.5, 0, Math.PI * 2);
         ctx.clip();
-        ctx.fillStyle = DOODLE.GRAPHITE_LIGHT;
+        ctx.fillStyle = creature?.coverInk ?? DOODLE.GRAPHITE_LIGHT;
         ctx.fillRect(-r - 1, -r - 1, 2 * r + 2, (2 * r + 2) * cover);
         ctx.strokeStyle = DOODLE.GRAPHITE;
         ctx.lineWidth = 1.2;
@@ -647,20 +647,23 @@ export default class DoodleWorld {
   private alienKey(a: Alien): string {
     if (a.ability instanceof Boss) return `boss:${a.model}:${a.ability.burrowing ? "dig" : "up"}`;
     if (a.model) return `blob:${a.model}`;
-    return this.pageSkin(a) ? `skin:${this.pageId}:${a.kind}` : `alien:${a.kind}`;
+    const creature = this.creature(a);
+    if (creature) return `creature:${this.pageId}:${a.species}:${creature.variant(a)}`;
+    return `alien:${a.kind}`;
   }
 
-  /** Story: the page's own doodle for this alien's kind, if it has one. */
-  private pageSkin(a: Alien): DoodleRecipe | undefined {
-    return this.pageId ? PAGES[this.pageId]?.skins[a.kind] : undefined;
+  /** Story: how the page draws this alien's creature (beetle, worm…), if any. */
+  private creature(a: Alien): CreatureLook | undefined {
+    return a.species && this.pageId ? PAGES[this.pageId]?.creatures[a.species] : undefined;
   }
 
   private alienRecipe(a: Alien): DoodleRecipe {
-    if (a.ability instanceof Boss && a.model && BOSS_RECIPES[a.model]) {
-      return a.ability.burrowing ? R.DIRT_MOUND : BOSS_RECIPES[a.model];
-    }
+    const boss = a.ability instanceof Boss && a.model && this.pageId ? PAGES[this.pageId]?.bosses[a.model] : undefined;
+    if (boss && a.ability instanceof Boss) return a.ability.burrowing ? (boss.hidden ?? boss.up) : boss.up;
+    const creature = this.creature(a);
+    if (creature) return creature.recipe(a);
     if (a.model) return R.blob(MODEL_BOXES[a.model]?.HALF_W ?? a.halfW, this.inkFor(a));
-    return this.pageSkin(a) ?? KIND_RECIPES[a.kind] ?? R.blob(a.halfW, this.inkFor(a));
+    return KIND_RECIPES[a.kind] ?? R.blob(a.halfW, this.inkFor(a));
   }
 
   private inkFor(a: Alien): string {
