@@ -228,7 +228,7 @@ white number balls still win) with stalactites, rocks, crystals, drips.
 | L4 ✓ | Boss phase + Giant Mole | level 1 complete |
 | L5 ✓ | Story map + per-level and full-run scores | runs save and restart at level 1 |
 | L6 ✓ | Levels 2–5 (pond, treetops, swamp, cave), 4-ball rows (`cluster`); still to do: subtraction, Bouncer, Heart balloon | bots clear them at the target rates |
-| L7 | Levels 6–10 (volcano ✓), multiplication | same |
+| L7 | Levels 6–10 (volcano ✓, sky ✓), multiplication | same |
 | L8 | Story bots report + balance pass; leaderboard `level` column | `npm run bots -- --story` |
 
 L1–L4 is the smallest playable slice: one full level with a boss, to judge
@@ -252,6 +252,40 @@ three creatures. Rules `config/levels/volcano.ts`, `objects/volcanoTraits.ts`,
 "pick your power" card before each level (the menu's pick is used), monsters
 re-skinned per page (level 1 still draws the standard darter/swooper
 doodles), story scores on the leaderboard, a dev shortcut to a level.
+
+**Level 7, THE WINDY SKY (built 2026-10-19, on its own branch):** d 0.65 →
+0.8 over 140 s (the owner found long paths boring), sums only (× joins with
+the shared operations piece). Its signature is the **wind**: one rhythm on
+the game clock for the whole sky (5.6 s calm, 1 s picking up: swirls on
+every creature, the telegraph; a 1.4 s gust), gusts blowing right, then
+left, in turn. Each creature meets a gust its own way (`objects/skyTraits.ts`,
+every trait a `Windy` with one shared `Wind`; pushes are glides, so a frozen
+field isn't blown about):
+
+| Creature (kind) | Personality |
+| --- | --- |
+| Kite (strafer: 2 bows; lumberer: 3 bows ×0.7) | "chain" layout: its numbers are the bows on its tail. On its string a gust swings it 56 px across and lifts it 22 px (kites climb in wind); then the string snaps (the windup jerk) and it **tumbles** down at 0.6 of a dive, swinging side to side and carried by gusts (`sky_kite`) |
+| Swallow (darter, ×0.68) | its eyes are its numbers; it **rides the gust**: swoops 46 px down and across with it, so answer a low swallow while the wind picks up (`sky_swoop`) |
+| Paper plane (swooper) | a number on each wing; every 130 px of descent it noses up (the telegraph) and **loops the loop**, up and over, ending further along; gusts sweep it sideways (`sky_loop`) |
+| Hot-air balloon (drifter, bonus) | a gust carries it 90 px: with its drift it may leave early, against it it stays longer (`sky_balloon`) |
+
+**Boss, STORM CLOUD** (mechanic `sky_storm`, `objects/stormCloud.ts`; 5
+answers of 3 balls, ×0.2): drifts down and with the gusts; every 4 s of
+field time on the page (no raindrop falling) it **rumbles** (windup: it
+shakes, numbers readable) and **thunders**: lightning (the page flashes)
+and a **raindrop** falls out of it, a boss part (`BossDef.PART`, mechanic
+`sky_raindrop`) with a 2-ball sum that wobbles down at ×0.6; a raindrop that
+reaches the ship splashes (a life), evaporates and falls again. Every answer
+it survives also thunders (one raindrop at a time), because a held target
+runs no rules: an ace keeps the cloud locked, so a timer alone almost never
+rained (0.5 drops per fight; now ~4). The storm is over once the cloud and
+its last raindrop are answered (~9 answers, so 5 for the cloud, not 6).
+Bots (20 seeds, 3 fresh lives): rookie 0/20 (out ~2/3 along the path),
+pilot 11/20, ace 20/20 (losing ~0.3 lives); swallows cause most hits. Tuning:
+swallows at ×1 left pilots 1/20, 3-bow kites at ×1 hit even aces, raindrops
+at ×0.9 cost pilots ~13 lives in the boss phase. Rules
+`config/levels/sky.ts`; looks `renderDoodle/levels/sky.ts`; test
+`sim/sky.test.ts`.
 
 ### Level 2, THE POND (built 2026-10-18)
 

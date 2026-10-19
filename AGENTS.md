@@ -711,6 +711,14 @@ Green=multiplication, Yellow=division.
   Level 6, THE VOLCANO: lava drips that drop in hops, fireflies that go
   dark together, lava tortoises (answer the shell first), a hopping spark;
   boss DRAGON, whose fire breath re-rolls its sum (docs/SOLO_MODES_DESIGN.md).
+  Level 7, THE WINDY SKY (140 s, d 0.65 → 0.8): one wind for the page
+  (calm, swirls, a gust, right then left; `objects/skyTraits.ts`); kites
+  (numbers = tail bows) climb in gusts, then their string snaps and they
+  tumble; swallows (eyes = numbers) swoop down on each gust; paper planes
+  loop the loop; a balloon bonus is blown along; boss STORM CLOUD (5
+  answers): rumbles, then thunder drops a raindrop (a 2-ball boss part),
+  and so does every answer it survives. Bots: rookie 0/20, pilot 11/20,
+  ace 20/20.
 - **Bullets hit only their target.** Results are unique on the field, and each
   bullet carries the alien whose answer fired it (`Bullet.target`); it flies
   through every other alien, so only the solved alien can die or lose its
@@ -959,6 +967,18 @@ dMatch)`; it is 0 in solo play.
 ## Decision Log
 
 Newest first. Format: `YYYY-MM-DD — decision — rationale`.
+
+- **2026-10-19 — Level 7, THE WINDY SKY: one wind, a storm that rains
+  minions.** The page's wind is a rhythm on the game clock shared by every
+  creature (like the volcano's fireflies), and each species reacts to a gust
+  its own way (kites climb, swallows swoop, planes and the balloon are
+  swept). The Storm Cloud's raindrops are boss parts (`BossDef.PART`, no
+  shared change), so the level clears only when the last drop is answered.
+  Rain comes on a telegraphed timer AND on each answer the cloud survives:
+  a held target runs no rules, so an ace who keeps the cloud locked was
+  never rained on by the timer alone. Cloud HP 5 (drops add ~4 answers).
+  Known: every raindrop shows the "BOSS · RAINDROP!" banner (GameScene
+  banners every boss part; left for a shared fix).
 
 - **2026-10-19 — Owner's first story playtest: faster start, pushback,
   music, map flow, saves, public logs.** Levels 1–2 felt long and easy
