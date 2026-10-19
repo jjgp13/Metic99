@@ -177,7 +177,7 @@ SLOW hold it like any other movement.
 | L3 ✓ | Level engine: `LEVELS` data, scrolling page + props, progress bar, level-complete card, lives carried over | level 1 playable to the end of the path |
 | L4 ✓ | Boss phase + Giant Mole | level 1 complete |
 | L5 | Table of contents + per-level and full-run scores | runs save and restart at level 1 |
-| L6 | Levels 2–5 (pond ✓, treetops, swamp, cave), subtraction, 4-ball rows (✓ `cluster`), Bouncer, Heart balloon | bots clear them at the target rates |
+| L6 | Levels 2–5 (pond ✓, treetops ✓, swamp, cave), subtraction, 4-ball rows (✓ `cluster`), Bouncer, Heart balloon | bots clear them at the target rates |
 | L7 | Levels 6–10, multiplication | same |
 | L8 | Story bots report + balance pass; leaderboard `level` column | `npm run bots -- --story` |
 
@@ -206,6 +206,19 @@ Bots (20 seeds, 3 fresh lives): rookie clears 11/20, pilot 20/20, ace 20/20
 a tongue that grabs (needs a way for a boss to act on the ship or a
 minion), croaks that call tadpole minions (needs an `AbilityHost` call to
 spawn one of the level's creatures).
+**Level 3, THE TREETOPS (built 2026-10-18, sums only).** Rules in
+`config/levels/treetops.ts`, traits in `objects/treetopsTraits.ts`, boss in
+`objects/owlBoss.ts`, doodles in `renderDoodle/levels/treetops.ts`. Path
+3.5 min, d 0.3 → 0.45 (two unsolved sums from the start).
+| Creature (kind) | Personality |
+| --- | --- |
+| Squirrel (swooper) | leaps in from a trunk at the page's edge, then every 120 px of descent crouches and leaps 70 px sideways to the next branch (the other way each time) and freezes a moment; its two acorns are its numbers ("eyes" layout) |
+| Owl (strafer, 0.9×) | its eyes are its numbers; perched, it turns its head away on the Blinker's rhythm (a glance first), but always looks at you while it winds up and swoops |
+| Bird (darter, 0.6×) | flies in flocks of up to three (`MARCH`), a number on each wing ("wings" layout) |
+| Hummingbird (drifter, bonus) | darts ahead and hovers, again and again: catch it while it hovers |
+| GREAT OWL (boss, `blink`) | 6 answers of 2 balls in its big eyes; the eyes blink, and faster after each answer (open 2.6 s → 1.4 s); after an answer it flies to a branch on the other side, eyes shut; hops down at 0.4× |
+Bots (20 seeds, 3 lives): rookie clears 10/20 (level 1: 16/20), pilot 19/20,
+ace 20/20. Planned for this level once operations land: subtraction.
 
 ## 9. Decisions (owner, 2026-10-18)
 

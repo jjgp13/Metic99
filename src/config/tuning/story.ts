@@ -52,6 +52,9 @@ export interface SpeciesDef {
   LAYOUT?: BallLayout;
   /** A special rule it carries (objects/traits.ts), e.g. "wings". */
   TRAIT?: string;
+  /** × its kind's speed (default 1): a creature whose trait makes it harder
+   * to beat moves slower (owner's rule, like ABILITY.SPEED). */
+  SPEED?: number;
   /** Sometimes comes in a marching line, in step: up to SIZE of them, with
    * chance CHANCE per spawn (a line skips the unsolved cap but not the
    * threat budget). */

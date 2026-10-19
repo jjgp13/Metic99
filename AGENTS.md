@@ -635,6 +635,15 @@ Green=multiplication, Yellow=division.
   traits/boss in `objects/pondCreatures.ts`; they move themselves through
   `Ability.steer(alien, fieldDelta)` (field time). Bots: rookie 11/20,
   pilot and ace 20/20.
+  Level 3, THE TREETOPS (3.5 min, d 0.3 → 0.45; `config/levels/treetops.ts`):
+  squirrels leap in from the trunks and then from branch to branch, two
+  acorns (numbers) in their paws; owls whose eyes are the numbers turn
+  their heads away while perched, never while they swoop; birds in flocks
+  of up to three, a number on each wing (0.6× speed); a hummingbird bonus
+  that darts and hovers; boss GREAT OWL (6 answers, eyes = numbers, blinks
+  faster after each answer, flies to another branch). Traits that move
+  their creature use `Ability.steer` (field time, glideTo/hold only).
+  Bots: rookie clears 10/20, pilot 19/20, ace 20/20.
 - **Bullets hit only their target.** Results are unique on the field, and each
   bullet carries the alien whose answer fired it (`Bullet.target`); it flies
   through every other alien, so only the solved alien can die or lose its
@@ -887,6 +896,15 @@ Newest first. Format: `YYYY-MM-DD — decision — rationale`.
   applied to creatures: a frog sits 250 ms longer per spot. Bots set the
   range: d 0.2 → 0.35 cleared rookies 0/20 (fish schools + frogs), d 0.1
   → 0.28 with schools on 15% of fish spawns clears 11/20 (level 1: 16/20).
+- **2026-10-18 — Level 3, THE TREETOPS (built in its own chat).** Creature
+  traits that move their alien go through `Ability.steer(alien, fieldDt)`
+  (glideTo/hold on field time; same hook as the pond branch) and trigger
+  on position, so freezes stop them too; `SpeciesDef.SPEED` (same as the
+  swamp branch) slows creatures that are harder to beat. Bots set the
+  numbers: flocks of three full-speed darters knocked out every rookie
+  (0/20), so birds fly at 0.6 and owls (they hide) at 0.9: rookie 10/20
+  (level 1: 16/20), pilot 19/20, ace 20/20. Sums only; subtraction comes
+  with the shared operations piece.
 
 - **2026-10-18 — Creatures with personality; one file per level.** Owner's
   ask: each level's monsters behave differently, not just look different.
