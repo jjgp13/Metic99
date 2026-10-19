@@ -1,4 +1,4 @@
-import { ABILITY, BLINKER, GAME, SHIELD, SPLITTER, type BossDef } from "../config/constants";
+import { ABILITY, BLINKER, GAME, SHIELD, SPLITTER, type AlienKind, type BossDef } from "../config/constants";
 import type Alien from "./Alien";
 
 /**
@@ -35,6 +35,11 @@ export interface AbilityHost {
    * Monster) at (x, y) with a new sum. Returns it, or null (nothing placed)
    * if its box there would break the readability rule. */
   spawnBossPart(def: BossDef, x: number, y: number): Alien | null;
+  /** Story: one of the level's creatures (what `kind` is on its page) appears
+   * at (x, y) with a new sum, e.g. a toy a boss flings out. Returns it, or
+   * null (nothing placed) if the field is full or its box there would break
+   * the readability rule. Optional: hosts without levels (test fakes) skip it. */
+  spawnCreature?(kind: AlienKind, x: number, y: number): Alien | null;
 }
 
 export abstract class Ability {
