@@ -7,8 +7,10 @@ import type Alien from "./Alien";
  * (Hider, Orbiter, Worm, …) reuse them instead of adding one-off code to the
  * scene:
  *
- *   update(delta)        per-frame state the renderer reads (e.g. how hidden
- *                        the balls are right now)
+ *   update(delta, alien, host)  per-frame state the renderer reads (e.g. how
+ *                        hidden the balls are right now); traits that move
+ *                        their alien (glide/hold) or change its sum use the
+ *                        alien and host
  *   onHit(alien, host)   a bullet hit it; return true to absorb the shot
  *   onKilled(alien, host) the player destroyed it
  *
@@ -48,8 +50,9 @@ export abstract class Ability {
   }
 
   /** Per sim step on real time; `alien` is the one wearing it (for rules
-   * that depend on where it is, like a boss read only in a beam of light). */
-  update(_delta: number, _alien?: Alien): void {}
+   * that depend on where it is, like a boss read only in a beam of light),
+   * `host` the field (for rules that act on it, like a dragon's breath). */
+  update(_delta: number, _alien?: Alien, _host?: AbilityHost): void {}
 
   /**
    * How many ms of its kind's movement pattern the alien runs this step

@@ -314,6 +314,21 @@ export default class Alien {
     this.holdMs = ms;
   }
 
+  /** A glide or hold is running, so the movement pattern waits (both count
+   * down in field time: freezes and SLOW stretch them). */
+  public get scripted(): boolean {
+    return this.glide !== null || this.holdMs > 0;
+  }
+
+  public get gliding(): boolean {
+    return this.glide !== null;
+  }
+
+  /** Ms of the current hold still to go (0 when not holding). */
+  public get holdLeftMs(): number {
+    return Math.max(0, this.holdMs);
+  }
+
   /** Move one frame according to the alien's kind (or a scripted glide/hold). */
   public advance(delta: number): void {
     if (this.glide) {

@@ -660,6 +660,9 @@ Green=multiplication, Yellow=division.
   rookie 2/20, pilot 18/20, ace 20/20. Traits can scale or hold their
   kind's movement with `Ability.pace(alien, delta)`; `update(delta, alien)`
   gets the alien; a boss look can draw under the field (`BossLook.under`).
+  Level 6, THE VOLCANO: lava drips that drop in hops, fireflies that go
+  dark together, lava tortoises (answer the shell first), a hopping spark;
+  boss DRAGON, whose fire breath re-rolls its sum (docs/SOLO_MODES_DESIGN.md).
 - **Bullets hit only their target.** Results are unique on the field, and each
   bullet carries the alien whose answer fired it (`Bullet.target`); it flies
   through every other alien, so only the solved alien can die or lose its
@@ -941,6 +944,13 @@ Newest first. Format: `YYYY-MM-DD — decision — rationale`.
   elsewhere: `Ability.pace` (hold/scale the kind's pattern; complements
   the pond's `steer`), `update(delta, alien)`, `BossLook.under`. d range
   0.45 → 0.6, not 0.5 → 0.65: pilots cleared 1/20 at the planned range.
+- **2026-10-18 — Level 6, THE VOLCANO; traits can move their alien.**
+  Ability `update` now also gets its alien and the host (like onHit), and
+  Alien says when a glide/hold runs (`scripted`): lava drips and the spark
+  move only in hops, in field time, and the Dragon breathes (a new sum)
+  after a telegraphed inhale. `SpeciesDef.SPEED` added for the owner's rule
+  (tortoise answers twice: ×0.45, it caused 90% of hits at ×1; flashing
+  fireflies ×0.8). Bots: rookie 0/20, pilot 14/20, ace 20/20.
 
 - **2026-10-18 — Creatures with personality; one file per level.** Owner's
   ask: each level's monsters behave differently, not just look different.

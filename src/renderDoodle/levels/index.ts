@@ -4,6 +4,7 @@ import { POND_PAGE } from "./pond";
 import { TREETOPS_PAGE } from "./treetops";
 import { SWAMP_PAGE } from "./swamp";
 import { CAVE_PAGE } from "./cave";
+import { VOLCANO_PAGE } from "./volcano";
 
 /**
  * Every story page by id (LevelDef.PAGE). A new level adds its own file in
@@ -15,4 +16,5 @@ export const PAGES: Record<string, PageDef> = {
   treetops: TREETOPS_PAGE,
   swamp: SWAMP_PAGE,
   cave: CAVE_PAGE,
+  volcano: VOLCANO_PAGE,
 };

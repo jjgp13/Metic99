@@ -201,7 +201,7 @@ export class Swarm implements AbilityHost {
 
     // Ability clocks run on real time, not field time: a blinker must not stay
     // shut through the post-hit freeze meant for reading the board.
-    for (const alien of this.aliens) if (alien.active) alien.ability?.update(dt, alien);
+    for (const alien of this.aliens) if (alien.active) alien.ability?.update(dt, alien, this);
 
     // Advance every alien; detect ones that reached the player line. The held
     // target STOPS: once the player has typed its answer it holds position while

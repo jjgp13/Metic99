@@ -144,6 +144,9 @@ Each level turns the monster kinds into its own creatures
   "wings" folds the wings over the numbers on a rhythm (like the Blinker);
   a trait's `pace(alien, delta)` can hold, slow or speed its kind's
   movement (the cave's bat hangs, then drops);
+  a trait sees its alien in `update(delta, alien, host)`, so it can move
+  it in glides and holds (`Alien.scripted`) or change its sum;
+- a **speed** (`SPEED`, × its kind's): the harder to kill, the slower;
 - a **march** (`MARCH: { SIZE, CHANCE }`): sometimes comes in a line, in
   step; a line skips the unsolved cap but obeys the threat budget;
 - an **intro** line shown the first time it appears.
@@ -219,12 +222,28 @@ white number balls still win) with stalactites, rocks, crystals, drips.
 | L3 ✓ | Level engine: `LEVELS` data, scrolling page + props, progress bar, level-complete card, lives carried over | level 1 playable to the end of the path |
 | L4 ✓ | Boss phase + Giant Mole | level 1 complete |
 | L5 | Table of contents + per-level and full-run scores | runs save and restart at level 1 |
-| L6 | Levels 2–5 (pond ✓, treetops ✓, swamp ✓, cave ✓), subtraction, 4-ball rows (✓ `cluster`), Bouncer, Heart balloon | bots clear them at the target rates |
-| L7 | Levels 6–10, multiplication | same |
+| L6 ✓ | Levels 2–5 (pond, treetops, swamp, cave), 4-ball rows (`cluster`); still to do: subtraction, Bouncer, Heart balloon | bots clear them at the target rates |
+| L7 | Levels 6–10 (volcano ✓), multiplication | same |
 | L8 | Story bots report + balance pass; leaderboard `level` column | `npm run bots -- --story` |
 
 L1–L4 is the smallest playable slice: one full level with a boss, to judge
-the feel before building ten. **Built 2026-10-18.** Not in it yet: the
+the feel before building ten.
+
+**Level 6, THE VOLCANO (built 2026-10-18, on its own branch):** d 0.6 →
+0.75 over 200 s, sums only (multiplication waits for the shared operations
+piece). Creatures: **lava drips** (darters, "chain": cling, swell, then drop
+70 px; trait `drip`), **fireflies** (strafers, ×0.8: their lanterns go dark
+on ONE rhythm from the game clock, so the whole swarm blinks together;
+`flash`), **lava tortoises** (3-ball lumberers, ×0.45: a shell that takes an
+answer first, the Shielded rule; `shell`), and the bonus **spark** (drifter,
+"eyes": crosses in hops, readable when it lands; `spark`). Boss **DRAGON**
+(mechanic `breath`, 6 answers of 3 balls, ×0.2): walks 50 px, stops and
+inhales (shakes), then breathes fire: its numbers melt into a new sum and it
+rears back 30 px. Bots (20 seeds, 3 fresh lives): rookie 0/20 (dies around
+40% of the path), pilot 14/20 (27/40), ace 20/20; hits spread evenly over the
+three creatures. Rules `config/levels/volcano.ts`, `objects/volcanoTraits.ts`,
+`objects/dragon.ts`; looks `renderDoodle/levels/volcano.ts`; test
+`sim/volcano.test.ts`. **Built 2026-10-18.** Not in it yet: the
 "pick your power" card before each level (the menu's pick is used), monsters
 re-skinned per page (level 1 still draws the standard darter/swooper
 doodles), story scores on the leaderboard, a dev shortcut to a level.
