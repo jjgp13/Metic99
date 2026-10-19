@@ -581,6 +581,14 @@ Green=multiplication, Yellow=division.
   summary, solves, hits, input sources (keypad/keyboard/pad), pad reads vs
   "?", pauses. GAME OVER shows "run saved for analysis". Claude reads the
   runs (ArtifactData) and `npm run playtest -- runs.json` replays them.
+  **Public run log:** outside the Artifact (GitHub Pages, any player) the
+  same record goes to Supabase `run_logs` through the write-only RPC
+  `log_run` (`supabase/run-logs.sql`; shape and size checked, a global flood
+  guard, RLS with no policies, so the API can't read it). No user agent,
+  name or IP: only screen size and touch. Story levels log one record per
+  attempt (cleared or not). The menu footer says runs are saved
+  anonymously. Claude reads them with SQL (Supabase MCP) and replays them
+  with `npm run playtest`.
 - **Keyboard:** raw key listeners use `onKeyDown` (`src/ui/keyboard.ts`).
   Phaser 3.90 re-delivers earlier keys when several arrive in one frame
   ("12" → "112", a power toggled twice); the helper drops repeats.
@@ -655,7 +663,15 @@ Green=multiplication, Yellow=division.
   (`objects/bosses.ts`). One file per level: `config/levels/<page>.ts`
   (rules) + `renderDoodle/levels/<page>.ts` (looks), each listed in its
   folder's index (docs/SOLO_MODES_DESIGN.md "Adding a level").
-  Built: level 1, THE BACKYARD (3 min, d 0 → 0.25; beetles whose eyes are
+  **Flow:** STORY opens the map (CONTINUE a saved run, or a new run from
+  island 1). After a clear the game returns to the map, the ship flies to
+  the next island, and a tap starts it. The run is saved when each level
+  starts (`STORAGE.STORY_SAVE`: level, lives, score), so it can be left
+  (pause → SAVE & QUIT TO MAP) and continued from that level's start; a
+  game over deletes it. **Music:** each level loads its own path + boss
+  track (`public/assets/music/levelNN-{path,boss}.mp3`, `scenes/levelMusic.ts`)
+  and crossfades to the boss track when the boss comes in.
+  Built: level 1, THE BACKYARD (now 100 s, d 0.1 → 0.35; beetles whose eyes are
   the numbers and sometimes march in pairs, worms made of numbers, a
   butterfly that folds its wings over its numbers; boss GIANT MOLE, 5
   answers of 3 balls). Bots: rookie clears 16/20, pilot and ace 20/20.
@@ -803,6 +819,9 @@ Green=multiplication, Yellow=division.
   absolute speed still climbs over time. The ship can still fire during the
   freeze (so a frozen board can be cleared). The freeze is a countdown that
   only runs while unpaused, so pausing doesn't eat it.
+  During the freeze every monster is also **pushed back up** the field by
+  `RECOVERY.PUSHBACK_PX` (70) over `PUSHBACK_MS` (owner's ask: room to
+  recover), all by the same amount so readability gaps hold (every mode).
   The ship shows it (doodle view): knocked down with an "ouch!", then blinks
   with stars circling it for the freeze. The last hit snaps it in two
   ("CRASH!"), and GAME OVER waits `RECOVERY.GAME_OVER_DELAY_MS` (1.6 s,
@@ -940,6 +959,20 @@ dMatch)`; it is 0 in solo play.
 ## Decision Log
 
 Newest first. Format: `YYYY-MM-DD — decision — rationale`.
+
+- **2026-10-19 — Owner's first story playtest: faster start, pushback,
+  music, map flow, saves, public logs.** Levels 1–2 felt long and easy
+  (shield never needed): paths 180/200 s → 100/120 s and d up (bots:
+  ace clears L1 in ~2:10, was ~3:30; rookie 4/12). A hit now also pushes
+  every monster back 70 px during the freeze (every mode; golden master
+  updated). The 20-track soundtrack ships as 96 kbps MP3 (6.9 MB, was 35
+  MB WAV), loaded per level, not at boot. After a clear the ship flies to
+  the next island on the map and waits for a tap; runs are saved per
+  level and can be continued. Logs: the Artifact keeps the owner's runs;
+  the public game now logs to Supabase `run_logs` (anonymous, write-only)
+  so other players' runs can be studied; the MeticWeb project was
+  restored (it had been paused) and story-boards + run-logs applied (an
+  old 1–5 char name check that refused 6-letter initials was dropped).
 
 - **2026-10-18 — Level 2, THE POND, and three small generic rules.**
   `Ability.steer(alien, fieldDelta)` lets a trait or boss script its own

@@ -2,6 +2,7 @@ import type { AlienKind, TargetStrategy } from "../config/constants";
 import type Alien from "../objects/Alien";
 import type { AbilityKind } from "../objects/abilities";
 import type { Field, FieldInput, MatchMessage } from "../sim/Field";
+import { isLeaderboardEnabled, submitRunLog } from "./leaderboard";
 
 /**
  * Playtest logger. When the game runs as a claude.ai Artifact with the `db`
@@ -73,13 +74,32 @@ export function hitRecord(alien: Alien, field: Field): RunExtras["hits"][number]
 }
 
 /**
- * Save a finished run. Resolves "saved", "failed", or "off" (not running as
- * an Artifact with a store: nothing to do).
+ * Save a finished run: in the playtest Artifact to its own store (with the
+ * full device string, it's the owner's), anywhere else to the public run
+ * log on Supabase (no user agent: only the screen and touch, nothing that
+ * identifies a player). Resolves "saved", "failed", or "off" (neither is
+ * available: nothing to do).
  */
 export async function logRun(field: Field, extras: RunExtras): Promise<"saved" | "failed" | "off"> {
   const db = await runsDb();
-  if (!db) return "off";
-  const record = {
+  const record = runRecord(field, extras);
+  if (!db) {
+    if (!isLeaderboardEnabled()) return "off";
+    const mode = extras.battle ? "battle" : extras.story ? "story" : "endless";
+    const { ua: _ua, ...device } = record.device;
+    return (await submitRunLog(mode, extras.story?.level ?? null, { ...record, device })) ? "saved" : "failed";
+  }
+  try {
+    await db.collection("runs").add(record);
+    return "saved";
+  } catch {
+    return "failed";
+  }
+}
+
+/** One finished run as the logs keep it: enough to replay it exactly. */
+function runRecord(field: Field, extras: RunExtras) {
+  return {
     v: 2,
     build: __BUILD_ID__,
     at: new Date().toISOString(),
@@ -124,12 +144,6 @@ export async function logRun(field: Field, extras: RunExtras): Promise<"saved" |
     battle: extras.battle,
     story: extras.story ? { level: extras.story.level, cleared: field.cleared } : null,
   };
-  try {
-    await db.collection("runs").add(record);
-    return "saved";
-  } catch {
-    return "failed";
-  }
 }
 
 /** A short form of an input for the log: "d12", "b", "c", "p" (power),

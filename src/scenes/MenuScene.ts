@@ -65,7 +65,7 @@ export default class MenuScene extends Phaser.Scene {
     );
 
     this.add
-      .text(cx, GAME.HEIGHT - 26, "a Phaser math-shooter", textStyle(12, PALETTE.TEXT_MUTED))
+      .text(cx, GAME.HEIGHT - 26, "runs are saved anonymously (no names) to tune the game", textStyle(12, PALETTE.TEXT_MUTED))
       .setOrigin(0.5);
 
     onKeyDown(this, (e) => {

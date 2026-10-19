@@ -68,6 +68,26 @@ export interface SubmitResult {
   rowId?: number;
 }
 
+/**
+ * Record a finished run in the public run log (supabase/run-logs.sql): write
+ * only, checked by the server, read by the owner. False if it wasn't saved
+ * (no credentials, offline, or refused).
+ */
+export async function submitRunLog(mode: string, level: number | null, data: object): Promise<boolean> {
+  const c = getClient();
+  if (!c) return false;
+  try {
+    const call: Promise<{ error: { message: string } | null }> = Promise.resolve(
+      c.rpc("log_run", { p_build: __BUILD_ID__, p_mode: mode, p_level: level, p_data: data }),
+    );
+    const { error } = await withTimeout(call, 8000, { error: { message: "timeout" } });
+    if (error) console.warn("[runlog] not saved:", error.message);
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
 /** Reject (resolve to fallback) if a promise takes too long, so the UI never hangs. */
 function withTimeout<T>(p: Promise<T>, ms: number, fallback: T): Promise<T> {
   return Promise.race([

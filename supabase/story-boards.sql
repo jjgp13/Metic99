@@ -21,6 +21,10 @@
 
 begin;
 
+-- 0) An old 1-5 character name check was still on the live table next to
+--    scores_name_chk (3-6): together they refused 6-letter initials.
+alter table public.scores drop constraint if exists name_format;
+
 -- 1) The board column on scores, plus an index for "top N on a board". -------
 alter table public.scores add column if not exists level smallint not null default 0;
 
@@ -42,6 +46,7 @@ create or replace function public.board_score_cap(p_level int)
 returns int
 language sql
 immutable
+set search_path = public
 as $$
   select case when p_level between 1 and 10 then 300000 else 1000000 end;
 $$;
@@ -142,6 +147,7 @@ create or replace function public.get_rank(s int, p_level int default 0)
 returns int
 language sql
 stable
+set search_path = public
 as $$
   select count(*)::int + 1 from public.scores where level = p_level and score > s;
 $$;
