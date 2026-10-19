@@ -1,4 +1,4 @@
-import { DOODLE, GAME } from "../config/constants";
+import { DOODLE, GAME, type AlienKind } from "../config/constants";
 import type { DoodleRecipe, Point } from "./pencil";
 
 /**
@@ -16,6 +16,8 @@ export interface PageDef {
   props: { recipe: DoodleRecipe; weight: number }[];
   /** Average px of path between two props. */
   propGap: number;
+  /** The page's own monsters: a doodle per movement kind (others keep theirs). */
+  skins: Partial<Record<AlienKind, DoodleRecipe>>;
 }
 
 /** A prop placed on the page: `pathY` px along the path from the start. */
@@ -119,8 +121,71 @@ const TWIG: DoodleRecipe = {
   },
 };
 
+// --- Backyard monsters (they face down, toward the player) ------------------
+const BUG = { beetle: "#6a4c93", spots: "#e8873a", worm: "#e0879a", wing: "#e8873a", wingDots: "#8e4fd8" };
+
+/** Beetle (moves as a darter): a round shell on six scuttling legs. */
+const BEETLE: DoodleRecipe = {
+  w: 40,
+  h: 48,
+  draw(p, t) {
+    for (const side of [-1, 1]) {
+      for (let i = 0; i < 3; i++) {
+        // Legs on each side step in turn, opposite sides out of phase.
+        const swing = Math.sin(TAU * t + i * 2.1 + (side > 0 ? Math.PI : 0)) * 3;
+        const y = -6 + i * 7;
+        p.line(side * 8, y, side * 17, y + swing, { strokeWidth: 1.2 });
+      }
+    }
+    const wag = Math.sin(TAU * t) * 2;
+    for (const side of [-1, 1]) p.curve([[side * 3, 12], [side * 6 + wag, 18], [side * 9 + wag, 21]], { strokeWidth: 1 });
+    p.ellipse(0, -2, 22, 28, BUG.beetle, { hachureGap: 2.2 });
+    p.line(0, -15, 0, 11, { strokeWidth: 1.1 }); // the split between the wing cases
+    for (const [x, y] of [[-5, -6], [5, -3], [-4, 4]]) p.dot(x, y, 1.8, BUG.spots);
+    p.ellipse(0, 12, 12, 8, DOODLE.GRAPHITE_LIGHT, { fillStyle: "solid" }); // head
+    for (const side of [-1, 1]) p.dot(side * 3, 13, 1.2, DOODLE.PAPER);
+  },
+};
+
+/** Worm (moves as a swooper): a pink segmented worm wriggling as it goes. */
+const WORM: DoodleRecipe = {
+  w: 40,
+  h: 44,
+  draw(p, t) {
+    const n = 6;
+    for (let i = n - 1; i >= 0; i--) {
+      // A wave runs down the body; the tail end wriggles most.
+      const x = Math.sin(TAU * t + i * 1.0) * (1 + (n - 1 - i) * 0.9);
+      const y = 14 - i * 5.5;
+      p.circle(x, y, i === 0 ? 13 : 11 - i * 0.6, BUG.worm, { hachureGap: 2.4, hachureAngle: 60 });
+    }
+    const hx = Math.sin(TAU * t) * 1;
+    for (const side of [-1, 1]) p.dot(hx + side * 2.5, 15, 1.3);
+    p.curve([[hx - 2.5, 18], [hx, 19.5], [hx + 2.5, 18]], { strokeWidth: 0.9 }); // a smile
+  },
+};
+
+/** Butterfly (the bonus drifter): two big wings flapping. */
+const BUTTERFLY: DoodleRecipe = {
+  w: 60,
+  h: 50,
+  draw(p, t) {
+    const open = 0.35 + 0.65 * Math.abs(Math.cos(Math.PI * t)); // one flap per cycle
+    for (const side of [-1, 1]) {
+      const wing = (y: number, w: number, h: number, ink: string) =>
+        p.ellipse(side * (3 + (w / 2) * open), y, w * open, h, ink, { hachureGap: 2.6 });
+      wing(-6, 26, 22, BUG.wing);
+      wing(10, 18, 16, BUG.wing);
+      p.dot(side * (3 + 13 * open), -6, 2.4, BUG.wingDots);
+      p.curve([[side * 1.5, -14], [side * 5, -20], [side * 7, -22]], { strokeWidth: 1 }); // antennae
+    }
+    p.ellipse(0, 0, 5, 26, DOODLE.GRAPHITE, { fillStyle: "solid" });
+  },
+};
+
 export const PAGES: Record<string, PageDef> = {
   backyard: {
+    skins: { darter: BEETLE, swooper: WORM, drifter: BUTTERFLY },
     paper: "#f3ead6",
     rule: "rgba(120, 140, 170, 0.28)",
     margin: "rgba(214, 84, 84, 0.35)",

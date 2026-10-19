@@ -11,9 +11,9 @@
  * same rules as the build that played it (the record's `build`).
  */
 import { readFileSync } from "node:fs";
-import { SIM, type PowerKind } from "../src/config/constants";
+import { LEVELS, SIM, type PowerKind } from "../src/config/constants";
 import { expand } from "../src/services/playtestLog";
-import { Field, feed, replayField } from "../src/sim/Field";
+import { Field, feed, replayField, type FieldOptions } from "../src/sim/Field";
 import { answerTimes, formatTimes, mergeTimes } from "../src/sim/pace";
 import { quantile, summarizeSolves } from "../src/sim/stats";
 
@@ -31,6 +31,9 @@ interface RunDoc {
     forcedAbilities: string[] | null;
     /** v2+: the power picked for the run. v1 runs had SLOW + FREEZE buttons. */
     power?: PowerKind;
+    /** Story runs: the level (index into LEVELS) and the score carried in. */
+    level?: number | null;
+    score?: number;
     steps: number;
     inputs: [number, string][];
   };
@@ -50,6 +53,21 @@ interface RunDoc {
   pauses: number;
   /** Battle runs (from M6). */
   battle?: { players: number; opponents: string[]; placement: number | null } | null;
+  /** Story runs: the level and whether its boss was beaten. */
+  story?: { level: number; cleared: boolean } | null;
+}
+
+/** The field a logged run started from (Endless, battle seat 0, or a story level). */
+function optionsFor(run: RunDoc): FieldOptions {
+  const level = run.replay.level ?? null;
+  return {
+    seed: run.replay.seed,
+    lives: run.replay.lives,
+    forcedAbilities: run.replay.forcedAbilities as never,
+    power: run.replay.power,
+    level: level === null ? undefined : LEVELS[level],
+    score: run.replay.score ?? 0,
+  };
 }
 
 const path = process.argv[2];
@@ -62,23 +80,9 @@ const rows = runs
   .sort((a, b) => a.at.localeCompare(b.at))
   .map((run) => {
     const log = run.replay.inputs.map(([step, code]) => ({ step, input: expand(code) }));
-    const replay = replayField(
-      {
-        seed: run.replay.seed,
-        lives: run.replay.lives,
-        forcedAbilities: run.replay.forcedAbilities as never,
-        power: run.replay.power,
-      },
-      log,
-      run.replay.steps,
-      SIM.STEP_MS,
-    );
+    const replay = replayField(optionsFor(run), log, run.replay.steps, SIM.STEP_MS);
     const matches = replay.score === run.summary.score && replay.kills === run.summary.kills;
-    const paces = answerTimes(
-      { seed: run.replay.seed, lives: run.replay.lives, forcedAbilities: run.replay.forcedAbilities as never },
-      log,
-      run.replay.steps,
-    );
+    const paces = answerTimes(optionsFor(run), log, run.replay.steps);
     if (matches) mergeTimes(allPaces, paces);
     const solves = summarizeSolves(run.solves.map(([balls, ms]) => ({ balls, ms })));
     const phone = /iPhone|Android|Mobile/i.test(run.device.ua) ? "phone" : "desktop";
@@ -89,7 +93,11 @@ const rows = runs
     return {
       when: run.at.slice(5, 16).replace("T", " "),
       device: `${phone} ${run.inputMode}`,
-      mode: run.battle ? `battle #${run.battle.placement}/${run.battle.players}` : "solo",
+      mode: run.battle
+        ? `battle #${run.battle.placement}/${run.battle.players}`
+        : run.story
+          ? `level ${run.story.level + 1} ${run.story.cleared ? "clear" : "out"}`
+          : "solo",
       survived: `${Math.round(run.summary.survivedMs / 1000)} s`,
       score: run.summary.score,
       kills: run.summary.kills,
@@ -107,12 +115,7 @@ const rows = runs
 
 /** Steps a time power ran in a (v2) run, found by replaying it. */
 function powerOnSteps(run: RunDoc): number {
-  const field = new Field({
-    seed: run.replay.seed,
-    lives: run.replay.lives,
-    forcedAbilities: run.replay.forcedAbilities as never,
-    power: run.replay.power,
-  });
+  const field = new Field(optionsFor(run));
   const log = run.replay.inputs.map(([step, code]) => ({ step, input: expand(code) }));
   let next = 0;
   let on = 0;

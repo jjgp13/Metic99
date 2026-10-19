@@ -646,7 +646,13 @@ export default class DoodleWorld {
 
   private alienKey(a: Alien): string {
     if (a.ability instanceof Boss) return `boss:${a.model}:${a.ability.burrowing ? "dig" : "up"}`;
-    return a.model ? `blob:${a.model}` : `alien:${a.kind}`;
+    if (a.model) return `blob:${a.model}`;
+    return this.pageSkin(a) ? `skin:${this.pageId}:${a.kind}` : `alien:${a.kind}`;
+  }
+
+  /** Story: the page's own doodle for this alien's kind, if it has one. */
+  private pageSkin(a: Alien): DoodleRecipe | undefined {
+    return this.pageId ? PAGES[this.pageId]?.skins[a.kind] : undefined;
   }
 
   private alienRecipe(a: Alien): DoodleRecipe {
@@ -654,7 +660,7 @@ export default class DoodleWorld {
       return a.ability.burrowing ? R.DIRT_MOUND : BOSS_RECIPES[a.model];
     }
     if (a.model) return R.blob(MODEL_BOXES[a.model]?.HALF_W ?? a.halfW, this.inkFor(a));
-    return KIND_RECIPES[a.kind] ?? R.blob(a.halfW, this.inkFor(a));
+    return this.pageSkin(a) ?? KIND_RECIPES[a.kind] ?? R.blob(a.halfW, this.inkFor(a));
   }
 
   private inkFor(a: Alien): string {

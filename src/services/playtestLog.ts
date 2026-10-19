@@ -54,6 +54,9 @@ export interface RunExtras {
   pauses: number;
   /** Battle mode: the lineup and where the player placed (null in solo). */
   battle: { players: number; opponents: string[]; placement: number | null } | null;
+  /** Story mode: which level (index into LEVELS) and the score carried in
+   * (each level attempt is its own record; null outside story). */
+  story: { level: number; startScore: number } | null;
   hits: { atMs: number; kind: string; model: string | null; ability: string | null; digits: readonly number[]; d: number }[];
 }
 
@@ -92,6 +95,8 @@ export async function logRun(field: Field, extras: RunExtras): Promise<"saved" |
       lives: extras.lives,
       forcedAbilities: extras.forcedAbilities,
       power: field.power.kind,
+      level: extras.story?.level ?? null,
+      score: extras.story?.startScore ?? 0,
       steps: field.steps,
       inputs: field.inputLog.map(({ step, input }) => [step, compact(input)]),
     },
@@ -117,6 +122,7 @@ export async function logRun(field: Field, extras: RunExtras): Promise<"saved" |
     ink: extras.ink,
     pauses: extras.pauses,
     battle: extras.battle,
+    story: extras.story ? { level: extras.story.level, cleared: field.cleared } : null,
   };
   try {
     await db.collection("runs").add(record);

@@ -102,6 +102,7 @@ export default class GameScene extends Phaser.Scene {
       battle: this.match
         ? { players: MATCH.OPPONENTS.length + 1, opponents: [...MATCH.OPPONENTS], placement: null }
         : null,
+      story: this.story ? { level: this.story.level, startScore: this.story.score } : null,
       inputMode: inputMode(),
       sources: { keypad: 0, keyboard: 0, pad: 0 },
       ink: { reads: 0, unknown: 0, scratch: 0 },
@@ -463,13 +464,18 @@ export default class GameScene extends Phaser.Scene {
           : "tap / Enter to play again",
     });
 
-    // Playtest build (a claude.ai Artifact): save the run for analysis.
-    this.runExtras.inputMode = inputMode();
-    void logRun(f, this.runExtras).then((status) => {
-      if (status !== "off" && this.scene.isActive()) screen.showSaveStatus(status === "saved");
-    });
+    this.saveRun((saved) => screen.showSaveStatus(saved));
 
     this.input.once("pointerdown", () => this.leaveGameOver());
+  }
+
+  /** Playtest build (a claude.ai Artifact): save the run (or the story level
+   * attempt) for analysis; `onStatus` hears whether it was saved. */
+  private saveRun(onStatus: (saved: boolean) => void): void {
+    this.runExtras.inputMode = inputMode();
+    void logRun(this.field, this.runExtras).then((status) => {
+      if (status !== "off" && this.scene.isActive()) onStatus(status === "saved");
+    });
   }
 
   /** Dev: compare your pace (or the autopilot's) with `npm run bots`. */
@@ -499,6 +505,7 @@ export default class GameScene extends Phaser.Scene {
       livesLeft: f.lives,
       hasNext: this.story.level + 1 < LEVELS.length,
     });
+    this.saveRun(() => {});
     this.leaveAllowedAt = this.time.now + STORY.CLEAR_MIN_MS;
     this.input.on("pointerdown", () => this.leaveGameOver());
   }
