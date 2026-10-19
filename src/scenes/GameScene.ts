@@ -227,7 +227,7 @@ export default class GameScene extends Phaser.Scene {
   private showFieldEvent(e: FieldEvent): void {
     switch (e.type) {
       case "spawned":
-        if (e.alien.ability) this.popups.introduceAbility(e.alien.ability.kind);
+        if (e.alien.ability && e.alien.ability.kind !== "boss") this.popups.introduceAbility(e.alien.ability.kind);
         break;
       case "fired":
         this.sound.play("shoot", { volume: 0.4 });

@@ -1,4 +1,4 @@
-import { ABILITY, BLINKER, GAME, SHIELD, SPLITTER } from "../config/constants";
+import { ABILITY, BLINKER, GAME, SHIELD, SPLITTER, type BossDef } from "../config/constants";
 import type Alien from "./Alien";
 
 /**
@@ -32,7 +32,7 @@ export interface AbilityHost {
 }
 
 export abstract class Ability {
-  abstract readonly kind: AbilityKind;
+  abstract readonly kind: AbilityKind | "boss";
   /** How hidden the number balls are: 0 = readable, 1 = fully covered. */
   cover = 0;
 
@@ -115,6 +115,55 @@ export class Splitter extends Ability {
     const y = Math.min(alien.y, SPLITTER.MAX_CHILD_Y);
     host.spawnSplitling(alien, center - SPLITTER.SPREAD_PX, y);
     host.spawnSplitling(alien, center + SPLITTER.SPREAD_PX, y - SPLITTER.STAGGER_PX);
+  }
+}
+
+/**
+ * A story boss (config/tuning/story.ts): takes HP answers. Each answer but
+ * the last rolls a new sum and burrows: it moves to the other side of the
+ * field and up, hidden while it digs, then holds still while the new sum is
+ * read. Reaching the ship costs a life and sends it back up; only the last
+ * answer kills it. Not spawned by difficulty: a level's director brings it in.
+ */
+export class Boss extends Ability {
+  readonly kind = "boss";
+  hp: number;
+  private burrowLeftMs = 0;
+
+  constructor(readonly def: BossDef) {
+    super();
+    this.hp = def.HP;
+  }
+
+  /** It is underground (moving, numbers hidden, can't reach the ship). */
+  get burrowing(): boolean {
+    return this.burrowLeftMs > 0;
+  }
+
+  update(delta: number): void {
+    this.burrowLeftMs = Math.max(0, this.burrowLeftMs - delta);
+    this.cover = this.burrowing ? 1 : 0;
+  }
+
+  onHit(alien: Alien, host: AbilityHost): boolean {
+    this.hp -= 1;
+    if (this.hp <= 0) return false;
+    host.rerollSum(alien); // if no free sum is found it keeps the old one
+    const x = Math.min(Math.max(GAME.WIDTH - alien.x, alien.halfW), GAME.WIDTH - alien.halfW);
+    this.burrow(alien, x, Math.max(this.def.MIN_Y, alien.y - this.def.BURROW_UP_PX));
+    return true;
+  }
+
+  /** It reached the ship: dig back up the field (the life is already lost). */
+  retreat(alien: Alien): void {
+    this.burrow(alien, alien.x, this.def.RETREAT_Y);
+  }
+
+  private burrow(alien: Alien, x: number, y: number): void {
+    this.burrowLeftMs = this.def.BURROW_MS;
+    this.cover = 1;
+    alien.glideTo(x, y, this.def.BURROW_MS);
+    alien.hold(this.def.REVEAL_MS);
   }
 }
 

@@ -1,5 +1,5 @@
-import { ENEMY } from "../config/constants";
-import { difficultyAt, type DifficultyParams } from "../config/difficulty";
+import { ENEMY, STORY, type BossDef, type LevelDef } from "../config/constants";
+import { difficultyAt, paramsAt, type DifficultyParams } from "../config/difficulty";
 import { unlockedAbilities, type AbilityKind } from "../objects/abilities";
 
 /** The kinds a 2-ball spawn picks from, by weight. */
@@ -32,6 +32,12 @@ export interface SpawnDirector {
   abilities(d: number): readonly AbilityKind[];
   /** Weights for picking a 2-ball spawn's kind. */
   readonly twoBallKinds: Readonly<Record<TwoBallKind, number>>;
+  /** Whether bonus drifters cross the field right now. */
+  drifters(fieldMs: number): boolean;
+  /** How far along a story level's path (0..1), or null without a path. */
+  progress(fieldMs: number): number | null;
+  /** The boss met at the end of the path, or null. */
+  readonly boss: BossDef | null;
 }
 
 /** Endless and battles: today's score-led curve, every monster unlocked by d. */
@@ -44,5 +50,54 @@ export class EndlessDirector implements SpawnDirector {
 
   abilities(d: number): readonly AbilityKind[] {
     return unlockedAbilities(d);
+  }
+
+  drifters(): boolean {
+    return true;
+  }
+
+  progress(): null {
+    return null;
+  }
+
+  readonly boss = null;
+}
+
+/**
+ * A story level (config/tuning/story.ts): difficulty follows the path from
+ * D.FROM to D.TO instead of the score, the roster is the level's own, and
+ * at the end of the path the boss comes in. The path runs on field time, so
+ * freezes and SLOW hold it back too.
+ */
+export class LevelDirector implements SpawnDirector {
+  readonly boss: BossDef;
+
+  constructor(readonly level: LevelDef) {
+    this.boss = level.BOSS;
+  }
+
+  get twoBallKinds(): Readonly<Record<TwoBallKind, number>> {
+    return this.level.TWO_BALL_KINDS;
+  }
+
+  difficulty(s: DirectorState): DifficultyParams {
+    const p = this.progress(s.fieldMs);
+    const { FROM, TO } = this.level.D;
+    const d = FROM + (TO - FROM) * p;
+    const params = paramsAt(d, d);
+    // Boss phase: the boss and a minion or two, no more.
+    return p < 1 ? params : { ...params, maxUnsolved: STORY.BOSS_PHASE_UNSOLVED };
+  }
+
+  abilities(): readonly AbilityKind[] {
+    return this.level.ABILITIES;
+  }
+
+  drifters(fieldMs: number): boolean {
+    return this.level.DRIFTERS && this.progress(fieldMs) < 1;
+  }
+
+  progress(fieldMs: number): number {
+    return Math.min(1, fieldMs / this.level.PATH_MS);
   }
 }

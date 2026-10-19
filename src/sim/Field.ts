@@ -10,15 +10,17 @@ import {
   SCORE,
   SEND,
   type AlienKind,
+  type LevelDef,
   type PowerKind,
   type TargetStrategy,
 } from "../config/constants";
 import { matchPressure, suddenDeathSpeed, type DifficultyParams } from "../config/difficulty";
 import type Alien from "../objects/Alien";
-import { ABILITY_KINDS, type AbilityKind } from "../objects/abilities";
+import { ABILITY_KINDS, Boss, type AbilityKind } from "../objects/abilities";
 import type { Bullet } from "../objects/Bullet";
 import { EnergyMeter, Power, energyForKill, type PowerUse } from "./energy";
 import { Rng } from "./rng";
+import { LevelDirector } from "./director";
 import { STREAM, Swarm, type SentAlien } from "./Swarm";
 
 const PLAYER_START_X = GAME.WIDTH / 2;
@@ -151,7 +153,9 @@ export type FieldEvent =
   | { type: "blasted"; aliens: Alien[] }
   /** An armed SHIELD destroyed this alien at the ship instead of a life. */
   | { type: "shielded"; alien: Alien }
-  | { type: "knockedOut" };
+  | { type: "knockedOut" }
+  /** Story: the boss is beaten; the level is over and the field stops. */
+  | { type: "levelCleared" };
 
 /** One kill: how many balls its sum had and how long it took (spawn → hit). */
 export interface Solve {
@@ -169,6 +173,10 @@ export interface FieldOptions {
   forcedKinds?: AlienKind[] | null;
   /** The power picked before the run (default: the first of POWER_KINDS). */
   power?: PowerKind;
+  /** Story: play this level (its path, roster and boss) instead of Endless. */
+  level?: LevelDef;
+  /** Story: the run's score so far (it carries over between levels). */
+  score?: number;
 }
 
 /**
@@ -203,6 +211,10 @@ export class Field {
   score = 0;
   lives: number;
   knockedOut = false;
+  /** Story: the boss is beaten (the field stops like a knockout). */
+  cleared = false;
+  /** Score when this field started (story: carried in from earlier levels). */
+  readonly startScore: number;
   /** The alien that ended the run (M7: its sender gets the KO credit). */
   knockedOutBy: Alien | null = null;
   /** Kill streak without a hit (scores and charges more). */
@@ -248,11 +260,14 @@ export class Field {
   constructor(options: FieldOptions) {
     this.seed = options.seed;
     this.lives = options.lives ?? PLAYER.LIVES;
+    this.score = options.score ?? 0;
+    this.startScore = this.score;
     this.power = new Power(options.power ?? POWER_KINDS[0]);
     this.swarm = new Swarm({
       seed: options.seed,
       forcedAbilities: options.forcedAbilities,
       forcedKinds: options.forcedKinds,
+      director: options.level ? new LevelDirector(options.level) : undefined,
     });
     this.sendRng = Rng.derive(options.seed, STREAM.SEND);
   }
@@ -273,6 +288,16 @@ export class Field {
 
   get aliens(): readonly Alien[] {
     return this.swarm.aliens;
+  }
+
+  /** Story: how far along the level's path (0..1); null in Endless. */
+  get levelProgress(): number | null {
+    return this.swarm.director.progress(this.swarm.fieldMs);
+  }
+
+  /** Story: the level's boss once it has come in (null before). */
+  get boss(): Alien | null {
+    return this.swarm.boss;
   }
 
   /** The game clock (ms of play). */
@@ -309,7 +334,7 @@ export class Field {
    * as the start of step N+1. Returns whether it changed anything.
    */
   apply(input: FieldInput): boolean {
-    if (this.knockedOut) return false;
+    if (this.knockedOut || this.cleared) return false;
     this.inputLog.push({ step: this.steps, input });
     let changed = true;
     switch (input.type) {
@@ -391,7 +416,7 @@ export class Field {
 
   /** Advance the rules by `dt` ms (always SIM.STEP_MS in play). */
   step(dt: number): void {
-    if (this.knockedOut) return;
+    if (this.knockedOut || this.cleared) return;
     this.steps++;
 
     // After a hit the field FREEZES for a few seconds (factor 0), then resumes at
@@ -602,7 +627,11 @@ export class Field {
       this.solves.push({ balls: digits.length, ms: solveMs });
     }
 
-    const abilityMult = !absorbed && alien.ability ? ABILITY.SCORE_MULT[alien.ability.kind] : 1;
+    const abilityMult = absorbed || !alien.ability
+      ? 1
+      : alien.ability instanceof Boss
+        ? alien.ability.def.SCORE_MULT
+        : ABILITY.SCORE_MULT[alien.ability.kind as AbilityKind];
     const points = Math.round(this.computeScore(digits.length, solveMs) * abilityMult);
     this.score += points;
     // The bonus drifter adds its burst on top of the normal kill energy.
@@ -628,6 +657,10 @@ export class Field {
     }
     const cancelled = this.standing ? kill - left : 0;
     this.events.push({ type: "solved", alien, digits, points, energy, burst, absorbed, cancelled, attack });
+    if (!absorbed && alien.ability instanceof Boss) {
+      this.cleared = true;
+      this.events.push({ type: "levelCleared" });
+    }
   }
 
   /**
@@ -636,7 +669,8 @@ export class Field {
    * skipped). A shot in flight at one of them just flies off.
    */
   private blast(): void {
-    const aliens = this.aliens.filter((a) => a.active);
+    // A boss shrugs it off: it must be beaten with answers.
+    const aliens = this.aliens.filter((a) => a.active && !(a.ability instanceof Boss));
     for (const a of aliens) this.swarm.remove(a);
     this.lockedTarget = null;
     this.lockedBullet = null;

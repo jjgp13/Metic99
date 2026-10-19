@@ -13,7 +13,7 @@ interface PlayStats {
   /** Steps on which two live aliens' boxes (plus READ_GAP) overlapped. */
   overlapSteps: number;
   kinds: Set<string>;
-  abilities: Set<AbilityKind>;
+  abilities: Set<AbilityKind | "boss">;
 }
 
 /**

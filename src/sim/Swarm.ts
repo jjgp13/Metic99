@@ -8,10 +8,11 @@ import {
   PLAYER,
   SPLITTER,
   type AlienKind,
+  type BossDef,
 } from "../config/constants";
 import type { DifficultyParams } from "../config/difficulty";
 import Alien from "../objects/Alien";
-import { createAbility, type AbilityHost, type AbilityKind } from "../objects/abilities";
+import { Boss, createAbility, type AbilityHost, type AbilityKind } from "../objects/abilities";
 import { EndlessDirector, type SpawnDirector } from "./director";
 import { Rng, SpawnStreams } from "./rng";
 
@@ -50,12 +51,15 @@ interface AlienSpec {
   laneX?: number;
   /** Battle: the seat that sent it. */
   sentBy?: number;
+  /** Story: this alien is the level's boss. */
+  boss?: BossDef;
 }
 
 /** What happened to the aliens; `Field` drains them after each step. */
 export type SwarmEvent =
   | { type: "spawned"; alien: Alien }
-  /** A lethal alien reached the player line (it is already removed). */
+  /** A lethal alien reached the player line (it is already removed; a boss
+   * instead digs back up the field). */
   | { type: "reachedPlayer"; alien: Alien };
 
 /** What the swarm needs from the player's side (Field) each step. */
@@ -98,6 +102,8 @@ export class Swarm implements AbilityHost {
   /** Field time: ms the field actually moved (stops in freezes). */
   fieldMs = 0;
   readonly director: SpawnDirector;
+  /** Story: the level's boss once it has come in (stays set after it dies). */
+  boss: Alien | null = null;
 
   /** result -> alien: results are unique, so a typed number maps to one alien. */
   private readonly byResult = new Map<number, Alien>();
@@ -162,8 +168,16 @@ export class Swarm implements AbilityHost {
     // the player earns points. The weighted threat budget is a secondary net so
     // the screen never floods and a hit stays recoverable. Recheck soon instead
     // of waiting a full interval so deferred spawns don't pile up and burst.
+    // A story level: at the end of the path no new spawns come until the
+    // board is clear, then the boss comes in.
+    const pathDone = (this.director.progress(this.fieldMs) ?? 0) >= 1;
+    const bossDue = pathDone && this.director.boss !== null && this.boss === null;
     this.spawnCountdown -= fieldDt;
-    if (this.spawnCountdown <= 0) {
+    if (bossDue) {
+      if (this.ownUnsolved().length === 0 && this.spawnBoss(this.director.boss!, diff)) {
+        this.spawnCountdown = diff.spawnInterval;
+      }
+    } else if (this.spawnCountdown <= 0) {
       const spawned =
         this.ownUnsolved().length < diff.maxUnsolved &&
         this.currentThreat() < diff.threatBudget &&
@@ -173,9 +187,11 @@ export class Swarm implements AbilityHost {
 
     // The bonus drifter runs on its own clock and ignores the caps above: it is
     // optional, so it never takes a slot from the sums the player must solve.
-    this.drifterCountdown -= fieldDt;
-    if (this.drifterCountdown <= 0 && !this.spawnDrifter(diff)) {
-      this.drifterCountdown = ENEMY.SPAWN_RETRY_MS;
+    if (this.director.drifters(this.fieldMs)) {
+      this.drifterCountdown -= fieldDt;
+      if (this.drifterCountdown <= 0 && !this.spawnDrifter(diff)) {
+        this.drifterCountdown = ENEMY.SPAWN_RETRY_MS;
+      }
     }
 
     // Ability clocks run on real time, not field time: a blinker must not stay
@@ -189,8 +205,11 @@ export class Swarm implements AbilityHost {
     for (const alien of this.aliens) {
       if (alien === ctx.held || !alien.active) continue;
       this.advanceReadable(alien, fieldDt);
-      if (alien.lethal && alien.y >= PLAYER.Y - 6) {
-        this.remove(alien);
+      const boss = alien.ability instanceof Boss ? alien.ability : null;
+      if (alien.lethal && alien.y >= PLAYER.Y - 6 && !boss?.burrowing) {
+        // It costs a life either way; a boss digs back up instead of leaving.
+        if (boss) boss.retreat(alien);
+        else this.remove(alien);
         this.events.push({ type: "reachedPlayer", alien });
       } else if (alien.escaped) {
         this.remove(alien); // a bonus alien crossed unsolved: no penalty
@@ -360,8 +379,8 @@ export class Swarm implements AbilityHost {
    * patrols PATROL_MULT longer.
    */
   private makeAlien(rng: Rng, spec: AlienSpec): Alien {
-    const { ability, pace } = spec;
-    const speed = ability ? ABILITY.SPEED[ability] : 1;
+    const { ability, pace, boss } = spec;
+    const speed = boss ? boss.SPEED : ability ? ABILITY.SPEED[ability] : 1;
     const patrol = ability === "blinker" ? ABILITY.PATROL_MULT : 1;
     return new Alien({
       kind: spec.kind,
@@ -378,8 +397,8 @@ export class Swarm implements AbilityHost {
       patrolMs: pace.straferPatrolMs * patrol,
       bandY: spec.bandY,
       laneX: spec.laneX,
-      model: ability ? ABILITY.MODEL[ability] : spec.model,
-      ability: ability ? createAbility(ability) : undefined,
+      model: boss ? boss.MODEL : ability ? ABILITY.MODEL[ability] : spec.model,
+      ability: boss ? new Boss(boss) : ability ? createAbility(ability) : undefined,
       sentBy: spec.sentBy,
     });
   }
@@ -419,6 +438,16 @@ export class Swarm implements AbilityHost {
 
     if (!this.enterFromTop(rng, { kind, sum, pace: diff, bandY, ability })) return false;
     this.spawnStreams.succeeded();
+    return true;
+  }
+
+  /** Story: bring the level's boss in from the top. False if no room yet. */
+  private spawnBoss(def: BossDef, diff: DifficultyParams): boolean {
+    const rng = this.spawnStreams.next();
+    const sum = this.rollSum(rng, def.BALLS, def.BALLS, diff.maxDigit);
+    if (!sum || !this.enterFromTop(rng, { kind: def.KIND, sum, pace: diff, boss: def })) return false;
+    this.spawnStreams.succeeded();
+    this.boss = this.aliens[this.aliens.length - 1];
     return true;
   }
 

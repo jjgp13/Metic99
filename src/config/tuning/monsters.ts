@@ -123,6 +123,8 @@ export const MODEL_BOXES: Record<string, { HALF_W: number; BALLS_Y: number; BOTT
   alien_blinker: { HALF_W: 15, BALLS_Y: 30, BOTTOM: 19 },
   alien_splitter: { HALF_W: 22, BALLS_Y: 30, BOTTOM: 12 },
   alien_splitling: { HALF_W: 10, BALLS_Y: 26, BOTTOM: 12 },
+  // Story bosses (config/tuning/story.ts).
+  boss_mole: { HALF_W: 42, BALLS_Y: 50, BOTTOM: 36 },
 };
 
 /**
