@@ -79,8 +79,10 @@ export const POND: LevelDef = {
   NAME: "THE POND",
   PAGE: "pond",
   SEED: 1002,
-  PATH_MS: 200_000,
-  D: { FROM: 0.1, TO: 0.28 },
+  // Owner's playtest: too long and too easy. Bots (12 seeds): rookie 1/12,
+  // pilot 10/12, ace 12/12 (~2:40 to clear).
+  PATH_MS: 120_000,
+  D: { FROM: 0.18, TO: 0.4 },
   MAX_BALLS: 4,
   // Fish (darters) and dragonflies (strafers); 3–4 ball sums are frogs.
   TWO_BALL_KINDS: { darter: 0.55, strafer: 0.45, swooper: 0 },

@@ -23,9 +23,10 @@ export const BACKYARD: LevelDef = {
   NAME: "THE BACKYARD",
   PAGE: "backyard",
   SEED: 1001,
-  PATH_MS: 180_000,
-  // Bots (20 seeds): rookie clears 18/20 losing ~1.5 lives, pilot and ace all.
-  D: { FROM: 0, TO: 0.25 },
+  // Owner's playtest: 3 min to the mole was too long and too easy. Bots
+  // (12 seeds): rookie 4/12, pilot and ace 12/12; an ace clears in ~2:10.
+  PATH_MS: 100_000,
+  D: { FROM: 0.1, TO: 0.35 },
   // Bugs: beetles (darters) and worms (swoopers); no divers yet.
   TWO_BALL_KINDS: { darter: 0.6, strafer: 0, swooper: 0.4 },
   ABILITIES: [],
