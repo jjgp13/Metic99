@@ -12,6 +12,9 @@ type Track = "path" | "boss";
  */
 export class LevelMusic {
   private current: Phaser.Sound.BaseSound | null = null;
+  /** Tracks still fading out. Leaving the scene kills their fade tweens, so
+   * they are destroyed here too, or they would loop on in the next scene. */
+  private readonly fading = new Set<Phaser.Sound.BaseSound>();
   private wanted: Track = "path";
   private stopped = false;
   private paused = false;
@@ -48,9 +51,26 @@ export class LevelMusic {
     this.stopped = true;
     const sound = this.current;
     this.current = null;
-    if (!sound) return;
-    if (fadeMs <= 0 || !this.scene.sys.isActive()) return void sound.destroy();
-    this.scene.tweens.add({ targets: sound, volume: 0, duration: fadeMs, onComplete: () => sound.destroy() });
+    if (fadeMs <= 0 || !this.scene.sys.isActive()) {
+      sound?.destroy();
+      for (const old of this.fading) old.destroy();
+      this.fading.clear();
+      return;
+    }
+    if (sound) this.fadeOut(sound, fadeMs);
+  }
+
+  private fadeOut(sound: Phaser.Sound.BaseSound, fadeMs: number): void {
+    this.fading.add(sound);
+    this.scene.tweens.add({
+      targets: sound,
+      volume: 0,
+      duration: fadeMs,
+      onComplete: () => {
+        this.fading.delete(sound);
+        sound.destroy();
+      },
+    });
   }
 
   private play(track: Track): void {
@@ -58,7 +78,7 @@ export class LevelMusic {
     if (this.stopped || !this.scene.cache.audio.exists(key)) return;
     const old = this.current;
     if (old && old.key === key) return;
-    if (old) this.scene.tweens.add({ targets: old, volume: 0, duration: MUSIC.FADE_MS, onComplete: () => old.destroy() });
+    if (old) this.fadeOut(old, MUSIC.FADE_MS);
     const sound = this.scene.sound.add(key, { loop: true, volume: MUSIC.VOLUME });
     sound.play();
     if (this.paused) sound.pause(); // loaded while the game was paused
