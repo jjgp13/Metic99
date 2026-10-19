@@ -9,14 +9,10 @@ import {
   SPLITTER,
   type AlienKind,
 } from "../config/constants";
-import { difficultyAt, type DifficultyParams } from "../config/difficulty";
+import type { DifficultyParams } from "../config/difficulty";
 import Alien from "../objects/Alien";
-import {
-  createAbility,
-  unlockedAbilities,
-  type AbilityHost,
-  type AbilityKind,
-} from "../objects/abilities";
+import { createAbility, type AbilityHost, type AbilityKind } from "../objects/abilities";
+import { EndlessDirector, type SpawnDirector } from "./director";
 import { Rng, SpawnStreams } from "./rng";
 
 // Keys of the run's seeded random streams (sim/rng.ts), one per purpose.
@@ -82,6 +78,8 @@ export interface SwarmOptions {
   forcedAbilities?: AbilityKind[] | null;
   /** Testing: every 2-ball spawn without an ability is one of these kinds. */
   forcedKinds?: AlienKind[] | null;
+  /** What spawns and how hard (default: Endless, the score-led curve). */
+  director?: SpawnDirector;
 }
 
 /**
@@ -97,6 +95,9 @@ export class Swarm implements AbilityHost {
   /** The game clock: ms of play. Only advances in `step()`, so it stops while
    * the scene is paused. Every rule timing reads it, never the wall clock. */
   elapsedMs = 0;
+  /** Field time: ms the field actually moved (stops in freezes). */
+  fieldMs = 0;
+  readonly director: SpawnDirector;
 
   /** result -> alien: results are unique, so a typed number maps to one alien. */
   private readonly byResult = new Map<number, Alien>();
@@ -117,13 +118,19 @@ export class Swarm implements AbilityHost {
     this.seed = options.seed;
     this.forcedAbilities = options.forcedAbilities ?? null;
     this.forcedKinds = options.forcedKinds ?? null;
+    this.director = options.director ?? new EndlessDirector();
     this.rng = Rng.derive(this.seed, STREAM.FIELD);
     this.spawnStreams = new SpawnStreams(this.seed, STREAM.SPAWN);
     this.drifterStreams = new SpawnStreams(this.seed, STREAM.DRIFTER);
   }
 
   get difficulty(): DifficultyParams {
-    return difficultyAt(this.elapsedMs, this.score, this.dMatch);
+    return this.difficultyFor(this.score, this.dMatch);
+  }
+
+  /** The director's pacing for this field at the given score and pressure. */
+  difficultyFor(score: number, dMatch: number): DifficultyParams {
+    return this.director.difficulty({ elapsedMs: this.elapsedMs, fieldMs: this.fieldMs, score, dMatch });
   }
 
   /** The live alien whose answer is `result`, if any. */
@@ -145,6 +152,7 @@ export class Swarm implements AbilityHost {
     this.dMatch = ctx.dMatch;
     this.locked = ctx.locked;
     this.elapsedMs += dt;
+    this.fieldMs += dt * ctx.speed;
     const diff = this.difficulty;
     const fieldDt = dt * ctx.speed;
     for (const alien of this.aliens) alien.savePrev();
@@ -320,7 +328,7 @@ export class Swarm implements AbilityHost {
   /** Roll whether the next spawn gets an ability (and which), or null. */
   private pickAbility(diff: DifficultyParams, rng: Rng): AbilityKind | null {
     if (this.abilityAliensOnScreen() >= diff.maxAbilityOnScreen) return null;
-    const pool = this.forcedAbilities ?? unlockedAbilities(diff.d);
+    const pool = this.forcedAbilities ?? this.director.abilities(diff.d);
     if (!pool.length) return null;
     if (!this.forcedAbilities && !rng.chance(diff.abilityChance)) return null;
     return rng.pick(pool);
@@ -459,7 +467,7 @@ export class Swarm implements AbilityHost {
 
   private pickTwoBallKind(rng: Rng): AlienKind {
     if (this.forcedKinds) return rng.pick(this.forcedKinds);
-    const weights = Object.entries(ENEMY.TWO_BALL_KINDS) as [AlienKind, number][];
+    const weights = Object.entries(this.director.twoBallKinds) as [AlienKind, number][];
     let r = rng.next() * weights.reduce((t, [, w]) => t + w, 0);
     for (const [kind, w] of weights) {
       r -= w;

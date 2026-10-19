@@ -13,7 +13,7 @@ import {
   type PowerKind,
   type TargetStrategy,
 } from "../config/constants";
-import { difficultyAt, matchPressure, suddenDeathSpeed, type DifficultyParams } from "../config/difficulty";
+import { matchPressure, suddenDeathSpeed, type DifficultyParams } from "../config/difficulty";
 import type Alien from "../objects/Alien";
 import { ABILITY_KINDS, type AbilityKind } from "../objects/abilities";
 import type { Bullet } from "../objects/Bullet";
@@ -281,7 +281,7 @@ export class Field {
   }
 
   get difficulty(): DifficultyParams {
-    return difficultyAt(this.swarm.elapsedMs, this.score, this.dMatch);
+    return this.swarm.difficultyFor(this.score, this.dMatch);
   }
 
   /** Battle pressure on this field (0 in solo play). */
