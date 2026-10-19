@@ -711,6 +711,12 @@ Green=multiplication, Yellow=division.
   Level 6, THE VOLCANO: lava drips that drop in hops, fireflies that go
   dark together, lava tortoises (answer the shell first), a hopping spark;
   boss DRAGON, whose fire breath re-rolls its sum (docs/SOLO_MODES_DESIGN.md).
+  Level 8, THE SNOWY MOUNTAIN (135 s, d 0.7 → 0.85; `config/levels/snow.ts`):
+  penguins that lean and belly-slide (lines of 3), snowballs that pick up
+  one more number past mid-field (`AbilityHost.addBall`, box sized ahead via
+  `SpeciesDef.BOX`), ice blocks that speed up as they slide, a snowflake
+  blown in gusts; boss YETI (7 answers) stomps and throws snowballs
+  (`AbilityHost.spawnMinion`). Bots: rookie 0/20, pilot 6/20, ace 20/20.
 - **Bullets hit only their target.** Results are unique on the field, and each
   bullet carries the alien whose answer fired it (`Bullet.target`); it flies
   through every other alien, so only the solved alien can die or lose its
@@ -959,6 +965,17 @@ dMatch)`; it is 0 in solo play.
 ## Decision Log
 
 Newest first. Format: `YYYY-MM-DD — decision — rationale`.
+
+- **2026-10-19 — Level 8, THE SNOWY MOUNTAIN: a sum that grows, a boss
+  that throws minions.** A snowball adds one number (its old ones stay, so
+  work already done still counts) instead of re-rolling, chosen over a
+  sum that changes (the dragon's) to reward answering early without wiping
+  progress. Three small generic hooks, no-ops elsewhere (golden master
+  green): `SpeciesDef.BOX` (a box that already fits the last ball, since a
+  box is fixed when an alien is built), optional `AbilityHost.addBall` and
+  `spawnMinion` (optional so stand-in hosts in other levels' tests still
+  compile). Bots set the numbers: snowballs growing at y 235 at full speed
+  and ice blocks up to 1.4× cleared pilots 0/12; now pilot 6/20, ace 20/20.
 
 - **2026-10-19 — Owner's first story playtest: faster start, pushback,
   music, map flow, saves, public logs.** Levels 1–2 felt long and easy

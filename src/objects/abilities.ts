@@ -1,4 +1,4 @@
-import { ABILITY, BLINKER, GAME, SHIELD, SPLITTER, type BossDef } from "../config/constants";
+import { ABILITY, BLINKER, GAME, SHIELD, SPLITTER, type AlienKind, type BossDef } from "../config/constants";
 import type Alien from "./Alien";
 
 /**
@@ -35,6 +35,16 @@ export interface AbilityHost {
    * Monster) at (x, y) with a new sum. Returns it, or null (nothing placed)
    * if its box there would break the readability rule. */
   spawnBossPart(def: BossDef, x: number, y: number): Alien | null;
+  /** Story: one more ball on `alien`'s sum (its numbers stay, a new one is
+   * added) so the result is still unique. False if no digit gives a free
+   * result (it keeps its sum). Its box must already fit the extra ball.
+   * (Optional, like spawnMinion, so a test's stand-in host may skip it.) */
+  addBall?(alien: Alien): boolean;
+  /** Story: a plain alien of `kind` (its level's creature, with a new 2-ball
+   * sum) placed at `from` and gliding to `to` over `ms` (a boss throwing a
+   * minion). Returns it, or null (nothing placed) if the field is full or
+   * its box at either spot would break the readability rule. */
+  spawnMinion?(kind: AlienKind, from: readonly [number, number], to: readonly [number, number], ms: number): Alien | null;
 }
 
 export abstract class Ability {

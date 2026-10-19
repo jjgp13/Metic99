@@ -41,6 +41,8 @@ One row per concept. Add new rows at the bottom.
 | Functional core, imperative shell | Decide in pure functions (easy to test), and keep reading/writing storage in a thin outer layer | `mergeLevel` / `recordLevel` in `services/storyProgress.ts` (like `masteryStats.ts`) | design | 2026-10-18 | story map (L5) |
 | Don't trust stored data | Data read back from storage (or the network) is checked and cleaned before use, so a bad value can't break the screen | `parseProgress` in `services/storyProgress.ts` | engineering | 2026-10-18 | story map (L5) |
 | Backward-compatible migration | Change the database so the old client still works (new column with a default, new parameters with defaults), then deploy the new client | `supabase/story-boards.sql` (`level` default 0, `p_level default 0`) | backend | 2026-10-18 | story map (L5) |
+| Optional interface method | Add a method to an interface as optional (`addBall?(…)`, called with `?.`) so every existing implementation and stand-in still compiles | `AbilityHost.addBall` / `spawnMinion` (`objects/abilities.ts`) | design | 2026-10-19 | level 8, snowy mountain |
+| Invariant fixed at construction | A value computed once in the constructor (the readability box) can't follow later changes, so plan for the biggest case up front | `SpeciesDef.BOX` for the snowball that grows from 2 to 3 balls | design | 2026-10-19 | level 8, snowy mountain |
 
 ## In the code, not studied yet
 

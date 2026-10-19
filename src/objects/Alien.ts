@@ -290,8 +290,9 @@ export default class Alien {
     return this.dir > 0 ? this.x > GAME.WIDTH + this.halfW : this.x < -this.halfW;
   }
 
-  /** Replace the sum (e.g. a shield broke). The caller keeps results unique;
-   * the ball count stays the same, so the readability box does too. */
+  /** Replace the sum (e.g. a shield broke). The caller keeps results unique.
+   * The box was sized when the alien was built: a sum with more balls must
+   * still fit it (a creature that grows has a box for its last ball). */
   public setSum(digits: number[], result: number, now: number): void {
     this.digits = digits;
     this.result = result;
