@@ -1,12 +1,13 @@
 import Phaser from "phaser";
-import { DOODLE, LEVELS, MATCH, RECOVERY, STORY, TARGET_STRATEGIES, type TargetStrategy } from "../config/constants";
+import { DOODLE, LEADERBOARD, LEVELS, MATCH, RECOVERY, STORY, TARGET_STRATEGIES, type TargetStrategy } from "../config/constants";
 import { inputMode } from "../config/inputMode";
 import type { InkEvent } from "../handwriting/inkReader";
 import type Alien from "../objects/Alien";
 import { ABILITY_KINDS, Boss, type AbilityKind } from "../objects/abilities";
-import { isLeaderboardEnabled, startMatch } from "../services/leaderboard";
+import { isLeaderboardEnabled, stageBoard, startMatch } from "../services/leaderboard";
 import { rankFor, recordRun } from "../services/masteryStats";
 import { hitRecord, initPlaytestLog, logRun, type InputSource, type RunExtras } from "../services/playtestLog";
+import { recordLevel, recordStoryRun } from "../services/storyProgress";
 import type { Bot } from "../sim/Bot";
 import { ANSWER_MAX_DIGITS, type Field, type FieldEvent, type FieldInput } from "../sim/Field";
 import type { Match, MatchEvent } from "../sim/Match";
@@ -27,6 +28,7 @@ import { SendButton } from "../ui/hud/SendButton";
 import { TopHud } from "../ui/hud/TopHud";
 import { onKeyDown } from "../ui/keyboard";
 import { createFieldView, type FieldView } from "./fieldView";
+import type { BoardScore } from "./NameEntryScene";
 import { setUpRun, type StoryRun } from "./runSetup";
 
 /**
@@ -115,8 +117,14 @@ export default class GameScene extends Phaser.Scene {
 
     // Open a server-gated match so this run's score can be submitted later.
     // Fire-and-forget: if it fails the player just gets an unsaved score.
-    // Battles and story runs don't go on the (endless) leaderboard yet.
-    if (!this.match && !this.story) void startMatch();
+    // A story run opens one per stage it plays, plus one for the whole run.
+    // Battles don't go on a leaderboard yet.
+    if (this.story) {
+      if (this.story.level === 0) void startMatch(LEADERBOARD.STORY_RUN_BOARD);
+      void startMatch(stageBoard(this.story.level));
+    } else if (!this.match) {
+      void startMatch();
+    }
     initPlaytestLog();
     if (this.story) {
       const level = LEVELS[this.story.level];
@@ -454,6 +462,10 @@ export default class GameScene extends Phaser.Scene {
     const f = this.field;
     const { mastery, newHighScore } = recordRun(f);
     this.newHighScore = newHighScore;
+    if (this.story) {
+      recordLevel(this.story.level, f.score - f.startScore, false);
+      this.newHighScore = recordStoryRun(f.score);
+    }
     const placement = this.match ? this.match.placements[0] : null;
     if (this.runExtras.battle) this.runExtras.battle.placement = placement;
 
@@ -462,9 +474,11 @@ export default class GameScene extends Phaser.Scene {
       mastery,
       rank: rankFor(mastery.highScore),
       battle: this.match && placement !== null ? { placement, players: this.match.seats.length } : null,
-      continueHint: this.match || this.story
+      continueHint: this.match
         ? "tap / Enter for the menu"
-        : isLeaderboardEnabled()
+        : this.story && !isLeaderboardEnabled()
+          ? "tap / Enter for the map"
+          : isLeaderboardEnabled()
           ? "tap / Enter to enter initials"
           : "tap / Enter to play again",
     });
@@ -502,13 +516,17 @@ export default class GameScene extends Phaser.Scene {
     this.inputPanel.setEnabled(false);
     this.sound.play("explode", { volume: 0.6, rate: 0.6 });
     const f = this.field;
+    const hasNext = this.story.level + 1 < LEVELS.length;
+    recordLevel(this.story.level, f.score - f.startScore, true);
+    // The last level built: the run ends here (the next stage isn't built yet).
+    if (!hasNext) this.newHighScore = recordStoryRun(f.score);
     new LevelClearCard(this, {
       number: this.story.level + 1,
       name: LEVELS[this.story.level].NAME,
       levelScore: f.score - f.startScore,
       totalScore: f.score,
       livesLeft: f.lives,
-      hasNext: this.story.level + 1 < LEVELS.length,
+      hasNext,
     });
     this.saveRun(() => {});
     this.leaveAllowedAt = this.time.now + STORY.CLEAR_MIN_MS;
@@ -529,17 +547,28 @@ export default class GameScene extends Phaser.Scene {
 
   /**
    * The single way out of game over (and of a cleared level): the next
-   * level, name entry (Endless, leaderboard on) or the menu.
+   * level, name entry (leaderboard on), the story map or the menu.
    */
   private leaveGameOver(): void {
     if (this.leaving || this.time.now < this.leaveAllowedAt) return;
     this.leaving = true;
     if (this.story) {
+      const f = this.field;
       const next = this.story.level + 1;
-      if (this.field.cleared && next < LEVELS.length) {
-        this.scene.restart({ story: { level: next, lives: this.field.lives, score: this.field.score } });
+      const levelScores = [...this.story.levelScores, f.score - f.startScore];
+      if (f.cleared && next < LEVELS.length) {
+        this.scene.restart({ story: { level: next, lives: f.lives, score: f.score, levelScores } });
+      } else if (isLeaderboardEnabled()) {
+        this.scene.start("NameEntryScene", {
+          score: f.score,
+          personalBest: this.newHighScore,
+          headline: f.cleared ? "STORY COMPLETE!" : "GAME OVER",
+          boards: storyBoards(f.score, levelScores),
+          title: "STORY RUNS",
+          back: "StoryMapScene",
+        });
       } else {
-        this.scene.start("MenuScene");
+        this.scene.start("StoryMapScene");
       }
     } else if (isLeaderboardEnabled() && !this.match) {
       this.scene.start("NameEntryScene", { score: this.field.score, personalBest: this.newHighScore });
@@ -547,4 +576,11 @@ export default class GameScene extends Phaser.Scene {
       this.scene.start("MenuScene");
     }
   }
+}
+
+/** A finished story run's scores, by board: the run's total first (shown
+ * after name entry), then each stage played (stages without points skipped). */
+function storyBoards(total: number, levelScores: number[]): BoardScore[] {
+  const stages = levelScores.map((score, i) => ({ board: stageBoard(i), score, label: `stage ${i + 1}` }));
+  return [{ board: LEADERBOARD.STORY_RUN_BOARD, score: total, label: "run" }, ...stages.filter((s) => s.score > 0)];
 }

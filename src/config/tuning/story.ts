@@ -100,6 +100,44 @@ export const STORY = {
   CLEAR_MIN_MS: 1500,
   /** Room between two beetles of a marching line (on top of READ_GAP). */
   MARCH_GAP: 6,
+  /** Stages planned (docs/SOLO_MODES_DESIGN.md §3); LEVELS holds the built ones. */
+  STAGES: 10,
+} as const;
+
+/**
+ * The story map (scenes/StoryMapScene.ts): one island per stage on a
+ * notebook page, joined by a dotted trail from the bottom (stage 1) up.
+ */
+export const STORY_MAP = {
+  /** Island centers, by stage index (a snake up the page). */
+  SPOTS: [
+    [128, 560],
+    [332, 548],
+    [356, 444],
+    [146, 432],
+    [118, 326],
+    [328, 334],
+    [354, 226],
+    [150, 216],
+    [132, 112],
+    [338, 118],
+  ] as const,
+  /** An island's doodle box (logical px), drawn at 2× for a sharp picture. */
+  ISLAND_W: 112,
+  ISLAND_H: 66,
+  /** Colored pencil per stage's island (its world, §3). No ball colors. */
+  INK: [
+    "#8a6a3f", // backyard dirt
+    "#2a8f9e", // pond
+    "#6f8f2f", // treetops
+    "#6b7344", // swamp mud
+    "#6e6a7a", // cave rock
+    "#c4572a", // volcano
+    "#8fb3d9", // windy sky
+    "#a9b8c9", // snowy mountain
+    "#4b3f8a", // night sky
+    "#c07a9e", // bedroom
+  ] as const,
 } as const;
 
 /** The story, in order: one file per level in config/levels/. */

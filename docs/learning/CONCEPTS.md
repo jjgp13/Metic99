@@ -38,6 +38,9 @@ One row per concept. Add new rows at the bottom.
 | Content as data | New levels are table entries, not new code, so tuning one never touches the rules | `LEVELS` in `config/tuning/story.ts` | design | 2026-10-18 | story slice L3 |
 | Registry | A table from a name to the code that makes it, so new kinds are added with one line instead of a new `if` | `TRAITS` (`objects/traits.ts`), `BOSS_MECHANICS` (`objects/bosses.ts`), `LEVELS`, `PAGES` | design | 2026-10-18 | creatures with personality |
 | Presentation delay | Let an animation play before the next screen, without slowing the rules | `RECOVERY.GAME_OVER_DELAY_MS` + `time.delayedCall` in `GameScene` | game dev | 2026-10-18 | ship doodles + hit animation |
+| Functional core, imperative shell | Decide in pure functions (easy to test), and keep reading/writing storage in a thin outer layer | `mergeLevel` / `recordLevel` in `services/storyProgress.ts` (like `masteryStats.ts`) | design | 2026-10-18 | story map (L5) |
+| Don't trust stored data | Data read back from storage (or the network) is checked and cleaned before use, so a bad value can't break the screen | `parseProgress` in `services/storyProgress.ts` | engineering | 2026-10-18 | story map (L5) |
+| Backward-compatible migration | Change the database so the old client still works (new column with a default, new parameters with defaults), then deploy the new client | `supabase/story-boards.sql` (`level` default 0, `p_level default 0`) | backend | 2026-10-18 | story map (L5) |
 
 ## In the code, not studied yet
 

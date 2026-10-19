@@ -38,7 +38,7 @@ export class LevelClearCard {
     this.line(10, stats, textStyle(18, PALETTE.TEXT, { align: "left", lineSpacing: 8 }));
     const hint = info.hasNext
       ? `tap / Enter: level ${info.number + 1}`
-      : "to be continued…  tap / Enter for the menu";
+      : "to be continued…  tap / Enter";
     this.line(100, hint, textStyle(16, PALETTE.ACCENT));
   }
 

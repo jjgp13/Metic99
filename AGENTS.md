@@ -97,6 +97,8 @@ src/
   scenes/
     BootScene.ts      Preloads assets; defers animations (static frames for now)
     MenuScene.ts      Title screen: ship picker + PLAY / BATTLE / HOW TO PLAY / SCORES
+    StoryMapScene.ts  The STORY button: one island per stage, best scores,
+                      "?" for stages not reached; PLAY = a run from island 1
     HowToPlayScene.ts Static rules screen reached from the menu
     GameScene.ts      Composition root: builds the run and the HUD parts,
                       maps keypad/keyboard/pad to Field inputs, steps the
@@ -110,8 +112,11 @@ src/
     HandwritingLabScene.ts `?lab=draw`: records real handwriting, exports JSON
   services/
     masteryStats.ts   Personal bests in localStorage (pure mergeRun + shell)
-    leaderboard.ts    Supabase global high scores: startMatch + match-gated
-                      submitScore, plus getTop/getRank reads
+    storyProgress.ts  Story map progress in localStorage: furthest stage,
+                      best per stage, best run (pure mergeLevel + shell)
+    leaderboard.ts    Supabase global high scores, one board per `level`
+                      (Endless, each stage, story runs): startMatch(board) +
+                      match-gated submitScore, plus getTop/getRank reads
     playtestLog.ts    Playtest logger: in the claude.ai playtest Artifact,
                       saves each finished run (seed + input log + extras)
                       to the Artifact's `db`; a no-op anywhere else
@@ -189,7 +194,8 @@ src/
                       (one short stroke recipe per ship/monster/boss),
                       pencil.ts (Rough.js + pre-drawn boil frames), paper.ts,
                       pages.ts (story pages: tinted paper + faint props that
-                      scroll), shipIcons.ts, font.ts
+                      scroll), shipIcons.ts, storyMap.ts (map islands +
+                      trail), font.ts
   render3d/
     World3D.ts        Three.js view: camera, lights, starfield, ship/alien/bullet
                       meshes, voxel-debris explosions, shake. Page-wide singleton.
@@ -224,21 +230,31 @@ docs/SOLO_MODES_DESIGN.md   Story mode plan: 10 scrolling levels + bosses, Endle
 - **Backend: Supabase** (hosted Postgres). Reads use `supabase-js` with the
   **anon public key** (public by design — top scores/rank are world-readable).
   No server to host.
-- `scores(id, name varchar(6), score int 0..1_000_000, created_at)`; RLS allows
-  anon `SELECT` of all rows. `name` is `^[A-Z0-9]{3,6}$` (the player picks 3–6
-  initials at game over). `get_rank(s int)` RPC = `count(*)+1 WHERE score > s`
-  (competition ranking; ties share a rank).
+- `scores(id, name varchar(6), score int 0..1_000_000, level smallint,
+  created_at)`; RLS allows anon `SELECT` of all rows. `name` is
+  `^[A-Z0-9]{3,6}$` (the player picks 3–6 initials at game over). **`level`
+  is the board** (`supabase/story-boards.sql`): 0 = Endless, 1–10 = story
+  stage N (points scored in that stage), 99 = a whole story run
+  (`LEADERBOARD.*_BOARD`). `get_rank(s, p_level)` RPC = `count(*)+1 WHERE
+  level = p_level AND score > s` (competition ranking; ties share a rank).
 - **Score writes are server-gated (no anon INSERT).** Direct anon `INSERT` into
   `scores` is revoked, so a forged REST insert with the public key can't write a
   score. Two `SECURITY DEFINER` functions (anon-executable via RPC) are the only
   write path — schema in `supabase/match-gate.sql`:
-  - `start_match()` → issues a single-use, server-timestamped `matches` row id;
-    called by `GameScene` (via `startMatch()`) when a run begins.
-  - `submit_run(p_match, p_name, p_score)` → in ONE transaction: atomically
-    consumes the match (rejects missing/used, age <2s or >4h), plausibility-checks
-    the score against elapsed time (cap `≈ elapsed·3000 + 5000`, far above real
-    play), inserts the score, and returns `{row_id, rank}`. A rejected/failed
-    submit rolls back, so a legit match is never burned.
+  - `start_match(p_level)` → issues a single-use, server-timestamped `matches`
+    row id for one board; called by `GameScene` (via `startMatch(board)`) when
+    a run begins. A story run opens one for the run board and one per stage
+    as each starts.
+  - `submit_run(p_match, p_name, p_score, p_level)` → in ONE transaction:
+    atomically consumes the match (rejects missing/used, another board's
+    ticket, age <2s or >4h), plausibility-checks the score against elapsed
+    time (cap `≈ elapsed·3000 + 5000`, far above real play) and the board's
+    cap (a stage ≤ 300k; an ace scores ~40k on stage 1), inserts the score,
+    and returns `{row_id, rank}`. A rejected/failed submit rolls back, so a
+    legit match is never burned. `p_level` defaults to 0 (Endless), so the
+    old call shapes still work.
+  - **Migration order:** run `story-boards.sql` (after `match-gate.sql`)
+    before deploying a build with the story map (it reads `scores.level`).
   - `matches` has RLS on with NO policies (only the definer functions touch it).
   - **Honest limit:** this blocks devtools/REST forgery and bots that skip the
     flow, but — like any client-scored game — can't stop a scripted
@@ -249,15 +265,22 @@ docs/SOLO_MODES_DESIGN.md   Story mode plan: 10 scrolling levels + bosses, Endle
   when both are present, so the game **builds and runs locally without them** —
   game over just returns to the menu instead of routing to name entry.
 - **Navigation:** `BootScene` → `MenuScene` (ship picker ◀ ▶ / ←→, then STORY /
-  ENDLESS / BATTLE (beta) / HOW TO PLAY / SCORES). STORY → `GameScene` with
-  `{ story: { level: 0, lives, score } }` (no leaderboard yet); ENDLESS (and
+  ENDLESS / BATTLE (beta) / HOW TO PLAY / SCORES). STORY → `StoryMapScene`
+  (islands; tap a reached island = that stage's board, RUN SCORES = the run
+  board, both `LeaderboardScene` browse with BACK → map; PLAY / Enter →
+  `GameScene` with `{ story: { level: 0, lives, score, levelScores: [] } }`);
+  ENDLESS (and
   Enter) → `GameScene`; BATTLE → `GameScene` with `{ battle: true }` (no leaderboard); HOW TO PLAY → `HowToPlayScene`; SCORES → `LeaderboardScene` in
   **browse** mode (fetches `getTop()` itself, BACK → menu).
 - Game-over flow (when enabled): GAME OVER overlay → `NameEntryScene` (3–6 char
   length selector + initials) → `submitScore` (via the match gate) →
   `LeaderboardScene` (post-run mode, shows world rank) → `MenuScene`. All restart
   triggers route through one idempotent `GameScene.leaveGameOver()`; when the
-  leaderboard is disabled it goes straight to `MenuScene`.
+  leaderboard is disabled it goes straight to `MenuScene`. A story run ends
+  (game over, or the last built level cleared) the same way, but names are
+  entered once and submitted to several boards (the run's total, shown
+  after, then each stage played, ranks in one line), and it goes back to
+  the story map.
 - **Hosting: GitHub Pages** via `.github/workflows/deploy.yml` (build on push to
   `main`, deploy `dist`). Supabase env injected from repo **secrets**. Vite
   `base: "./"` keeps asset paths relative so the project subpath works.
@@ -614,8 +637,17 @@ Green=multiplication, Yellow=division.
   digs), then holds still to be read; reaching the ship costs a life and
   sends it back up; BLAST doesn't touch it. The last answer clears the
   level (`levelCleared`, a card, then the next level with the same lives
-  and score). Game over = back to the menu (level 1 next time). The top
-  bar shows the path's progress; the page scrolls (`DOODLE.PAGE_*`).
+  and score). Game over = back to the story map (every run starts at
+  level 1). The top bar shows the path's progress; the page scrolls
+  (`DOODLE.PAGE_*`).
+  **Story map** (`StoryMapScene`, `STORY_MAP`, owner's design): 10 islands
+  (`STORY.STAGES`) up a notebook page joined by a pencil trail. A stage is
+  reached once the previous boss is beaten (`services/storyProgress.ts`,
+  `STORAGE.STORY`): reached islands are shaded with a sketch of their world
+  and the best score under them (a flag = boss beaten, the ship sits on the
+  furthest one); the rest are a dashed "?". Built levels come from LEVELS; a
+  reached stage that isn't built yet says "coming soon". Islands are not
+  entry points: PLAY always starts at island 1 (no practice mode).
   **Creatures** (`LevelDef.SPECIES`): a level turns monster kinds into its
   own creatures with a ball layout (`BALL_LAYOUTS`: eyes, chain, wings; it
   sets the readability box), a trait (`objects/traits.ts`), an optional
@@ -874,6 +906,9 @@ dMatch)`; it is 0 in solo play.
        2026-10-18). [x] L1 menu modes, [x] L2 director seam, [x] L3 level
        engine (level 1 page + path), [x] L4 boss (Giant Mole), level 2 the pond (Big Frog); next: L5
        table of contents + scores, power card before each level.
+       engine (level 1 page + path), [x] L4 boss (Giant Mole), [x] L5 story
+       map + per-stage and run boards (SQL not applied yet); next: power
+       card before each level.
 
 ## Conventions
 
@@ -951,6 +986,15 @@ Newest first. Format: `YYYY-MM-DD — decision — rationale`.
   after a telegraphed inhale. `SpeciesDef.SPEED` added for the owner's rule
   (tortoise answers twice: ×0.45, it caused 90% of hits at ×1; flashing
   fireflies ×0.8). Bots: rookie 0/20, pilot 14/20, ace 20/20.
+- **2026-10-18 — Story map (L5): islands show progress, every run starts at
+  island 1; one leaderboard table with a `level` column.** Owner's picks:
+  reached islands show their best score, the rest a "?"; no practice mode
+  (arcade rules hold: a run always starts at stage 1, so an island opens
+  its stage's world board, not the level). Boards: `scores.level` (0
+  Endless, 1–10 stages, 99 runs) over a second table (two of every
+  function). Tickets are per board; a story run submits all its boards once,
+  after one name entry. Migration in `supabase/story-boards.sql`, not
+  applied yet.
 
 - **2026-10-18 — Creatures with personality; one file per level.** Owner's
   ask: each level's monsters behave differently, not just look different.
