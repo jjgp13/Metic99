@@ -39,6 +39,9 @@ export interface BossDef {
   RETREAT_Y: number;
   /** It never pops up higher than this y (its balls stay below the top HUD). */
   MIN_Y: number;
+  /** A boss that splits (the Mud Monster): what each of its parts is. The
+   * level is cleared once every part is beaten. */
+  PART?: BossDef;
 }
 
 /**
@@ -52,6 +55,9 @@ export interface SpeciesDef {
   LAYOUT?: BallLayout;
   /** A special rule it carries (objects/traits.ts), e.g. "wings". */
   TRAIT?: string;
+  /** × its kind's speed (default 1): a creature whose trait makes it harder
+   * to beat moves slower (owner's rule, like ABILITY.SPEED). */
+  SPEED?: number;
   /** Sometimes comes in a marching line, in step: up to SIZE of them, with
    * chance CHANCE per spawn (a line skips the unsolved cap but not the
    * threat budget). */

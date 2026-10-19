@@ -279,6 +279,16 @@ export class Swarm implements AbilityHost {
     return true;
   }
 
+  spawnBossPart(def: BossDef, x: number, y: number): Alien | null {
+    const diff = this.difficulty;
+    const sum = this.rollSum(this.rng, def.BALLS, def.BALLS, diff.maxDigit);
+    if (!sum) return null;
+    const part = this.makeAlien(this.rng, { kind: def.KIND, sum, x, y, pace: diff, boss: def });
+    if (!this.aliens.every((o) => !o.active || !part.overlaps(o))) return null;
+    this.addAlien(part);
+    return part;
+  }
+
   // ---------------------------------------------------------------------------
   // Readability
   // ---------------------------------------------------------------------------
@@ -388,7 +398,7 @@ export class Swarm implements AbilityHost {
     // Story: a plain alien of the field's own is its page's creature.
     const plain = !ability && !boss && !spec.model && spec.sentBy === undefined;
     const species = plain ? this.director.species(spec.kind) : null;
-    const speed = boss ? boss.SPEED : ability ? ABILITY.SPEED[ability] : 1;
+    const speed = boss ? boss.SPEED : ability ? ABILITY.SPEED[ability] : (species?.SPEED ?? 1);
     const patrol = ability === "blinker" ? ABILITY.PATROL_MULT : 1;
     return new Alien({
       kind: spec.kind,

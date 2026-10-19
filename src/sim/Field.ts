@@ -653,7 +653,9 @@ export class Field {
     }
     const cancelled = this.standing ? kill - left : 0;
     this.events.push({ type: "solved", alien, digits, points, energy, burst, absorbed, cancelled, attack });
-    if (!absorbed && alien.ability instanceof Boss) {
+    // A boss that split (the Mud Monster) is beaten once its last part is.
+    const bossLeft = this.aliens.some((a) => a.active && a.ability instanceof Boss);
+    if (!absorbed && alien.ability instanceof Boss && !bossLeft) {
       this.cleared = true;
       this.events.push({ type: "levelCleared" });
     }

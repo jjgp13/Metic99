@@ -57,7 +57,7 @@ A kid's imagination of nature and the elements, doodled in a notebook.
 | 1 | Backyard dirt | bugs, worms | Giant Mole | sums |
 | 2 | Pond (water) | frogs, fish, dragonflies | Big Frog | sums, 3–4 balls |
 | 3 | Treetops | squirrels, owls | Owl (blinking eyes) | + subtraction |
-| 4 | Mud swamp | blobs that split | Mud Monster | + / − |
+| 4 ✓ | Mud swamp | slime blobs that split, peepers, snails, turtles | Mud Monster (splits in two) | + / − (sums for now) |
 | 5 | Dark cave | bats, glowworms | Cave Troll (a flashlight shows its numbers) | + / − |
 | 6 | Volcano (fire) | fireflies, lava drips | Dragon | + multiplication |
 | 7 | Windy sky (air) | birds, kites, paper planes | Storm Cloud | × mixed |
@@ -158,6 +158,11 @@ Bosses fight by a **mechanic** (`objects/bosses.ts`; "burrow" = the mole).
 3. New rules only if needed: a trait (an Ability class + one line in
    `TRAITS`), a boss mechanic (subclass `Boss` + one line in
    `BOSS_MECHANICS`), a layout (BALL_LAYOUTS + `Alien.boxFor`/`ballOffset`).
+   A level's own rule classes can live in `src/objects/<page>.ts`. Hooks
+   already there: `SpeciesDef.SPEED` (a creature with a hard trait moves
+   slower), `Boss.surfaceAt` (where a boss pops up after an answer),
+   `BossDef.PART` + `AbilityHost.spawnBossPart` (a boss that splits; the
+   level clears when no boss part is left).
 4. Check: `story.test.ts`-style run (every creature appears, no box
    overlaps), bots per level (rookie mostly clears early levels), the level
    played in the browser (`?bot=ace`), golden master unchanged.
@@ -171,7 +176,7 @@ Bosses fight by a **mechanic** (`objects/bosses.ts`; "burrow" = the mole).
 | L3 ✓ | Level engine: `LEVELS` data, scrolling page + props, progress bar, level-complete card, lives carried over | level 1 playable to the end of the path |
 | L4 ✓ | Boss phase + Giant Mole | level 1 complete |
 | L5 | Table of contents + per-level and full-run scores | runs save and restart at level 1 |
-| L6 | Levels 2–5 (pond, treetops, swamp, cave), subtraction, 4-ball rows, Bouncer, Heart balloon | bots clear them at the target rates |
+| L6 | Levels 2–5 (pond, treetops, swamp ✓, cave), subtraction, 4-ball rows, Bouncer, Heart balloon | bots clear them at the target rates |
 | L7 | Levels 6–10, multiplication | same |
 | L8 | Story bots report + balance pass; leaderboard `level` column | `npm run bots -- --story` |
 
@@ -180,6 +185,29 @@ the feel before building ten. **Built 2026-10-18.** Not in it yet: the
 "pick your power" card before each level (the menu's pick is used), monsters
 re-skinned per page (level 1 still draws the standard darter/swooper
 doodles), story scores on the leaderboard, a dev shortcut to a level.
+
+### Level 4: THE MUD SWAMP (built 2026-10-18, sums only)
+
+`config/levels/swamp.ts` (rules), `objects/swamp.ts` (its traits and boss),
+`renderDoodle/levels/swamp.ts` (looks). Path 200 s, d 0.3 → 0.55, seed 1004.
+
+| Creature | Kind | Personality |
+| --- | --- | --- |
+| Slime blob | darter, ×0.7 | trait "split" (the Splitter): beaten, it pops into two little blobs that land no lower than y 190 |
+| Peeper | strafer, ×0.6 | its eyes are its numbers ("eyes"); trait "peek": ducks them under the mud on a rhythm, bubbling first |
+| Mud snail | swooper, ×0.7 | trait "shell" (Shielded): the first answer knocks its shell off, the second beats the slug |
+| Bog turtle | lumberer | three numbers on its shell; joins at d 0.5 (the last fifth) |
+| Firefly (bonus) | drifter | a number on each wing ("wings"); trait "glow": its light flickers out and the numbers go dark |
+
+**Boss, MUD MONSTER** (mechanic "split"): 3-ball sums. The first answer sinks
+it into the mud (it pops up on the other side, like the mole); the second
+splits it into two halves (`BossDef.PART`), each with a 2-ball sum that
+sinks once and glops back up on its own side. Both halves must be beaten:
+6 answers in all (the mole: 5), so it moves at ×0.4 (the mole: ×0.45).
+While both halves are up no minions come (the boss phase allows 2 unsolved).
+
+Bots (20 seeds): see the AGENTS.md Decision Log. Planned math: + and −
+(subtraction comes as its own shared piece).
 
 ## 9. Decisions (owner, 2026-10-18)
 
