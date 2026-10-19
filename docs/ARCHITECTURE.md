@@ -137,6 +137,12 @@ fits here, and **what we didn't do**.
   ability never touches the field's code.
 - **Instead of:** `if (alien.kind === "shielded")` scattered through
   `Field` and `Swarm`.
+- **A fourth hook, `steer(alien, fieldDelta)`** (2026-10-18, level 2): runs
+  on *field* time just before the alien moves, so a creature can script
+  its own moves with `glideTo` / `hold` (the pond's darting dragonfly,
+  diving duck, hopping frog, leaping Big Frog: `objects/pondCreatures.ts`).
+  `update` stays on real time (a Blinker keeps blinking through a freeze);
+  movement must stop when the field stops, hence a separate hook.
 
 ### 2.8 Dependency inversion through small interfaces
 
