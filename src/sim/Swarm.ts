@@ -280,6 +280,16 @@ export class Swarm implements AbilityHost {
     return true;
   }
 
+  spawnBossPart(def: BossDef, x: number, y: number): Alien | null {
+    const diff = this.difficulty;
+    const sum = this.rollSum(this.rng, def.BALLS, def.BALLS, diff.maxDigit);
+    if (!sum) return null;
+    const part = this.makeAlien(this.rng, { kind: def.KIND, sum, x, y, pace: diff, boss: def });
+    if (!this.aliens.every((o) => !o.active || !part.overlaps(o))) return null;
+    this.addAlien(part);
+    return part;
+  }
+
   // ---------------------------------------------------------------------------
   // Readability
   // ---------------------------------------------------------------------------

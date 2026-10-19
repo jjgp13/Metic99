@@ -39,6 +39,9 @@ export interface BossDef {
   RETREAT_Y: number;
   /** It never pops up higher than this y (its balls stay below the top HUD). */
   MIN_Y: number;
+  /** A boss that splits (the Mud Monster): what each of its parts is. The
+   * level is cleared once every part is beaten. */
+  PART?: BossDef;
 }
 
 /**

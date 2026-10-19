@@ -134,7 +134,9 @@ fits here, and **what we didn't do**.
 - **Where:** `objects/abilities.ts` (`Ability`, `Blinker`, `Shielded`,
   `Splitter`).
 - **Why:** the field calls the same three hooks for every alien; adding an
-  ability never touches the field's code.
+  ability never touches the field's code. Bosses add one more hook:
+  `Boss.surfaceAt` (where it pops up after an answer); the Mud Monster's
+  halves (`objects/swamp.ts`) override only that.
 - **Instead of:** `if (alien.kind === "shielded")` scattered through
   `Field` and `Swarm`.
 - **A fourth hook, `steer(alien, fieldDelta)`** (2026-10-18, level 2): runs

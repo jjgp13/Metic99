@@ -3,6 +3,7 @@ import { Boss } from "./abilities";
 import { BigFrog } from "./pondCreatures";
 import type { BigFrogDef } from "../config/levels/pond";
 import { OwlBoss } from "./owlBoss";
+import { MudHalf, MudMonster } from "./swamp";
 
 /**
  * How each story boss fights (BossDef.MECHANIC). `Boss` is the base: it
@@ -14,6 +15,8 @@ export const BOSS_MECHANICS: Record<string, (def: BossDef) => Boss> = {
   burrow: (def) => new Boss(def),
   leap: (def) => new BigFrog(def as BigFrogDef), // the pond's BIG_FROG is a BigFrogDef
   blink: (def) => new OwlBoss(def),
+  split: (def) => new MudMonster(def),
+  mud_half: (def) => new MudHalf(def),
 };
 
 export function createBoss(def: BossDef): Boss {

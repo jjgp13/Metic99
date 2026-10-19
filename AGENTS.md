@@ -178,6 +178,8 @@ src/
                       Built from one `AlienConfig`. Optional `model` +
                       `ability`; `glideTo`/`hold` override the pattern for
                       scripted moves (knockback, splits).
+    swamp.ts          Level 4's own rules: peeper/firefly traits, the slime's
+                      split, the Mud Monster and its halves.
     abilities.ts      Monster abilities (Blinker, Shielded, Splitter): pure
                       state with update/steer/onHit/onKilled hooks + `AbilityHost`.
     traits.ts, bosses.ts  Story registries: creature traits, boss mechanics.
@@ -644,6 +646,12 @@ Green=multiplication, Yellow=division.
   faster after each answer, flies to another branch). Traits that move
   their creature use `Ability.steer` (field time, glideTo/hold only).
   Bots: rookie clears 10/20, pilot 19/20, ace 20/20.
+  Level 4, THE MUD SWAMP (200 s, d 0.3 → 0.55; slime blobs that pop in
+  two, peepers whose eyes duck under the mud, snails that lose their
+  shell, bog turtles, a firefly whose light flickers out; boss MUD
+  MONSTER, which splits into two halves that must both be beaten, 6
+  answers). A boss that splits clears the level only when no boss part is
+  left (`BossDef.PART`, `AbilityHost.spawnBossPart`).
 - **Bullets hit only their target.** Results are unique on the field, and each
   bullet carries the alien whose answer fired it (`Bullet.target`); it flies
   through every other alien, so only the solved alien can die or lose its
@@ -905,6 +913,17 @@ Newest first. Format: `YYYY-MM-DD — decision — rationale`.
   (0/20), so birds fly at 0.6 and owls (they hide) at 0.9: rookie 10/20
   (level 1: 16/20), pilot 19/20, ace 20/20. Sums only; subtraction comes
   with the shared operations piece.
+- **2026-10-18 — Level 4, THE MUD SWAMP: every creature has a trait; the
+  Mud Monster splits.** Slime = Splitter, snail = Shielded, peeper and
+  firefly = blink rhythms, given as species traits; `SpeciesDef.SPEED`
+  slows a creature whose trait makes it harder (owner's rule). The boss's
+  last answer spawns two boss parts (`spawnBossPart`), and the level now
+  clears when no boss is left instead of when "the" boss dies (chosen over
+  a dying boss that waits as a hidden puddle: it would block the field and
+  keep a typeable answer). Bots (20 seeds): rookie 0/20 (out in ~1.5 min),
+  pilot 15/20, ace 20/20; d 0.4 → 0.55 gave pilots 5–9/20 (splitlings
+  caused ~70% of their hits), so d starts at 0.3 and splitlings land no
+  lower than y 190 (Endless: 260).
 
 - **2026-10-18 — Creatures with personality; one file per level.** Owner's
   ask: each level's monsters behave differently, not just look different.

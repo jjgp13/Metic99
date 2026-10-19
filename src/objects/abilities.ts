@@ -29,6 +29,10 @@ export interface AbilityHost {
    * false (and spawns nothing) if its box there would break the readability
    * rule (another alien within READ_GAP). */
   spawnSplitling(parent: Alien, x: number, y: number): boolean;
+  /** Story: place a part of a boss that splits (`def`, e.g. half of the Mud
+   * Monster) at (x, y) with a new sum. Returns it, or null (nothing placed)
+   * if its box there would break the readability rule. */
+  spawnBossPart(def: BossDef, x: number, y: number): Alien | null;
 }
 
 export abstract class Ability {
@@ -126,16 +130,22 @@ export class Shielded extends Ability {
 /**
  * Splitter: when destroyed it pops into two 2-ball splitlings that glide out to
  * lanes on either side. A splitling whose landing spot isn't clear is simply
- * not spawned, so splitting never causes overlap.
+ * not spawned, so splitting never causes overlap. `maxChildY`: the splitlings
+ * never land closer to the player than this (a story creature may keep them
+ * higher up, for more time to read them).
  */
 export class Splitter extends Ability {
   readonly kind = "splitter";
+
+  constructor(private readonly maxChildY: number = SPLITTER.MAX_CHILD_Y) {
+    super();
+  }
 
   onKilled(alien: Alien, host: AbilityHost): void {
     // Keep the pair inside the field as a unit so they stay a full lane apart.
     const min = SPLITTER.EDGE_PX + SPLITTER.SPREAD_PX;
     const center = Math.min(Math.max(alien.x, min), GAME.WIDTH - min);
-    const y = Math.min(alien.y, SPLITTER.MAX_CHILD_Y);
+    const y = Math.min(alien.y, this.maxChildY);
     host.spawnSplitling(alien, center - SPLITTER.SPREAD_PX, y);
     host.spawnSplitling(alien, center + SPLITTER.SPREAD_PX, y - SPLITTER.STAGGER_PX);
   }
@@ -176,9 +186,15 @@ export class Boss extends Ability {
     this.hp -= 1;
     if (this.hp <= 0) return false;
     host.rerollSum(alien); // if no free sum is found it keeps the old one
-    const x = Math.min(Math.max(GAME.WIDTH - alien.x, alien.halfW), GAME.WIDTH - alien.halfW);
-    this.burrow(alien, x, Math.max(this.def.MIN_Y, alien.y - this.def.BURROW_UP_PX));
+    const [x, y] = this.surfaceAt(alien);
+    this.burrow(alien, x, y);
     return true;
+  }
+
+  /** Where it pops up after an answer: the other side of the field and up. */
+  protected surfaceAt(alien: Alien): readonly [number, number] {
+    const x = Math.min(Math.max(GAME.WIDTH - alien.x, alien.halfW), GAME.WIDTH - alien.halfW);
+    return [x, Math.max(this.def.MIN_Y, alien.y - this.def.BURROW_UP_PX)];
   }
 
   /** It reached the ship: dig back up the field (the life is already lost). */

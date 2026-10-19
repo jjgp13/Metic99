@@ -1,7 +1,8 @@
 import { WINGS } from "../config/constants";
-import { Ability, blinkCover } from "./abilities";
 import { Dart, Dive, Hop } from "./pondCreatures";
 import { HeadTurn, Hover, Leap } from "./treetopsTraits";
+import { Ability, Shielded, blinkCover } from "./abilities";
+import { Glow, Peek, SlimeSplit } from "./swamp";
 
 /**
  * Story creatures' special rules (SpeciesDef.TRAIT): an Ability on the same
@@ -32,4 +33,8 @@ export const TRAITS: Record<string, () => Ability> = {
   leap: () => new Leap(),
   headTurn: () => new HeadTurn(),
   hover: () => new Hover(),
+  split: () => new SlimeSplit(),
+  shell: () => new Shielded(),
+  peek: () => new Peek(),
+  glow: () => new Glow(),
 };
