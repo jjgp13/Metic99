@@ -1,5 +1,6 @@
 import type { BossDef } from "../config/constants";
 import { Boss } from "./abilities";
+import { OwlBoss } from "./owlBoss";
 
 /**
  * How each story boss fights (BossDef.MECHANIC). `Boss` is the base: it
@@ -9,6 +10,7 @@ import { Boss } from "./abilities";
  */
 export const BOSS_MECHANICS: Record<string, (def: BossDef) => Boss> = {
   burrow: (def) => new Boss(def),
+  blink: (def) => new OwlBoss(def),
 };
 
 export function createBoss(def: BossDef): Boss {

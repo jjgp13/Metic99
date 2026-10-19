@@ -1,5 +1,6 @@
 import { WINGS } from "../config/constants";
 import { Ability, blinkCover } from "./abilities";
+import { HeadTurn, Hover, Leap } from "./treetopsTraits";
 
 /**
  * Story creatures' special rules (SpeciesDef.TRAIT): an Ability on the same
@@ -24,4 +25,7 @@ export class Wings extends Ability {
 
 export const TRAITS: Record<string, () => Ability> = {
   wings: () => new Wings(),
+  leap: () => new Leap(),
+  headTurn: () => new HeadTurn(),
+  hover: () => new Hover(),
 };
