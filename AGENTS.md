@@ -711,6 +711,13 @@ Green=multiplication, Yellow=division.
   Level 6, THE VOLCANO: lava drips that drop in hops, fireflies that go
   dark together, lava tortoises (answer the shell first), a hopping spark;
   boss DRAGON, whose fire breath re-rolls its sum (docs/SOLO_MODES_DESIGN.md).
+  Level 10, THE KID'S BEDROOM, the finale (160 s, d 0.8 → 0.95): wind-up
+  soldiers that march in lines and stop when their key runs down, a
+  jack-in-the-box whose numbers show only when he pops, a bouncing rubber
+  ball, a teddy bear that naps, a loop-the-loop paper plane; boss
+  UNDER-THE-BED MONSTER (eyes peek from under a creeping bed, it flings toys
+  out via `AbilityHost.spawnCreature`, then climbs out in full: 4 + 3
+  answers). Bots: rookie 0/20, pilot 1/20, ace 20/20.
 - **Bullets hit only their target.** Results are unique on the field, and each
   bullet carries the alien whose answer fired it (`Bullet.target`); it flies
   through every other alien, so only the solved alien can die or lose its
@@ -959,6 +966,17 @@ dMatch)`; it is 0 in solo play.
 ## Decision Log
 
 Newest first. Format: `YYYY-MM-DD — decision — rationale`.
+
+- **2026-10-19 — Level 10, THE KID'S BEDROOM (the finale, own chat).**
+  The boss's two phases are two BossDefs (the bed, then `PART` = the
+  monster, same box so it always fits where the bed was) instead of one
+  boss with a phase switch: the view picks a look by model, and the swamp's
+  split already clears the level when no boss is left. New optional
+  `AbilityHost.spawnCreature(kind, x, y)` so a boss can call one of its
+  level's creatures (the pond wanted it too); optional, so test fakes and
+  other levels compile unchanged. Bots set the numbers: soldiers at full
+  darter speed in lines of 3 left pilots 0/12 and aces 7/12; ×0.6, lines on
+  25%, teddies ×0.8, balls 44 px a bounce: ace 20/20, pilot 1/20.
 
 - **2026-10-19 — Owner's first story playtest: faster start, pushback,
   music, map flow, saves, public logs.** Levels 1–2 felt long and easy
