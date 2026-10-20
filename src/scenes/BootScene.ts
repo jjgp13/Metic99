@@ -84,8 +84,9 @@ export default class BootScene extends Phaser.Scene {
       if (MODELS_AS_JSON) this.load.json(`model:${name}`, `${base}/models/${name}.json`);
       else this.load.binary(`model:${name}`, `${base}/models/${name}.glb`);
     }
-    // Top-down ship renders for the menu's ship picker (built with the models).
-    for (const ship of RENDER3D.SHIPS) {
+    // Top-down ship renders for the menu's ship picker (built with the models;
+    // ships without a 3D model show their doodle there).
+    for (const ship of RENDER3D.SHIPS.filter((s) => (RENDER3D.MODELS as readonly string[]).includes(s.model))) {
       this.load.image(`icon:${ship.model}`, `${base}/icons/${ship.model}.png`);
     }
 

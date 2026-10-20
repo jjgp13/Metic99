@@ -85,6 +85,8 @@ export class Pencil {
 export interface DoodleRecipe {
   w: number;
   h: number;
+  /** Drawn in crayon instead of colored pencil (the kid's own ship). */
+  look?: "pencil" | "crayon";
   draw(pencil: Pencil, t: number): void;
 }
 
@@ -103,7 +105,7 @@ export function drawFrames(recipe: DoodleRecipe, pxPerUnit: number, frames: numb
     ctx.setTransform(pxPerUnit, 0, 0, pxPerUnit, canvas.width / 2, canvas.height / 2);
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
-    recipe.draw(new Pencil(rough.canvas(canvas), seed * 31 + i + 1), i / frames);
+    recipe.draw(new Pencil(rough.canvas(canvas), seed * 31 + i + 1, recipe.look), i / frames);
     out.push(canvas);
   }
   return out;

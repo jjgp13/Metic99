@@ -183,6 +183,8 @@ export default class LeaderboardScene extends Phaser.Scene {
   }
 
   private toMenu(): void {
-    this.scene.start(this.result.back);
+    // Explicit (empty) data: started without any, Phaser would hand the
+    // scene its last start's data again (e.g. the story map's flight).
+    this.scene.start(this.result.back, {});
   }
 }
