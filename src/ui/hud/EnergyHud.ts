@@ -3,7 +3,8 @@ import { GAME, PLAYER } from "../../config/constants";
 import { PALETTE } from "../../config/palette";
 import type { Field } from "../../sim/Field";
 import { textStyle } from "../theme";
-import { DEPTH, GUTTER, METER } from "./layout";
+import type { Ducker } from "./Ducker";
+import { DEPTH, GUTTER, KEY_HINT_Y, METER } from "./layout";
 
 interface GutterButton {
   bg: Phaser.GameObjects.Rectangle;
@@ -19,9 +20,11 @@ export interface EnergyHudOptions {
 
 /**
  * The player's power and its fuel: the POWER button in the gutters beside
- * the keypad (one per thumb), the energy meter under the keypad with a mark
- * at the power's cost, and a tint over the field while a time power runs.
- * It sits beside and under the keypad, so it never covers the field or keys.
+ * the keypad (one per thumb), the energy meter in the top HUD with a mark at
+ * the power's cost, and a tint over the field while a time power runs.
+ * The buttons sit beside the keypad, so they never cover the field or keys;
+ * the meter is over the field, so it ducks under aliens like the rest of the
+ * top HUD (the numbers win).
  */
 export class EnergyHud {
   private readonly buttons: GutterButton[] = [];
@@ -30,7 +33,7 @@ export class EnergyHud {
   /** Drawn on the transparent Phaser canvas, so it tints the 3D field below. */
   private readonly fieldTint: Phaser.GameObjects.Rectangle;
 
-  constructor(scene: Phaser.Scene, field: Field, options: EnergyHudOptions) {
+  constructor(scene: Phaser.Scene, ducker: Ducker, field: Field, options: EnergyHudOptions) {
     const power = field.power.def;
 
     this.fieldTint = scene.add
@@ -42,26 +45,24 @@ export class EnergyHud {
     if (!options.battle) this.buttons.push(this.powerButton(scene, GUTTER.LEFT_X, field, options.onPower));
     this.buttons.push(this.powerButton(scene, GUTTER.RIGHT_X, field, options.onPower));
 
-    scene.add.text(GUTTER.LEFT_X, METER.Y, "EN", textStyle(12, PALETTE.ENERGY)).setOrigin(0.5).setDepth(DEPTH.HUD);
-    scene.add
-      .rectangle(METER.X, METER.Y, METER.W, 12, PALETTE.PANEL)
-      .setOrigin(0, 0.5)
-      .setStrokeStyle(1, PALETTE.PANEL_LIGHT)
-      .setDepth(DEPTH.HUD);
-    this.meterFill = scene.add
-      .rectangle(METER.X, METER.Y, 0, 8, PALETTE.ENERGY)
-      .setOrigin(0, 0.5)
-      .setDepth(DEPTH.HUD);
+    // The meter: the power's name, the bar with a gold mark at its cost, the value.
+    ducker.add(scene.add.text(METER.LABEL_X, METER.Y, power.NAME, textStyle(12)).setOrigin(0, 0.5));
+    ducker.add(
+      scene.add
+        .rectangle(METER.X, METER.Y, METER.W, METER.H, PALETTE.PANEL)
+        .setOrigin(0, 0.5)
+        .setStrokeStyle(1, PALETTE.PANEL_LIGHT),
+    );
+    this.meterFill = ducker.add(
+      scene.add.rectangle(METER.X, METER.Y, 0, METER.H - 4, PALETTE.ENERGY).setOrigin(0, 0.5),
+    );
     const costX = METER.X + METER.W * (field.power.cost / field.energy.max);
-    scene.add.rectangle(costX, METER.Y, 2, 18, PALETTE.GOLD).setDepth(DEPTH.HUD);
-    this.meterValue = scene.add
-      .text(GUTTER.RIGHT_X, METER.Y, "0", textStyle(12))
-      .setOrigin(0.5)
-      .setDepth(DEPTH.HUD);
+    ducker.add(scene.add.rectangle(costX, METER.Y, 2, METER.H + 6, PALETTE.GOLD));
+    this.meterValue = ducker.add(scene.add.text(METER.VALUE_X, METER.Y, "0", textStyle(12)).setOrigin(1, 0.5));
 
     if (!options.battle) {
       scene.add
-        .text(GAME.WIDTH / 2, METER.Y + 22, `SPACE or F: ${power.NAME}`, textStyle(11, PALETTE.TEXT_MUTED))
+        .text(GAME.WIDTH / 2, KEY_HINT_Y, `SPACE or F: ${power.NAME}`, textStyle(11, PALETTE.TEXT_MUTED))
         .setOrigin(0.5)
         .setDepth(DEPTH.HUD);
     }
@@ -71,7 +72,7 @@ export class EnergyHud {
 
   update(field: Field): void {
     const { energy, power } = field;
-    this.meterFill.setSize(METER.W * energy.fraction, 8);
+    this.meterFill.setSize(METER.W * energy.fraction, METER.H - 4);
     this.meterValue.setText(String(Math.floor(energy.value)));
 
     // Lit while running (time) or armed (shield); dim when it can't be used.

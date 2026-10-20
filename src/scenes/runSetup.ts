@@ -14,6 +14,8 @@ export interface StoryRun {
   score: number;
   /** Points scored in each level already finished (for the stage boards). */
   levelScores: number[];
+  /** Energy carried over from the last level (missing = 0: a new run). */
+  energy?: number;
 }
 
 /** Which mode GameScene was started in. */
@@ -55,8 +57,8 @@ export function setUpRun(mode: RunMode): RunSetup {
   const autopilot = Bot.isLevel(botLevel) ? Bot.forSeat(botLevel, seed) : null;
 
   if (level && mode.story) {
-    const { lives, score } = mode.story;
-    const field = new Field({ seed, level, lives, score, power: selectedPower() });
+    const { lives, score, energy } = mode.story;
+    const field = new Field({ seed, level, lives, score, energy, power: selectedPower() });
     return { seed, field, match: null, forcedAbilities: null, autopilot };
   }
   if (mode.battle) {

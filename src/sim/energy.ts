@@ -17,7 +17,11 @@ export interface KillInfo {
   combo: number;
 }
 
-/** gain = BASE * ballBonus * digitBonus * speedBonus * comboBonus (see ENERGY). */
+/**
+ * A kill's value = BASE * ballBonus * digitBonus * speedBonus * comboBonus
+ * (see ENERGY). The power meter gets ENERGY.POWER_RATE of it; in a battle the
+ * whole value cancels incoming attacks and fills the attack gauge.
+ */
 export function energyForKill(k: KillInfo): number {
   const ballBonus = ENERGY.BALL_BONUS[k.digits.length] ?? 1;
 

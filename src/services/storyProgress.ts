@@ -1,4 +1,4 @@
-import { STORAGE, STORY } from "../config/constants";
+import { ENERGY, STORAGE, STORY } from "../config/constants";
 
 /**
  * Story progress kept across visits in localStorage: how far the player has
@@ -85,7 +85,7 @@ export function parseProgress(value: unknown): StoryProgress {
 /**
  * The story run in progress, saved when each level starts (and when one is
  * cleared, as the next level), so a run left in the middle continues from
- * the start of that level with the lives and score it had there. A game
+ * the start of that level with the lives, score and energy it had there. A game
  * over or the end of the story deletes it.
  */
 export interface SavedRun {
@@ -95,6 +95,9 @@ export interface SavedRun {
   score: number;
   /** Points scored in each level already finished. */
   levelScores: number[];
+  /** Energy carried into this level (missing = an empty bar: a new run, or
+   * one saved before energy carried over). */
+  energy?: number;
 }
 
 export function saveRun(run: SavedRun): void {
@@ -132,7 +135,8 @@ export function parseSavedRun(value: unknown): SavedRun | null {
   const score = whole(v.score);
   if (level < 0 || level >= STORY.STAGES || lives < 1 || lives > STORY.LIVES || score < 0) return null;
   const levelScores = Array.isArray(v.levelScores) ? v.levelScores.map(whole).map((n) => Math.max(0, n)) : [];
-  return { level, lives, score, levelScores: levelScores.slice(0, level) };
+  const energy = Math.min(ENERGY.MAX, Math.max(0, whole(v.energy)));
+  return { level, lives, score, levelScores: levelScores.slice(0, level), energy };
 }
 
 function save(progress: StoryProgress): void {

@@ -53,8 +53,8 @@ export type TargetStrategy = "random" | "kos" | "attackers" | "badges";
 export const TARGET_STRATEGIES: readonly TargetStrategy[] = ["random", "kos", "attackers", "badges"];
 
 /**
- * The phone battle HUD (src/ui/battleViews.ts, M8): a dock under the energy
- * meter, the only strip of a portrait screen that is never over the field,
+ * The phone battle HUD (src/ui/battleViews.ts, M8): a dock under the keypad,
+ * the only strip of a portrait screen that is never over the field,
  * so it never hides a sum and never has to duck. Left to right: the aim chip
  * (tap = next strategy), one tile per opponent (tap = aim at them), players
  * left + a one-line KO feed. Incoming attacks glow on the field's side edges
@@ -64,9 +64,9 @@ export const TARGET_STRATEGIES: readonly TargetStrategy[] = ["random", "kos", "a
  * would be noise.
  */
 export const BATTLE_HUD = {
-  // Under the energy meter (at KEYPAD_AREA.BOTTOM + 22 = PLAYER.Y + 236, ± its
-  // cost mark) to the bottom of the canvas.
-  DOCK: { TOP: PLAYER.Y + 249, BOTTOM: 717, MARGIN: 6 },
+  // Under the keypad (KEYPAD_AREA.BOTTOM = PLAYER.Y + 214) to the bottom of
+  // the canvas. The energy meter that sat between them is in the top HUD now.
+  DOCK: { TOP: PLAYER.Y + 226, BOTTOM: 717, MARGIN: 6 },
   CHIP_W: 72, // the aim chip
   INFO_W: 54, // players left + KO feed
   GAP: 5, // between the chip, the tiles and the info

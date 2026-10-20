@@ -43,12 +43,18 @@ describe("parseProgress", () => {
 
 describe("saved story run", () => {
   it("keeps a sensible run", () => {
-    expect(parseSavedRun({ level: 2, lives: 1, score: 1234, levelScores: [400, 834] })).toEqual({
+    expect(parseSavedRun({ level: 2, lives: 1, score: 1234, levelScores: [400, 834], energy: 62 })).toEqual({
       level: 2,
       lives: 1,
       score: 1234,
       levelScores: [400, 834],
+      energy: 62,
     });
+  });
+
+  it("reads a run saved before energy carried over as an empty bar, and caps junk", () => {
+    expect(parseSavedRun({ level: 1, lives: 2, score: 10 })?.energy).toBe(0);
+    expect(parseSavedRun({ level: 1, lives: 2, score: 10, energy: 9999 })?.energy).toBe(100);
   });
 
   it("drops a run that can't be played (no lives, bad level, junk)", () => {

@@ -88,4 +88,18 @@ describe("story level 1", () => {
     expect(blasted).toBeDefined();
     expect(boss.active).toBe(true);
   });
+
+  it("energy carries over: a level starts with what the last one ended with", () => {
+    expect(new Field({ seed: 3, level: LEVEL_1, energy: 62 }).energy.value).toBe(62);
+    expect(new Field({ seed: 3, level: LEVEL_1, energy: 500 }).energy.value).toBe(100);
+    expect(new Field({ seed: 3, level: LEVEL_1 }).energy.value).toBe(0);
+  });
+
+  it("an armed shield goes back into the bar for the next level", () => {
+    const field = new Field({ seed: 3, level: LEVEL_1, power: "shield", energy: 70 });
+    field.apply({ type: "power" });
+    expect(field.power.shieldArmed).toBe(true);
+    expect(field.energy.value).toBe(20);
+    expect(field.carriedEnergy()).toBe(70);
+  });
 });

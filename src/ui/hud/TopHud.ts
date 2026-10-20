@@ -41,11 +41,12 @@ export class TopHud {
       this.lifeIcons.push(ducker.add(icon));
     }
 
-    this.comboText = ducker.add(scene.add.text(MARGIN, 56, "", textStyle(14, PALETTE.GOLD)));
+    // Under the energy meter (EnergyHud), which sits under the difficulty bar.
+    this.comboText = ducker.add(scene.add.text(MARGIN, 66, "", textStyle(14, PALETTE.GOLD)));
 
     if (options.autopilotLevel) {
       const label = `AUTOPILOT: ${options.autopilotLevel.toUpperCase()}`;
-      ducker.add(scene.add.text(GAME.WIDTH - MARGIN, 62, label, textStyle(12, PALETTE.ENERGY)).setOrigin(1, 0.5));
+      ducker.add(scene.add.text(GAME.WIDTH - MARGIN, 74, label, textStyle(12, PALETTE.ENERGY)).setOrigin(1, 0.5));
     }
 
     const pauseButton = ducker.add(scene.add.text(GAME.WIDTH / 2, 22, "II", textStyle(20, PALETTE.ACCENT)).setOrigin(0.5));

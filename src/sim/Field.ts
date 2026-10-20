@@ -1,6 +1,7 @@
 import {
   ABILITY,
   BULLET,
+  ENERGY,
   FEEDBACK,
   GAME,
   MONSTERS,
@@ -177,6 +178,8 @@ export interface FieldOptions {
   level?: LevelDef;
   /** Story: the run's score so far (it carries over between levels). */
   score?: number;
+  /** Story: the energy carried over from the last level (default 0). */
+  energy?: number;
 }
 
 /**
@@ -265,6 +268,7 @@ export class Field {
     this.lives = options.lives ?? PLAYER.LIVES;
     this.score = options.score ?? 0;
     this.startScore = this.score;
+    this.energy.value = Math.min(this.energy.max, Math.max(0, options.energy ?? 0));
     this.power = new Power(options.power ?? POWER_KINDS[0]);
     this.swarm = new Swarm({
       seed: options.seed,
@@ -273,6 +277,15 @@ export class Field {
       director: options.level ? new LevelDirector(options.level) : undefined,
     });
     this.sendRng = Rng.derive(options.seed, STREAM.SEND);
+  }
+
+  /**
+   * Story: the energy this field hands to the next level. An armed shield
+   * goes back into the bar (only energy carries over, and it was paid for).
+   */
+  carriedEnergy(): number {
+    const shield = this.power.shieldArmed ? this.power.cost : 0;
+    return Math.min(this.energy.max, this.energy.value + shield);
   }
 
   /** The SEND tier a tap buys now: the strongest affordable, else null. */
@@ -642,12 +655,12 @@ export class Field {
     // The bonus drifter adds its burst on top of the normal kill energy.
     const burst = alien.lethal ? 0 : MONSTERS.drifter.ENERGY_BURST;
     // Powers never pay for themselves: a kill while a time power runs charges
-    // nothing (no energy, no cancel, no attack). Otherwise the kill charges the
-    // power meter in full, and in a battle its value (the drifter's burst is
-    // power energy only) pays off incoming attacks first; the rest fills the
-    // attack gauge, which only SEND spends.
+    // nothing (no energy, no cancel, no attack). Otherwise POWER_RATE of the
+    // kill's value charges the power meter, and in a battle the full value (the
+    // drifter's burst is power energy only) pays off incoming attacks first;
+    // the rest fills the attack gauge, which only SEND spends.
     const kill = this.power.running ? 0 : energyForKill({ digits, solveMs, combo: this.combo });
-    const energy = kill > 0 ? this.energy.charge(kill + burst) : 0;
+    const energy = kill > 0 ? this.energy.charge(kill * ENERGY.POWER_RATE + burst) : 0;
     const left = this.standing ? this.cancelIncoming(kill) : 0;
     const attack = left > 0 ? this.attack.charge(left) : 0;
 
