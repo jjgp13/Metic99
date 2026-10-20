@@ -94,3 +94,33 @@ export const POWERS: Record<PowerKind, PowerDef> = {
 
 /** Menu order; the first is the default pick. */
 export const POWER_KINDS: readonly PowerKind[] = ["freeze", "slow", "blast", "shield"];
+
+/**
+ * The "power is ready" cues (ui/hud/EnergyHud, ui/hud/powerCue): looks only,
+ * the rules never read them. Owner's Playtest 3: the power sat ready but
+ * unused in 12–74% of dangerous moments, and the bar sat full (wasting
+ * energy) 27–66% of the time, so readiness is shown with motion, not size.
+ *
+ * - The ready moment (energy crosses the power's cost): the bar flashes and
+ *   pops, a READY tag pops in, the POWER buttons flash, a two-note chime.
+ * - While ready: the bar's gold glow and the buttons breathe (BREATHE_MS a
+ *   cycle). At 100 the tag says FULL and a light band runs up the bar.
+ * - The nudge: ready and a lethal, unanswered alien within NUDGE_PX of the
+ *   ship (the bots' "dangerous moment" distance): faster, stronger pulse.
+ */
+export const POWER_CUE = {
+  FLASH_MS: 700, // the ready moment's flash fades over this long
+  POP_SCALE: 1.6, // the tag (and bar) pop from this much bigger
+  BREATHE_MS: 1400,
+  NUDGE_MS: 420,
+  NUDGE_PX: 200,
+  /** Glow alpha: [low, high] while breathing, and while nudging. */
+  GLOW: { BREATHE: [0.15, 0.45], NUDGE: [0.35, 0.9] },
+  /** POWER button fill alpha (gold), same idea. */
+  BUTTON: { BREATHE: [0.08, 0.3], NUDGE: [0.25, 0.6] },
+  SHIMMER_MS: 900, // the light band's trip up a full bar
+  /** The chime: blips at these playback rates, CHIME_GAP_MS apart. */
+  CHIME_RATES: [1.4, 1.9],
+  CHIME_GAP_MS: 90,
+  CHIME_VOLUME: 0.35,
+} as const;

@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { DOODLE, LEADERBOARD, LEVEL_CLEAR, LEVELS, MATCH, RECOVERY, STORY, TARGET_STRATEGIES, type TargetStrategy } from "../config/constants";
+import { DOODLE, LEADERBOARD, LEVEL_CLEAR, LEVELS, MATCH, POWER_CUE, RECOVERY, STORY, TARGET_STRATEGIES, type TargetStrategy } from "../config/constants";
 import { inputMode } from "../config/inputMode";
 import type { InkEvent } from "../handwriting/inkReader";
 import type Alien from "../objects/Alien";
@@ -169,7 +169,11 @@ export default class GameScene extends Phaser.Scene {
       onInk: (e) => this.onInk(e),
     });
     this.sendButton = this.match ? new SendButton(this, this.field, (cost) => this.sendAttack(cost)) : null;
-    this.energyHud = new EnergyHud(this, this.ducker, this.field, { battle: this.match !== null, onPower: () => this.usePower() });
+    this.energyHud = new EnergyHud(this, this.ducker, this.field, {
+      battle: this.match !== null,
+      onPower: () => this.usePower(),
+      onReady: () => this.powerReadyChime(),
+    });
     this.popups = new Popups(this, this.ducker);
     this.pauseOverlay = new PauseOverlay(
       this,
@@ -223,7 +227,7 @@ export default class GameScene extends Phaser.Scene {
     const target = f.target?.active && !this.world.drawsTarget ? f.target : null;
     this.reticle.update(target, this.clock.alpha, delta);
     this.ducker.update(f.aliens, this.clock.alpha, delta);
-    this.energyHud.update(f);
+    this.energyHud.update(f, delta);
     this.sendButton?.update();
   }
 
@@ -431,6 +435,15 @@ export default class GameScene extends Phaser.Scene {
     if (this.gameOver || this.paused) return;
     this.field.apply({ type: "power" });
     this.energyHud.update(this.field);
+  }
+
+  /** The power just became ready: a soft rising two-note blip. */
+  private powerReadyChime(): void {
+    POWER_CUE.CHIME_RATES.forEach((rate, i) =>
+      this.time.delayedCall(i * POWER_CUE.CHIME_GAP_MS, () =>
+        this.sound.play("blip", { volume: POWER_CUE.CHIME_VOLUME, rate }),
+      ),
+    );
   }
 
   private sendAttack(cost: number): void {

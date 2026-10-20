@@ -557,11 +557,21 @@ Green=multiplication, Yellow=division.
   both gutters beside the keypad, one per thumb (in a battle the left one is
   SEND); it lights while running/armed and dims when unaffordable.
   The meter is a **small vertical bar in the top-right corner** (`METER` in
-  `ui/hud/layout.ts`), under the lives and the progress bar: it fills from
-  the bottom, a gold mark shows the power's cost, and the value sits over
-  the power's name to its left. Like the rest of the top HUD it ducks under
-  aliens; a kill's "+N" pops under the bar. Under the keypad it went
-  unseen; as a long horizontal bar it read like a second progress bar.
+  `ui/hud/layout.ts`, 14 × 60 px), under the lives and the progress bar: it
+  fills from the bottom, a gold mark shows the power's cost, and the value
+  sits over the power's name to its left. Like the rest of the top HUD it
+  ducks under aliens; a kill's "+N" pops under the bar. Under the keypad it
+  went unseen; as a long horizontal bar it read like a second progress bar.
+  **Ready cues** (`POWER_CUE`, `ui/hud/powerCue.ts`, looks only): when
+  energy crosses the power's cost, the bar flashes in gold, a READY tag
+  pops in under the name, both POWER buttons flash gold, and a two-note
+  chime plays (not when a time power is switched off with energy left).
+  While ready, the bar's gold glow and the buttons' gold fill breathe; at
+  100 the tag says FULL and a light band runs up the bar (new energy is
+  wasted). Ready with a lethal, unanswered alien within 200 px of the ship
+  = a faster, stronger pulse (the nudge). EnergyHud works all of this out
+  from the field each frame (last frame's cue vs this one); Field has no
+  event for it, so bots, replays and the golden master don't change.
 - HUD (score, lives, difficulty bar, typed display) draws above gameplay
   (`depth 5`), so entering aliens never obscure it. **The numbers win over
   the HUD:** every top-HUD piece, ability banner and score/equation/energy
@@ -1070,6 +1080,19 @@ dMatch)`; it is 0 in solo play.
 ## Decision Log
 
 Newest first. Format: `YYYY-MM-DD — decision — rationale`.
+
+- **2026-10-20 — The power shows when it's ready (owner's Playtest 3
+  note: "the energy bar is very small").** Replayed: in dangerous moments
+  the power was ready but off 12–74% of the time per level, the owner took
+  a median 8–32 s to press it after it became ready, and the bar sat full
+  27–66% of levels 1–8. Owner picked all four cues: a ready moment (flash,
+  READY, buttons, chime), breathing while ready, FULL + shimmer, and a
+  nudge when an alien is near, plus a 14 × 60 bar (was 10 × 44). Motion
+  over size, so the bar still ducks and the numbers win. The cue is worked
+  out in the view (EnergyHud compares last frame's state), not a Field
+  event (owner's first pick): it is two numbers the HUD already reads, and
+  in Field every bot, replay and the future server would compute it for
+  nothing. Not yet playtested by the owner.
 
 - **2026-10-20 — The energy meter is a small vertical bar, top right
   (owner's phone playtest).** The long horizontal meter under the progress
