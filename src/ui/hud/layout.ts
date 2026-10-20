@@ -2,9 +2,10 @@ import { GAME, KEYPAD_AREA, PLAYER } from "../../config/constants";
 
 /**
  * Where the in-game HUD sits (480×720 logical px). The field is the top part
- * of the screen down to the ship's line (PLAYER.Y); under it, from top to
- * bottom: the answer row, the keypad (or drawing pad) with a gutter on each
- * side, the energy meter, and a strip for hints or the battle dock.
+ * of the screen down to the ship's line (PLAYER.Y), with the top HUD over it
+ * (score, progress bar, energy meter; it ducks under aliens). Under the
+ * field, from top to bottom: the answer row, the keypad (or drawing pad) with
+ * a gutter on each side, and a strip for the key hint or the battle dock.
  */
 
 /** Drawing order: higher draws on top. The 3D field is under all of these. */
@@ -35,9 +36,19 @@ export const GUTTER = {
   CENTER_Y: (KEYPAD_AREA.TOP + KEYPAD_AREA.BOTTOM) / 2,
 } as const;
 
-/** The energy meter under the keypad, as wide as the keypad. */
+/**
+ * The energy meter in the top HUD, under the progress bar (y 44), where the
+ * eyes already are: under the keypad it went unseen in playtests. The power's
+ * name sits left of it, the value right of it.
+ */
 export const METER = {
-  X: GAME.WIDTH / 2 - 180,
-  W: 360,
-  Y: KEYPAD_AREA.BOTTOM + 22,
+  LABEL_X: 12,
+  X: 62,
+  W: GAME.WIDTH - 62 - 44,
+  Y: 57,
+  H: 10,
+  VALUE_X: GAME.WIDTH - 12,
 } as const;
+
+/** Solo: the key hint in the strip under the keypad (a battle puts its dock there). */
+export const KEY_HINT_Y = KEYPAD_AREA.BOTTOM + 30;

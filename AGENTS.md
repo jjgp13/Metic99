@@ -69,7 +69,9 @@ loop. See the Decision Log.
 - Node.js LTS required. `npm install` → `npm run dev` (port 5173) → `npm run build`.
   `npm run bots` plays every bot level headless and prints a report
   (`scripts/bot-report.ts`; `-- --lives 1 --seeds 20 --minutes 5
-  --ability splitter`), including which monsters cause the hits.
+  --ability splitter`, `--story 1,7` for story stages), including which
+  monsters cause the hits and how scarce energy is (first full bar, time
+  full, overflow).
   `npm run playtest -- runs.json` replays saved playtest runs and prints
   them next to the bots (`scripts/playtest-report.ts`). `npm run bots:fit --
   ace 1.15 2.27` fits a bot level to a player's answer times. `npm run match`
@@ -106,7 +108,7 @@ src/
                       turns its events into sound and HUD calls, and hands
                       World3D a snapshot every frame.
     runSetup.ts       A run's seed + Field or Match, or a story level
-                      (`StoryRun`: level, lives, score) (+ dev URL params)
+                      (`StoryRun`: level, lives, score, energy) (+ dev URL params)
     NameEntryScene.ts Arcade 5-char initials entry shown at game over
     LeaderboardScene.ts Global top-N board; dual-mode (post-run / menu browse)
     HandwritingLabScene.ts `?lab=draw`: records real handwriting, exports JSON
@@ -387,9 +389,9 @@ Green=multiplication, Yellow=division.
     score). It runs on its own spawn clock (first after 15 s, then every
     18–28 s, one at a time) and does **not** count toward any spawn cap. Stray
     bullets fly through it (it must be solved, not hit by accident).
-- **Drifter energy:** a solved drifter charges its `ENERGY_BURST` on top of the
-  normal kill energy (one `addEnergy()` call, capped by the meter) and pops
-  "+N ENERGY" where it died.
+- **Drifter energy:** a solved drifter charges its `ENERGY_BURST` (16) on top
+  of the normal kill energy (one `charge()` call, capped by the meter) and
+  pops "+N ENERGY" where it died.
 - **Scoring** rewards skill (`SCORE` in constants):
   `BASE × ballCountBonus × speedBonus × difficultyMult × comboMult`, where speed
   bonus decays from solving fast→slow, difficulty = `1 + d`, and the combo
@@ -491,13 +493,18 @@ Green=multiplication, Yellow=division.
   same colors; they burst gold when it's solved and scatter red when it was
   wrong. Every kill (and a shield break) pops the solved sum, e.g.
   `7 + 5 = 12`, above the alien. Pause hides all of it.
-- **Energy** (`ENERGY`, `src/sim/energy.ts`): each kill charges a 0–100 meter by
+- **Energy** (`ENERGY`, `src/sim/energy.ts`): each kill has a value
   `BASE × ballBonus × digitBonus × speedBonus × comboBonus` (more balls, bigger
   average digit, faster solve, longer streak = more; ~8 for an easy early kill,
-  30+ for a fast 3-ball streak kill). Overflow is lost. The meter only charges
-  and spends; each use is a separate spender (one per power). Per-run
-  earned/spent totals show on game over. In a battle SEND spends a separate
-  **attack gauge** (below), never this meter.
+  ~20 for a strong player's kill on a streak). The 0–100 power meter gets
+  **`POWER_RATE` (0.4) of it**: ~3 for an easy kill, ~8 on a streak, so
+  ~12 strong kills fill the bar (scarce, worth saving). Overflow is lost. The
+  meter only charges and spends; each use is a separate spender (one per
+  power). Per-run earned/spent totals show on game over. In a battle the
+  kill's full value goes to cancelling and the separate **attack gauge**
+  (below), which SEND spends, never this meter. **Story: energy carries
+  over** from level to level like lives and score (`StoryRun.energy`, saved
+  with the run); an armed shield goes back into the bar as its cost.
 - **Powers** (`POWERS`, `Power` in `src/sim/energy.ts`): the ship is only a
   look; the player picks ONE power on the menu (`STORAGE.POWER`), fixed for
   the run. One POWER input (`{ type: "power" }`) uses it. The set is data: each
@@ -521,7 +528,10 @@ Green=multiplication, Yellow=division.
 - **Energy HUD**: the POWER button (named after the picked power) sits in
   both gutters beside the keypad, one per thumb (in a battle the left one is
   SEND); it lights while running/armed and dims when unaffordable.
-  The meter is a bar under the keypad with a mark at the power's cost.
+  The meter is in the **top HUD** (`METER` in `ui/hud/layout.ts`), under the
+  progress bar: the power's name, a bar with a gold mark at the power's
+  cost, the value. Like the rest of the top HUD it ducks under aliens; a
+  kill's "+N" pops under the bar's end. Under the keypad it went unseen.
 - HUD (score, lives, difficulty bar, typed display) draws above gameplay
   (`depth 5`), so entering aliens never obscure it. **The numbers win over
   the HUD:** every top-HUD piece, ability banner and score/equation/energy
@@ -644,8 +654,8 @@ Green=multiplication, Yellow=division.
   new sum and burrows to the other side and up (numbers hidden while it
   digs), then holds still to be read; reaching the ship costs a life and
   sends it back up; BLAST doesn't touch it. The last answer clears the
-  level (`levelCleared`, a card, then the next level with the same lives
-  and score). Game over = back to the story map (every run starts at
+  level (`levelCleared`, a card, then the next level with the same lives,
+  score and energy). Game over = back to the story map (every run starts at
   level 1). The top bar shows the path's progress; the page scrolls
   (`DOODLE.PAGE_*`).
   **Story map** (`StoryMapScene`, `STORY_MAP`, owner's design): 10 islands
@@ -666,7 +676,7 @@ Green=multiplication, Yellow=division.
   **Flow:** STORY opens the map (CONTINUE a saved run, or a new run from
   island 1). After a clear the game returns to the map, the ship flies to
   the next island, and a tap starts it. The run is saved when each level
-  starts (`STORAGE.STORY_SAVE`: level, lives, score), so it can be left
+  starts (`STORAGE.STORY_SAVE`: level, lives, score, energy), so it can be left
   (pause → SAVE & QUIT TO MAP) and continued from that level's start; a
   game over deletes it. **Music:** each level loads its own path + boss
   track (`public/assets/music/levelNN-{path,boss}.mp3`, `scenes/levelMusic.ts`)
@@ -763,7 +773,7 @@ Green=multiplication, Yellow=division.
   cap and threat budget and not holding back the field's own spawns, but
   obeying the on-screen cap and readability (no room → it waits).
   **Two gauges (owner's pick, 2026-09-30):** a kill charges the power meter
-  in full, and its value (without the drifter burst) **pays off incoming
+  (`POWER_RATE` of its value), and its full value (without the drifter burst) **pays off incoming
   first** (soonest first; each alien's share of the weight); only the rest
   fills the **attack gauge** (`field.attack`, max `SEND.GAUGE_MAX` 100,
   overflow lost), and SEND spends only the gauge. So attacking never costs
@@ -772,7 +782,7 @@ Green=multiplication, Yellow=division.
   gauge: it fills from the bottom in orange (marks at each tier) while
   incoming attacks hang from its top as pink blocks (blinking in their last
   second); tap = strongest affordable tier, hold steps down, slide off
-  cancels; Space = send. Under the energy meter sits the battle dock (see
+  cancels; Space = send. Under the keypad sits the battle dock (see
   the phone battle HUD), and game over shows the placement.
 - **Targeting, KO credit, badges** (M7, `MATCH`): the `target` input aims a
   player's attacks by a strategy (`TARGET_STRATEGIES`: random, kos = whoever
@@ -797,7 +807,7 @@ Green=multiplication, Yellow=division.
   GameScene calls each view once per frame with the tiles and new match
   events; a view acts only via `aimAt(seat)` / `aimBy(strategy)`.
 - **Phone battle HUD** (M8, `PhoneBattleDock`, `BATTLE_HUD`): a **dock under
-  the energy meter** (the only portrait strip never over the field, so it
+  the keypad** (the only portrait strip never over the field, so it
   never ducks or hides a sum; the solo key hint sits there otherwise).
   Left: the **aim chip** (strategy or PICK, `→P3` target, `⚠n` = n aim at
   you; tap = next strategy). Middle: **one tile per opponent** in seat order,
@@ -985,6 +995,29 @@ dMatch)`; it is 0 in solo play.
 ## Decision Log
 
 Newest first. Format: `YYYY-MM-DD — decision — rationale`.
+
+- **2026-10-19 — Energy is scarce, carries over between story levels, and
+  its bar is at the top (owner's playtest notes 2+3).** Replayed playtest: a
+  kill charged 16–22, the bar was full 10–17 s into every level, full 47–93%
+  of the time, 75–97% of energy lost to overflow, and 2 of 3 hits came with
+  the power affordable and unused (the bar under the keypad went unseen).
+  Owner's picks: cut every kill evenly (over dropping the combo bonus or
+  charging only hard sums) at rate 0.4 (over 0.5 / 0.3), and carry energy
+  over like lives and score. The power meter gets `ENERGY.POWER_RATE` of a
+  kill's value; the battle attack gauge keeps the full value, so SEND's
+  balance holds. The drifter burst was cut with it (40 → 16): at 40 it
+  became a quarter of early income. Results: owner's runs replayed, first
+  full bar 10–17 s → 18–31 s; ace bots 14–22 s → 25–46 s, still clear every
+  level (an ace's bar still sits full in easy levels: it doesn't need the
+  power there, and with carry-over that saved bar now pays at the next
+  level). Cost, as warned: pilots lean on the power (story L8 SLOW 7/12 →
+  3/12, SHIELD 12/12 → 6/12; whole runs with SHIELD reach stage 8 → 4);
+  Endless ace survival FREEZE 215 → 160 s, BLAST 257 → 144 s, SLOW 211 →
+  190 s (SLOW is now the strongest: power costs may need a retune);
+  battles ace win 95 → 85%, matches 83 → 77 s. The meter moved to the top
+  HUD under the progress bar and ducks like the rest of it; the battle dock
+  grew into the freed strip under the keypad. Golden master updated (rule
+  change). `npm run bots -- --story 1,7` measures energy per level.
 
 - **2026-10-19 — Level 7, THE WINDY SKY: one wind, a storm that rains
   minions.** The page's wind is a rhythm on the game clock shared by every

@@ -107,7 +107,9 @@ export default class GameScene extends Phaser.Scene {
       battle: this.match
         ? { players: MATCH.OPPONENTS.length + 1, opponents: [...MATCH.OPPONENTS], placement: null }
         : null,
-      story: this.story ? { level: this.story.level, startScore: this.story.score } : null,
+      story: this.story
+        ? { level: this.story.level, startScore: this.story.score, startEnergy: this.story.energy ?? 0 }
+        : null,
       inputMode: inputMode(),
       sources: { keypad: 0, keyboard: 0, pad: 0 },
       ink: { reads: 0, unknown: 0, scratch: 0 },
@@ -156,7 +158,7 @@ export default class GameScene extends Phaser.Scene {
       onInk: (e) => this.onInk(e),
     });
     this.sendButton = this.match ? new SendButton(this, this.field, (cost) => this.sendAttack(cost)) : null;
-    this.energyHud = new EnergyHud(this, this.field, { battle: this.match !== null, onPower: () => this.usePower() });
+    this.energyHud = new EnergyHud(this, this.ducker, this.field, { battle: this.match !== null, onPower: () => this.usePower() });
     this.popups = new Popups(this, this.ducker);
     this.pauseOverlay = new PauseOverlay(
       this,
@@ -562,6 +564,7 @@ export default class GameScene extends Phaser.Scene {
       lives: f.lives,
       score: f.score,
       levelScores: [...story.levelScores, f.score - f.startScore],
+      energy: f.carriedEnergy(),
     };
   }
 

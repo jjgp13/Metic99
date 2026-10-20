@@ -2,11 +2,10 @@
 // Re-exported by config/constants.ts; see docs/ENGINEERING.md §3.
 
 /**
- * Energy: kills charge a meter the player chooses when to spend (slow time now;
- * sending aliens to opponents in the battle royale, see
- * docs/MULTIPLAYER_DESIGN.md). Harder, faster and streakier kills charge more:
+ * Energy: every kill has a value; harder, faster and streakier kills are worth
+ * more:
  *
- *   gain = BASE * ballBonus * digitBonus * speedBonus * comboBonus
+ *   value = BASE * ballBonus * digitBonus * speedBonus * comboBonus
  *
  * - ballBonus: more numbers in the sum pay more.
  * - digitBonus: 1 for an average digit of 1, rising to DIGIT_MAX_MULT at 9.
@@ -14,8 +13,11 @@
  *   SLOW_MULT by SCORE.SLOW_MS (same window as the score's speed bonus).
  * - comboBonus: +COMBO_STEP per consecutive kill, capped at COMBO_MAX.
  *
- * An easy early kill gives ~8 (about 1.3 s of SLOW or 0.3 s of FREEZE); a fast
- * 3-ball kill on a streak gives 30+.
+ * The power meter (MAX) gets POWER_RATE of that value, so the power is scarce
+ * and worth saving: an easy early kill charges ~3, a strong player's kill on
+ * a streak ~8, so ~12 such kills fill the bar (it was ~5 at rate 1, and the
+ * bar sat full most of every level). In a battle the full value goes to
+ * cancelling incoming attacks and to the attack gauge (SEND, tuned at rate 1).
  */
 export const ENERGY = {
   MAX: 100,
@@ -26,6 +28,7 @@ export const ENERGY = {
   SLOW_MULT: 1.0,
   COMBO_STEP: 0.1,
   COMBO_MAX: 2.0,
+  POWER_RATE: 0.4,
 } as const;
 
 /**
