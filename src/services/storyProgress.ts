@@ -38,12 +38,30 @@ export function mergeRun(prior: StoryProgress, total: number): { progress: Story
   };
 }
 
-/** What an island on the map shows. */
-export type IslandState = "cleared" | "reached" | "unreached";
+/**
+ * How an island looks: reached in this run (in color), reached only in an
+ * earlier run (gray pencil, until this run gets there again), or never
+ * reached (a "?").
+ */
+export type IslandLook = "run" | "before" | "unreached";
 
-export function islandState(progress: StoryProgress, stage: number): IslandState {
-  if (stage < progress.furthest) return "cleared";
-  return stage === progress.furthest ? "reached" : "unreached";
+export interface IslandView {
+  look: IslandLook;
+  /** Its boss was beaten, in this run or an earlier one. */
+  flag: boolean;
+}
+
+/** The stage the run in progress is on: the saved run's level, or island 1
+ * when there is none (a new run, or after a game over). The saved run is
+ * the only record of the run, so nothing else needs to be stored. */
+export function runStage(saved: SavedRun | null): number {
+  return saved?.level ?? 0;
+}
+
+/** What `stage`'s island shows, with the run in progress on `atStage`. */
+export function islandView(progress: StoryProgress, atStage: number, stage: number): IslandView {
+  const look: IslandLook = stage <= atStage ? "run" : stage <= progress.furthest ? "before" : "unreached";
+  return { look, flag: stage < progress.furthest };
 }
 
 export function loadStoryProgress(): StoryProgress {

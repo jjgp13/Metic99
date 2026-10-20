@@ -269,6 +269,21 @@ fits here, and **what we didn't do**.
   two versions that both accept the old arguments make the RPC call
   ambiguous.
 
+### 2.17 Single source of truth (derive, don't copy)
+
+- **What:** each fact is stored in one place; anything else that needs it
+  computes it from there instead of keeping its own copy.
+- **Where:** `services/storyProgress.ts`: `runStage(saved)` says which
+  island the run in progress is on from the saved run (`STORAGE.STORY_SAVE`)
+  alone (no save = island 1), and `islandView` combines it with the
+  all-time progress to color or gray each island.
+- **Why:** the save is already written when a level starts or is cleared
+  and deleted on a game over, so it is always right. A second copy would
+  need every one of those places to update it too, and the first one that
+  forgot would show the ship on the wrong island.
+- **Instead of:** a `runFurthest` field in the stored progress, reset on a
+  game over: it works, but it is the same fact twice, with two writers.
+
 ---
 
 ## 3. Where to start when you want to…

@@ -4,13 +4,14 @@ import { selectedShip } from "../config/ships";
 import { drawPaper } from "../renderDoodle/paper";
 import { drawFrames, type DoodleRecipe } from "../renderDoodle/pencil";
 import { shipIconFrames } from "../renderDoodle/shipIcons";
-import { drawTrail, islandFrames } from "../renderDoodle/storyMap";
+import { drawTrail, islandFrames, type Box } from "../renderDoodle/storyMap";
 import { stageBoard } from "../services/leaderboard";
 import {
   clearSavedRun,
-  islandState,
+  islandView,
   loadSavedRun,
   loadStoryProgress,
+  runStage,
   type SavedRun,
   type StoryProgress,
 } from "../services/storyProgress";
@@ -22,9 +23,11 @@ const SHARP = 2;
 
 /**
  * The story map (the STORY button): one island per stage on a notebook page,
- * joined by a pencil trail. Islands reached show their world and the best
- * score; a flag marks a beaten boss; the ship waits on the furthest island;
- * islands not reached yet are a "?". A game over sends the next run back to
+ * joined by a pencil trail. The ship waits on the island of the run in
+ * progress; islands this run has reached show their world in color and the
+ * best score, islands reached only in an earlier run show it in gray pencil
+ * (until this run gets there again), a flag marks a boss ever beaten, and
+ * islands never reached are a "?". A game over sends the next run back to
  * island 1 (arcade rules, owner's pick), but a run in progress is saved at
  * the start of each level: CONTINUE picks it up there. After a level is
  * cleared the game comes back here, the ship flies to the next island, and
@@ -57,14 +60,12 @@ export default class StoryMapScene extends Phaser.Scene {
     const progress = loadStoryProgress();
     this.saved = loadSavedRun();
 
+    // The run in progress is on the saved run's level (island 1 if none).
+    const atStage = runStage(this.saved);
+
     this.textures.remove("storyMap:paper");
     this.textures.addCanvas("storyMap:paper", drawPaper(SHARP));
-    this.add.image(0, 0, "storyMap:paper").setOrigin(0).setScale(1 / SHARP);
-
-    this.textures.remove("storyMap:trail");
-    const reached = Math.min(progress.furthest, STORY.STAGES - 1);
-    this.textures.addCanvas("storyMap:trail", drawTrail(GAME.WIDTH, GAME.HEIGHT, SHARP, STORY_MAP.SPOTS, reached));
-    this.add.image(0, 0, "storyMap:trail").setOrigin(0).setScale(1 / SHARP);
+    this.add.image(0, 0, "storyMap:paper").setOrigin(0).setScale(1 / SHARP).setDepth(-2);
 
     const cx = GAME.WIDTH / 2;
     this.add.text(cx, 24, "STORY MAP", textStyle(28, DOODLE.GRAPHITE)).setOrigin(0.5);
@@ -72,9 +73,18 @@ export default class StoryMapScene extends Phaser.Scene {
       .text(cx, 48, "a game over sends you back to island 1 · tap an island for scores", textStyle(13, DOODLE.GRAPHITE_LIGHT))
       .setOrigin(0.5);
 
-    for (let stage = 0; stage < STORY.STAGES; stage++) this.makeIsland(stage, progress);
+    const labels: Box[] = [];
+    for (let stage = 0; stage < STORY.STAGES; stage++) labels.push(...this.makeIsland(stage, progress, atStage));
+
+    // Drawn after the islands so it knows where their labels are, and kept
+    // under them by its depth.
+    this.textures.remove("storyMap:trail");
+    const trail = drawTrail(GAME.WIDTH, GAME.HEIGHT, SHARP, STORY_MAP.SPOTS, atStage, labels);
+    this.textures.addCanvas("storyMap:trail", trail);
+    this.add.image(0, 0, "storyMap:trail").setOrigin(0).setScale(1 / SHARP).setDepth(-1);
+
     const travelTo = data?.travelTo;
-    const shipAt = travelTo !== undefined ? travelTo - 1 : (this.saved?.level ?? 0);
+    const shipAt = travelTo !== undefined ? travelTo - 1 : atStage;
     const ship = this.makeShip(shipAt);
     this.makeButtons(progress);
     if (travelTo !== undefined && this.saved) this.travel(ship, travelTo, this.saved);
@@ -93,28 +103,32 @@ export default class StoryMapScene extends Phaser.Scene {
     });
   }
 
-  private makeIsland(stage: number, progress: StoryProgress): void {
+  /** One island and its labels; returns the labels' boxes (padded), which
+   * the trail must not run through. */
+  private makeIsland(stage: number, progress: StoryProgress, atStage: number): Box[] {
     const [x, y] = STORY_MAP.SPOTS[stage];
-    const state = islandState(progress, stage);
-    const keys = islandFrames(this.textures, stage, state, SHARP);
+    const view = islandView(progress, atStage, stage);
+    const keys = islandFrames(this.textures, stage, view, SHARP);
     const island = this.add.image(x, y, keys[0]).setScale(1 / SHARP);
     this.boiling.push({ image: island, keys });
 
-    if (state === "unreached") {
-      this.add.text(x, y + 10, "?", textStyle(30, DOODLE.GRAPHITE_LIGHT)).setOrigin(0.5);
-      return;
+    if (view.look === "unreached") {
+      const unknown = this.add.text(x, y + 10, "?", textStyle(30, DOODLE.GRAPHITE_LIGHT)).setOrigin(0.5);
+      return [labelBox(unknown)];
     }
 
     const level = LEVELS[stage];
     const best = progress.best[stage] ?? 0;
+    const nameInk = view.look === "run" ? DOODLE.GRAPHITE : DOODLE.GRAPHITE_LIGHT;
     const name = this.add
-      .text(x, y + 30, `${stage + 1} · ${level?.NAME ?? "coming soon"}`, textStyle(15, DOODLE.GRAPHITE, { align: "center", wordWrap: { width: 170 } }))
+      .text(x, y + 30, `${stage + 1} · ${level?.NAME ?? "coming soon"}`, textStyle(15, nameInk, { align: "center", wordWrap: { width: 170 } }))
       .setOrigin(0.5, 0);
-    const scoreInk = state === "cleared" ? DOODLE.TARGET : DOODLE.GRAPHITE_LIGHT;
-    this.add
+    const scoreInk = view.look === "run" && view.flag ? DOODLE.TARGET : DOODLE.GRAPHITE_LIGHT;
+    const score = this.add
       .text(x, name.y + name.height - 2, best > 0 ? `best ${best}` : "not played yet", textStyle(14, scoreInk))
       .setOrigin(0.5, 0);
-    if (!level) return; // reached, but this stage isn't built yet
+    const labels = [labelBox(name), labelBox(score)];
+    if (!level) return labels; // reached, but this stage isn't built yet
 
     island.setInteractive({ useHandCursor: true });
     island.on("pointerover", () => island.setScale(1.08 / SHARP));
@@ -128,6 +142,7 @@ export default class StoryMapScene extends Phaser.Scene {
         back: "StoryMapScene",
       }),
     );
+    return labels;
   }
 
   /** The player's ship hovers beside the island of the run in progress. */
@@ -251,4 +266,11 @@ export default class StoryMapScene extends Phaser.Scene {
     const story = run ?? { level: 0, lives: STORY.LIVES, score: 0, levelScores: [] };
     this.scene.start("GameScene", { story });
   }
+}
+
+/** A text's box on the page, padded so the trail stops short of it. */
+function labelBox(text: Phaser.GameObjects.Text): Box {
+  const pad = STORY_MAP.LABEL_CLEAR_PX;
+  const b = text.getBounds();
+  return { x: b.x - pad, y: b.y - pad, w: b.width + 2 * pad, h: b.height + 2 * pad };
 }
