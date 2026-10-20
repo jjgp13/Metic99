@@ -8,6 +8,7 @@ import { drawTrail, islandFrames, type Box } from "../renderDoodle/storyMap";
 import { stageBoard } from "../services/leaderboard";
 import {
   clearSavedRun,
+  flightTo,
   islandView,
   loadSavedRun,
   loadStoryProgress,
@@ -83,11 +84,10 @@ export default class StoryMapScene extends Phaser.Scene {
     this.textures.addCanvas("storyMap:trail", trail);
     this.add.image(0, 0, "storyMap:trail").setOrigin(0).setScale(1 / SHARP).setDepth(-1);
 
-    const travelTo = data?.travelTo;
-    const shipAt = travelTo !== undefined ? travelTo - 1 : atStage;
-    const ship = this.makeShip(shipAt);
+    const flight = flightTo(this.saved, data?.travelTo);
+    const ship = this.makeShip(flight !== null ? flight - 1 : atStage);
     this.makeButtons(progress);
-    if (travelTo !== undefined && this.saved) this.travel(ship, travelTo, this.saved);
+    if (flight !== null && this.saved) this.travel(ship, flight, this.saved);
 
     this.time.addEvent({
       delay: 1000 / DOODLE.BOIL_FPS,

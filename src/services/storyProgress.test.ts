@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { NO_PROGRESS, islandView, mergeLevel, mergeRun, parseProgress, parseSavedRun, runStage } from "./storyProgress";
+import { NO_PROGRESS, flightTo, islandView, mergeLevel, mergeRun, parseProgress, parseSavedRun, runStage } from "./storyProgress";
 
 describe("mergeLevel", () => {
   it("beating a boss opens the next stage and keeps the best score", () => {
@@ -84,5 +84,24 @@ describe("saved story run", () => {
     expect(parseSavedRun({ level: 99, lives: 2, score: 10 })).toBeNull();
     expect(parseSavedRun("nonsense")).toBeNull();
     expect(parseSavedRun(null)).toBeNull();
+  });
+});
+
+describe("flightTo", () => {
+  const atStage9 = { level: 9, lives: 2, score: 900, levelScores: [] };
+
+  it("flies to the next island right after a clear", () => {
+    expect(flightTo(atStage9, 9)).toBe(9);
+  });
+
+  it("ignores a flight left over from an earlier clear after a game over (owner's phone playtest)", () => {
+    // Phaser restarts the map with its last data, { travelTo: 9 }, but the
+    // game over deleted the save: the ship belongs on island 1.
+    expect(flightTo(null, 9)).toBeNull();
+  });
+
+  it("ignores a stale flight once the saved run is on another stage", () => {
+    expect(flightTo({ ...atStage9, level: 2 }, 9)).toBeNull();
+    expect(flightTo(atStage9, undefined)).toBeNull();
   });
 });

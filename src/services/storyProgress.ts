@@ -58,6 +58,15 @@ export function runStage(saved: SavedRun | null): number {
   return saved?.level ?? 0;
 }
 
+/** The island the map flies the ship to, or null to just show it at
+ * `runStage`. A clear asks for a flight (`travelTo`), but Phaser hands a
+ * scene its last start's data again when it is restarted without any, so
+ * a game over would bring back the old request: trust it only while the
+ * saved run is really on that stage. */
+export function flightTo(saved: SavedRun | null, travelTo: number | undefined): number | null {
+  return travelTo !== undefined && saved?.level === travelTo ? travelTo : null;
+}
+
 /** What `stage`'s island shows, with the run in progress on `atStage`. */
 export function islandView(progress: StoryProgress, atStage: number, stage: number): IslandView {
   const look: IslandLook = stage <= atStage ? "run" : stage <= progress.furthest ? "before" : "unreached";
