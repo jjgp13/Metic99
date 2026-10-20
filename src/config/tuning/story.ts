@@ -101,6 +101,46 @@ export interface LevelDef {
 export const MUSIC = {
   VOLUME: 0.35, // under the sound effects
   FADE_MS: 700, // crossfade to the boss track; fade out at the end
+  /** The main theme on the menu and the story map (scenes/extraMusic.ts). */
+  MENU_FILE: "menu.mp3",
+  /** The victory jingle after a boss (not a loop). */
+  LEVEL_CLEAR_FILE: "level-clear.mp3",
+  JINGLE_VOLUME: 0.5,
+  /** No jingle file yet: a fanfare made of the blip sound at these pitches
+   * (playback rates: C E G C, a rising major arpeggio), one every STEP_MS. */
+  FALLBACK_FANFARE: [1, 1.26, 1.5, 2],
+  FALLBACK_STEP_MS: 110,
+} as const;
+
+/**
+ * Story: the moment after a level's boss is beaten (GameScene.clearLevel),
+ * in order: the minions left pop, the ship squashes and blasts off the top
+ * (scenes/shipLaunch.ts), then the results card counts the score up.
+ */
+export const LEVEL_CLEAR = {
+  /** The first leftover minion pops this long after the boss; then one per STAGGER. */
+  POP_START_MS: 150,
+  POP_STAGGER_MS: 90,
+  /** The ship's launch starts this long after the boss. */
+  LAUNCH_AT_MS: 500,
+  /** Anticipation: the ship squashes down and shivers, gathering power. */
+  SQUASH_MS: 300,
+  SQUASH: 0.3, // height lost at the deepest squash (it gets wider by 2/3 of it)
+  SQUASH_DIP_PX: 6, // pressed down this far
+  SHIVER_PX: 1.5,
+  /** Then it accelerates off the top: gone after FLY_MS. */
+  FLY_MS: 800,
+  /** How the climb speeds up: height ∝ time^EASE (higher = slower start). */
+  FLY_EASE: 2.4,
+  STRETCH: 0.35, // taller while it flies (and a little thinner)
+  EXIT_MARGIN_PX: 40, // gone = this far above the top edge
+  /** The speed lines under the flying ship, at full length. */
+  TRAIL_PX: 140,
+  /** The results card comes in this long after the ship is gone. */
+  CARD_DELAY_MS: 400,
+  /** The level score counts up in this long; a tap skips to the end. */
+  COUNT_MS: 1300,
+  COUNT_TICK_MS: 70, // a blip at most this often while it counts
 } as const;
 
 export const STORY = {

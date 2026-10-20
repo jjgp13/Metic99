@@ -97,6 +97,19 @@ export const DOODLE = {
   DOWN_PIECE_SPIN: 2.6, // rad/s
   DOWN_GRAVITY: 260, // px/s²
   DOWN_WORDS: ["KABOOM!", "CRASH!", "BOOM!"],
+  // A level cleared: the ship blasts off the top (timing in LEVEL_CLEAR).
+  LAUNCH_WORDS: ["zoom!", "whoosh!"],
+  LAUNCH_WORD_DX: 62, // written this far right of the ship, clear of it
+  /** Speed lines under the flying ship: [x offset px, length share, width px]. */
+  SPEED_LINES: [
+    [-15, 0.55, 1.2],
+    [-7, 1, 1.7],
+    [0, 0.7, 1.2],
+    [7, 0.9, 1.7],
+    [15, 0.5, 1.2],
+  ],
+  SPEED_LINE_ALPHA: 0.75,
+  LAUNCH_FLAME_PX: 22, // the flame under it, at full trail
 
   // Story pages (renderDoodle/pages.ts): the page scrolls as the path goes by.
   PAGE_SCROLL_PX_PER_S: 22,

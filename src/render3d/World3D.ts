@@ -28,12 +28,28 @@ export interface WorldSnapshot {
   shipHurt: number;
   /** The last life is gone: the ship is destroyed. */
   shipDown: boolean;
+  /** Story: a level was cleared and the ship is blasting off the top
+   * (scenes/shipLaunch.ts), or null. */
+  shipLaunch: ShipLaunchPose | null;
   /** Story: the level's page and how far it has scrolled (null in Endless). */
   page: { id: string; scrolledPx: number; lengthPx: number } | null;
   /** The answer the background stars spell out, or null. */
   answer: AnswerView | null;
   /** The alien the typed answer points at (lock-on), or null. */
   target: Alien | null;
+}
+
+/** How the launching ship looks this frame. */
+export interface ShipLaunchPose {
+  /** px above its usual place (negative = pressed down). */
+  liftPx: number;
+  /** Squash and stretch: 1 = its usual shape. */
+  scaleX: number;
+  scaleY: number;
+  /** How far it shivers sideways while it gathers power. */
+  shiverPx: number;
+  /** Speed lines under it, 0 (none, still on the ground) to 1 (full length). */
+  trail: number;
 }
 
 /** A model's `anim_*` part, with its rest rotation and mirror side. */
@@ -395,7 +411,9 @@ export default class World3D {
 
   private syncShip(s: WorldSnapshot, time: number, dt: number): void {
     if (!this.ship || !this.shipBody) return;
-    this.ship.position.set(toWorldX(s.shipX), toWorldY(PLAYER.Y), 0);
+    const launch = s.shipLaunch;
+    this.ship.position.set(toWorldX(s.shipX), toWorldY(PLAYER.Y - (launch?.liftPx ?? 0)), 0);
+    this.ship.scale.set(launch?.scaleX ?? 1, launch?.scaleY ?? 1, 1);
     // Bank into the slide: positive yaw tips the right wing away from the camera.
     const target =
       s.shipTargetX === null

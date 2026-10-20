@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { DOODLE, LEADERBOARD, LEVELS, MATCH, RECOVERY, STORY, TARGET_STRATEGIES, type TargetStrategy } from "../config/constants";
+import { DOODLE, LEADERBOARD, LEVEL_CLEAR, LEVELS, MATCH, RECOVERY, STORY, TARGET_STRATEGIES, type TargetStrategy } from "../config/constants";
 import { inputMode } from "../config/inputMode";
 import type { InkEvent } from "../handwriting/inkReader";
 import type Alien from "../objects/Alien";
@@ -7,7 +7,7 @@ import { ABILITY_KINDS, Boss, type AbilityKind } from "../objects/abilities";
 import { isLeaderboardEnabled, stageBoard, startMatch } from "../services/leaderboard";
 import { rankFor, recordRun } from "../services/masteryStats";
 import { hitRecord, initPlaytestLog, logRun, type InputSource, type RunExtras } from "../services/playtestLog";
-import { clearSavedRun, recordLevel, recordStoryRun, saveRun as saveStoryRun } from "../services/storyProgress";
+import { clearSavedRun, loadStoryProgress, recordLevel, recordStoryRun, saveRun as saveStoryRun } from "../services/storyProgress";
 import type { Bot } from "../sim/Bot";
 import { ANSWER_MAX_DIGITS, type Field, type FieldEvent, type FieldInput } from "../sim/Field";
 import type { Match, MatchEvent } from "../sim/Match";
@@ -21,6 +21,7 @@ import { EnergyHud } from "../ui/hud/EnergyHud";
 import { GameOverScreen } from "../ui/hud/GameOverScreen";
 import { InputPanel, type PadKey } from "../ui/hud/InputPanel";
 import { LevelClearCard } from "../ui/hud/LevelClearCard";
+import { playLevelClearJingle, stopMenuTheme } from "./extraMusic";
 import { LevelMusic } from "./levelMusic";
 import { PauseOverlay } from "../ui/hud/PauseOverlay";
 import { Popups } from "../ui/hud/Popups";
@@ -31,6 +32,7 @@ import { onKeyDown } from "../ui/keyboard";
 import { createFieldView, type FieldView } from "./fieldView";
 import type { BoardScore } from "./NameEntryScene";
 import { setUpRun, type StoryRun } from "./runSetup";
+import { ShipLaunch } from "./shipLaunch";
 
 /**
  * The game screen. It is the *composition root* (docs/ARCHITECTURE.md §2.9):
@@ -69,6 +71,10 @@ export default class GameScene extends Phaser.Scene {
   private leaveAllowedAt = 0;
   /** Whether this run set a new personal best (name entry says so). */
   private newHighScore = false;
+  /** Story clear: the ship flying off, the minions popped, the results. */
+  private launch: ShipLaunch | null = null;
+  private readonly popped = new Set<Alien>();
+  private clearCard: LevelClearCard | null = null;
 
   // --- The screen ---
   private world!: FieldView;
@@ -101,6 +107,9 @@ export default class GameScene extends Phaser.Scene {
     this.leaving = false;
     this.leaveAllowedAt = 0;
     this.newHighScore = false;
+    this.launch = null;
+    this.popped.clear();
+    this.clearCard = null;
     this.runExtras = {
       lives: this.field.lives,
       forcedAbilities: run.forcedAbilities,
@@ -131,6 +140,7 @@ export default class GameScene extends Phaser.Scene {
       void startMatch();
     }
     initPlaytestLog();
+    stopMenuTheme(this);
     this.music = this.story ? new LevelMusic(this, this.story.level) : null;
     // Story: a run left in the middle continues from the start of this level.
     if (this.story) saveStoryRun(this.story);
@@ -239,13 +249,14 @@ export default class GameScene extends Phaser.Scene {
       {
         shipX: f.prevShipX + (f.shipX - f.prevShipX) * alpha,
         shipTargetX: f.target?.active ? f.target.viewX(alpha) : null,
-        aliens: f.aliens,
-        bullets: f.bullets,
+        aliens: this.popped.size ? f.aliens.filter((a) => !this.popped.has(a)) : f.aliens,
+        bullets: this.launch ? [] : f.bullets,
         alpha,
         aliensHidden: this.paused,
         shipShield: f.power.shieldArmed,
         shipHurt: Math.min(1, f.freezeLeftMs / RECOVERY.FREEZE_MS),
         shipDown: f.knockedOut,
+        shipLaunch: this.launch?.pose ?? null,
         answer: hidden ? null : this.answer.view,
         target: !hidden && f.target?.active ? f.target : null,
         page: this.pageView(),
@@ -527,32 +538,70 @@ export default class GameScene extends Phaser.Scene {
     console.table(summarizeSolves(f.solves));
   }
 
-  /** Story: the boss is beaten. The field has stopped; show the card. */
+  /**
+   * Story: the boss is beaten and the field has stopped. In order: the
+   * minions left pop, the ship squashes and blasts off the top while the
+   * victory jingle plays, then the results card counts the score up; a tap
+   * after that goes on (leaveGameOver).
+   */
   private clearLevel(): void {
     if (this.gameOver || !this.story) return;
     this.gameOver = true;
     this.music?.stop();
     this.reticle.clear();
+    this.answer.setVisible(false); // a half-typed answer for a minion that's about to pop
     this.inputPanel.setEnabled(false);
     this.sound.play("explode", { volume: 0.6, rate: 0.6 });
     const f = this.field;
-    const hasNext = this.story.level + 1 < LEVELS.length;
-    recordLevel(this.story.level, f.score - f.startScore, true);
+    const stage = this.story.level;
+    const levelScore = f.score - f.startScore;
+    const hasNext = stage + 1 < LEVELS.length;
+    const priorBest = loadStoryProgress().best[stage] ?? 0;
+    recordLevel(stage, levelScore, true);
     // The last level built: the run ends here (the next stage isn't built yet).
     if (!hasNext) this.newHighScore = recordStoryRun(f.score);
     if (hasNext) saveStoryRun(this.nextRun());
     else clearSavedRun();
-    new LevelClearCard(this, {
-      number: this.story.level + 1,
-      name: LEVELS[this.story.level].NAME,
-      levelScore: f.score - f.startScore,
-      totalScore: f.score,
-      livesLeft: f.lives,
-      hasNext,
-    });
     this.saveRun(() => {});
-    this.leaveAllowedAt = this.time.now + STORY.CLEAR_MIN_MS;
+
+    this.popLeftovers();
+    this.launch = new ShipLaunch(this);
+    // No way out until the results are up (the card's first tap skips its count).
+    this.leaveAllowedAt = Infinity;
+    this.time.delayedCall(LEVEL_CLEAR.LAUNCH_AT_MS, () => {
+      playLevelClearJingle(this);
+      this.launch!.start(() =>
+        this.time.delayedCall(LEVEL_CLEAR.CARD_DELAY_MS, () => {
+          this.clearCard = new LevelClearCard(this, {
+            number: stage + 1,
+            name: LEVELS[stage].NAME,
+            levelScore,
+            totalScore: f.score,
+            livesLeft: f.lives,
+            kills: f.kills,
+            bestCombo: f.bestCombo,
+            levelMs: f.elapsedMs,
+            newBest: priorBest > 0 && levelScore > priorBest,
+            hasNext,
+          });
+          this.leaveAllowedAt = this.time.now;
+        }),
+      );
+    });
     this.input.on("pointerdown", () => this.leaveGameOver());
+  }
+
+  /** Story clear: the minions still on the field pop one by one (a look:
+   * the rules have ended, so they only leave the picture). */
+  private popLeftovers(): void {
+    const left = this.field.aliens.filter((a) => a.active);
+    left.forEach((alien, i) =>
+      this.time.delayedCall(LEVEL_CLEAR.POP_START_MS + i * LEVEL_CLEAR.POP_STAGGER_MS, () => {
+        this.popped.add(alien);
+        this.world.explode(alien.x, alien.y, alien);
+        this.sound.play("blip", { volume: 0.35, rate: 1.5 + i * 0.15 });
+      }),
+    );
   }
 
   /** Story: the run as it goes into the next level (after a clear). */
@@ -586,6 +635,7 @@ export default class GameScene extends Phaser.Scene {
    */
   private leaveGameOver(): void {
     if (this.leaving || this.time.now < this.leaveAllowedAt) return;
+    if (this.clearCard?.finishCount()) return; // the first tap shows the whole score
     this.leaving = true;
     if (this.story) {
       const f = this.field;

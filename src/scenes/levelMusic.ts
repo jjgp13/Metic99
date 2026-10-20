@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { MUSIC } from "../config/constants";
+import { loadOptionalMusic } from "./extraMusic";
 
 type Track = "path" | "boss";
 
@@ -8,7 +9,7 @@ type Track = "path" | "boss";
  * the level's boss track once the boss comes in. The tracks are loaded when
  * the level starts, not at boot (20 tracks would slow the first load on a
  * phone), so the music starts a moment after the level does. Pause, the
- * level card and game over fade it out; leaving the scene stops it.
+ * level clear and game over fade it out; leaving the scene stops it.
  */
 export class LevelMusic {
   private current: Phaser.Sound.BaseSound | null = null;
@@ -26,6 +27,8 @@ export class LevelMusic {
       const key = this.key(track);
       if (!scene.cache.audio.exists(key)) load.audio(key, `assets/music/${this.file(track)}`);
     }
+    // Loaded now so the victory jingle starts on time when the boss falls.
+    loadOptionalMusic(scene, MUSIC.LEVEL_CLEAR_FILE);
     load.once(Phaser.Loader.Events.COMPLETE, () => this.play(this.wanted));
     load.start();
     scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.stop(0));

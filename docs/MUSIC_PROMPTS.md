@@ -88,7 +88,9 @@ Same shared style, except where a prompt says it is not a loop.
 
 **Files:** `menu.mp3` (the loop), `level-clear.mp3` and `ending.mp3`
 (jingles), in `public/assets/music/`, exported at 96 kbps like the rest.
-Not wired up yet: tell Claude when the files exist.
+`menu.mp3` and `level-clear.mp3` are wired up (`scenes/extraMusic.ts`):
+drop the files in and they play; until then the menu is silent and the
+clear plays a blip fanfare. `ending.mp3` is not wired up yet.
 
 ### Menu and story map (a loop)
 

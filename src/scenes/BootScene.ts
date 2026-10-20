@@ -93,6 +93,7 @@ export default class BootScene extends Phaser.Scene {
     this.load.audio("explode", `${base}/sounds/Explosion.wav`);
     this.load.audio("blip", `${base}/sounds/Blip_Select7.wav`);
     this.load.audio("hurt", `${base}/sounds/Hit_Hurt12.wav`);
+    this.load.audio("launch", `${base}/sounds/Powerup.wav`); // the ship leaves after a level clear
   }
 
   create(): void {
