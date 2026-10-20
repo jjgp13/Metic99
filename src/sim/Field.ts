@@ -22,6 +22,7 @@ import type { Bullet } from "../objects/Bullet";
 import { EnergyMeter, Power, energyForKill, type PowerUse } from "./energy";
 import { Rng } from "./rng";
 import { LevelDirector } from "./director";
+import type { WavePoint } from "./waves";
 import { STREAM, Swarm, type SentAlien } from "./Swarm";
 
 const PLAYER_START_X = GAME.WIDTH / 2;
@@ -313,7 +314,12 @@ export class Field {
 
   /** Story: how far along the level's path (0..1); null in Endless. */
   get levelProgress(): number | null {
-    return this.swarm.director.progress(this.swarm.fieldMs);
+    return this.swarm.director.progress(this.swarm);
+  }
+
+  /** Story: where the path is in the level's wave; null in Endless. */
+  get wave(): WavePoint | null {
+    return this.swarm.director.wave(this.swarm);
   }
 
   /** Story: the level's boss once it has come in (null before). */

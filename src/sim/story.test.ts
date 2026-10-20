@@ -64,11 +64,11 @@ describe("story level 1", () => {
     expect(marchers).toBeGreaterThan(0);
   });
 
-  it("the path holds still while the field is frozen", () => {
+  it("the path holds back while the field is frozen, but never below PATH_MIN_PACE of real time", () => {
     const field = new Field({ seed: 3, level: LEVEL_1 });
     field.freezeLeftMs = 1000;
     for (let i = 0; i < 30; i++) field.step(STEP);
-    expect(field.levelProgress).toBe(0);
+    expect(field.levelProgress).toBeCloseTo((30 * STEP * STORY.PATH_MIN_PACE) / LEVEL_1.PATH_MS);
   });
 
   it("BLAST leaves the boss standing", () => {

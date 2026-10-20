@@ -81,6 +81,9 @@ loop. See the Decision Log.
   --ability splitter`, `--story 1,7` for story stages), including which
   monsters cause the hits and how scarce energy is (first full bar, time
   full, overflow).
+  `npm run bots:story -- --stage 4` plays story levels from their start
+  (`scripts/story-report.ts`): clears, level/path/boss time, and in which
+  stretch of the wave the hits land.
   `npm run playtest -- runs.json` replays saved playtest runs and prints
   them next to the bots (`scripts/playtest-report.ts`). `npm run bots:fit --
   ace 1.15 2.27` fits a bot level to a player's answer times. `npm run match`
@@ -173,8 +176,9 @@ src/
                       movement + readability guard, AbilityHost. Asks its
                       SpawnDirector what to spawn.
     director.ts       SpawnDirector (strategy): EndlessDirector = today's
-                      curve; LevelDirector = a story level's path, roster,
-                      creatures and boss.
+                      curve; LevelDirector = a story level's path, wave,
+                      roster, creatures and boss.
+    waves.ts          A level's wave profile → the stretch and its intensity.
     Match.ts          Battle match: N Fields on one seed stepped together, bots
                       per seat, KOs, placement, standing messages (pressure),
                       targeting, KO credit, badges, attack delivery, and
@@ -657,7 +661,16 @@ Green=multiplication, Yellow=division.
   levels are data (`LEVELS`: page, seed, path length, difficulty range,
   roster, drifters, boss). Swarm asks a `SpawnDirector` (`sim/director.ts`)
   what to spawn: `LevelDirector` lerps d from `D.FROM` to `D.TO` along the
-  path, which runs on **field time** (freezes and SLOW hold it). At the end
+  path (speed, sum size). The path runs on **field time** (freezes and SLOW
+  hold it) but never slower than `STORY.PATH_MIN_PACE` (0.8) of the game
+  clock, so a level lasts about **2 minutes, boss included** however it is
+  played (path ~65–88 s). **Waves** (`LevelDef.WAVES`, `sim/waves.ts`): a
+  profile of rest / spike / ramp / burst stretches (shares of the path;
+  every level uses `OWNER_WAVE`: rest, spike, rest, spike, rest, ramp,
+  burst, rest) sets the unsolved cap (1 at rest → the level's `PEAK` in a
+  burst) and the spawn interval (×1.5 → ×0.55, `WAVES`). The per-level
+  path lengths and bot numbers below are from when each level was built,
+  before the 2-minute change (docs/SOLO_MODES_DESIGN.md §2). At the end
   of the path no spawns come until the board is clear, then the **boss**
   comes in; while it's up, one minion at a time (`BOSS_PHASE_UNSOLVED`).
   The boss (`Boss` ability) takes `HP` answers: each but the last rolls a
@@ -1053,6 +1066,19 @@ Newest first. Format: `YYYY-MM-DD — decision — rationale`.
   phones) and over a full-screen animated layer (fill-rate). Drifts live in
   screen space and ignore FREEZE and the sky's wind (the view gets neither);
   they are faint and small so the numbers stay the most readable thing.
+
+- **2026-10-19 — Story levels come in waves and last ~2 minutes (owner's
+  playtest notes 4 + 7).** The felt load was flat (the unsolved cap sat at
+  2 for whole levels; d only changed speed), so a level's wave is now data:
+  rest / spike / ramp / burst stretches that move the unsolved cap (1 →
+  `PEAK`) and the spawn rate (owner's pick over speed: count + rate), with
+  the D ramp kept underneath for speed. Path = max(field time, 0.8 × game
+  time) (owner's pick: SLOW on ~30% of the time stretched levels ~25%).
+  Paths 65–88 s. Bots (8 seeds, SLOW): aces clear every level in 111–121 s
+  (was 126–269 s); pilots now clear 7–8/8 everywhere (were 1–8/8: shorter
+  levels and rests make L8–L10 easier); rookies 0–8/8. Ace hits land in
+  bursts and boss fights. Not yet tuned per level (PEAK, D) or playtested.
+
 - **2026-10-19 — Level 7, THE WINDY SKY: one wind, a storm that rains
   minions.** The page's wind is a rhythm on the game clock shared by every
   creature (like the volcano's fireflies), and each species reacts to a gust

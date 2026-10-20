@@ -62,14 +62,19 @@ describe("story level 6: the volcano", () => {
   });
 
   it("fireflies flash in step, all dark at the same moment", () => {
-    const field = new Field({ seed: 4, level: VOLCANO, lives: 99 });
+    // A burst all along: nobody answers here, so a rest (one sum at a time)
+    // would never bring two fireflies up together.
+    const level = { ...VOLCANO, WAVES: { PROFILE: [{ KIND: "burst", SHARE: 1 }], PEAK: 3 } } as const;
     let together = 0;
-    while (field.steps < 20_000) {
-      field.step(STEP);
-      const covers = field.aliens.filter((a) => a.active && a.ability instanceof Flash).map((a) => a.ability!.cover);
-      if (covers.length < 2) continue;
-      expect(Math.max(...covers) - Math.min(...covers)).toBeLessThan(1e-9);
-      together++;
+    for (const seed of [4, 1, 2, 3]) {
+      const field = new Field({ seed, level, lives: 99 });
+      while (field.steps < 20_000) {
+        field.step(STEP);
+        const covers = field.aliens.filter((a) => a.active && a.ability instanceof Flash).map((a) => a.ability!.cover);
+        if (covers.length < 2) continue;
+        expect(Math.max(...covers) - Math.min(...covers)).toBeLessThan(1e-9);
+        together++;
+      }
     }
     expect(together).toBeGreaterThan(0); // two or more fireflies were up at once
   });

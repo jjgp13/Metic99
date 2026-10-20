@@ -175,7 +175,7 @@ export class Swarm implements AbilityHost {
     // of waiting a full interval so deferred spawns don't pile up and burst.
     // A story level: at the end of the path no new spawns come until the
     // board is clear, then the boss comes in.
-    const pathDone = (this.director.progress(this.fieldMs) ?? 0) >= 1;
+    const pathDone = (this.director.progress(this) ?? 0) >= 1;
     const bossDue = pathDone && this.director.boss !== null && this.boss === null;
     this.spawnCountdown -= fieldDt;
     if (bossDue) {
@@ -192,7 +192,7 @@ export class Swarm implements AbilityHost {
 
     // The bonus drifter runs on its own clock and ignores the caps above: it is
     // optional, so it never takes a slot from the sums the player must solve.
-    if (this.director.drifters(this.fieldMs)) {
+    if (this.director.drifters(this)) {
       this.drifterCountdown -= fieldDt;
       if (this.drifterCountdown <= 0 && !this.spawnDrifter(diff)) {
         this.drifterCountdown = ENEMY.SPAWN_RETRY_MS;

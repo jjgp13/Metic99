@@ -21,13 +21,26 @@ button and becomes METIC 99 when online play lands.
 A level is a **scrolling path** across one notebook page (like Aero Fighters
 flying a map): the page and its props scroll down, a progress bar shows how
 far along the map you are, and the **boss waits at the end**. The path is the
-timer: ~3–4 minutes to the boss, so the 10 levels take ~25–35 minutes.
+timer: about 2 minutes per level, boss included (owner's playtest,
+2026-10-19: 3–4 min felt long), so the 10 levels take ~20 minutes.
 
 - **Fair:** a slow player isn't stuck in a level that never ends (a kill
   quota could do that).
-- **Game clock:** the scroll runs on the game clock, so FREEZE, SLOW and the
-  hit freeze slow or stop it too. The sim only needs
-  "level progress = game time".
+- **Path clock:** the scroll runs on field time, so FREEZE, SLOW and the
+  hit freeze hold it back, but never below `STORY.PATH_MIN_PACE` (0.8) of
+  the game clock (owner's pick): a level played with SLOW on a third of the
+  time is no longer ~25% longer. Path time = max(field time, 0.8 × game time).
+- **Waves** (owner's playtest: "small spikes and then rest for some time,
+  then increase gradually, then a burst of difficulty and then rest
+  again"): a level's `WAVES.PROFILE` is a list of stretches (rest / spike /
+  ramp / burst) with shares of the path. A stretch pushes with an intensity
+  0..1 (rest 0, spike 0.6, a ramp climbing to 0.7, burst 1) that sets the
+  two knobs the owner picked: **how many unsolved sums may be up at once**
+  (1 at rest, the level's `WAVES.PEAK` in a burst) and **how fast they
+  come** (spawn interval ×1.5 at rest, ×0.55 in a burst). Speed and sum
+  size keep following the level's `D` range underneath. Before, the
+  unsolved cap sat at 2 for whole levels and the load felt flat. Every
+  level uses `OWNER_WAVE` for now; a level can get its own shape.
 
 A level is **data**, not code: one entry in a `LEVELS` table, so adding or
 retuning a level never touches the rules. Each has:
@@ -131,9 +144,10 @@ adds one seam and reuses everything else:
 - **Boss phase** in the director: normal spawns stop or slow while the boss
   is up. Field events gain `levelCleared` and `bossPhase`; GameScene shows
   them (banner, level-complete card), like it shows hits today.
-- **Bots play levels:** `npm run bots -- --story 3` runs each bot level
-  through level 3; that is how levels get tuned (e.g. a rookie clears 1–3,
-  an ace reaches 10).
+- **Bots play levels:** `npm run bots:story -- --stage 3` plays each bot
+  level through stage 3 from its start (3 lives, SLOW like the owner), and
+  prints clears, level time, path and boss time, and in which stretch of
+  the wave the hits land; that is how levels get tuned.
 - **Doodles:** each level's page, props, creatures and boss doodles live in
   `renderDoodle/levels/<page>.ts`; the scroll is the view reading level
   progress.
@@ -441,7 +455,8 @@ they are slow. Planned math once operations land: all four, mixed.
    levels use 4+ ball monsters.
 2. **Lives:** carried across levels (arcade).
 3. **Power:** picked before each level; ships stay looks.
-4. **Length:** 3–4 min per level, ~25–35 min for the run.
+4. **Length:** 3–4 min per level, ~25–35 min for the run. *Changed
+   2026-10-19 (playtest): ~2 min per level, boss included.*
 5. **Goal:** a scrolling path that ends at the boss (path = timer).
 6. **Game over:** back to level 1.
 7. **Levels:** the 10 in §3, in that order, open to change.
