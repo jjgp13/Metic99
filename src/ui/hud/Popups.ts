@@ -15,8 +15,8 @@ import { DEPTH, GUTTER, METER } from "./layout";
 export class Popups {
   /** Abilities and creatures already introduced this run (one banner each). */
   private readonly introduced = new Set<string>();
-  /** Banners on screen right now (each new one goes below them). */
-  private banners = 0;
+  /** Banners on screen right now, top to bottom (each new one goes below them). */
+  private readonly banners: Phaser.GameObjects.Text[] = [];
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -95,21 +95,24 @@ export class Popups {
   }
 
   /** A line of text at the top of the field that fades after `ms`; banners
-   * shown together stack downward instead of overlapping. */
+   * shown together stack downward instead of overlapping (each one sits
+   * under the lowest one still shown, by their real heights: a big BOSS
+   * banner and its small intro line differ). */
   banner(text: string, size: number, ms: number): void {
-    const y = ABILITY.INTRO_Y + this.banners * (size + 10);
-    this.banners++;
     const banner = this.ducker.add(
-      this.scene.add.text(GAME.WIDTH / 2, y, text, textStyle(size, PALETTE.GOLD, outline(4))).setOrigin(0.5),
+      this.scene.add.text(GAME.WIDTH / 2, ABILITY.INTRO_Y, text, textStyle(size, PALETTE.GOLD, outline(4))).setOrigin(0.5),
     );
+    const above = this.banners[this.banners.length - 1];
+    if (above) banner.setY(above.y + above.height / 2 + banner.height / 2);
+    this.banners.push(banner);
     this.scene.tweens.add({
       targets: banner,
       alpha: 0,
       delay: ms,
       duration: 400,
       onComplete: () => {
+        this.banners.splice(this.banners.indexOf(banner), 1);
         banner.destroy();
-        this.banners--;
       },
     });
   }
