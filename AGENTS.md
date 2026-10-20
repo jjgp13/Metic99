@@ -649,8 +649,8 @@ Green=multiplication, Yellow=division.
   profile of rest / spike / ramp / burst stretches (shares of the path), a
   push carrying its own `HEIGHT` 0..1; every level uses `OWNER_WAVE`
   (in bars of level 1's song: rest 4, spike .35 ×4, rest 4, spike .7 ×8,
-  rest 4, ramp to 1 ×8, burst ×8, rest 4; its timeline is in
-  docs/MUSIC_PROMPTS.md). The intensity sets the unsolved cap (the
+  rest 4, ramp to 1 ×8, burst ×8, rest 4; `npm run waves` prints each
+  level's timeline in seconds, for its music). The intensity sets the unsolved cap (the
   level's `BASE` at rest → its `PEAK` in a burst) and the spawn interval
   (×1.5 → ×0.55, `WAVES`). The scale grows by level (BASE/PEAK: L1–2
   1/2, L3–6 1/3, L7–9 1/4, L10 2/4) on top of the D range, so a level's
@@ -1011,9 +1011,10 @@ Newest first. Format: `YYYY-MM-DD — decision — rationale`.
   burst) and each level sets its scale (`WAVES.BASE` / `PEAK` unsolved
   sums), chosen by the owner over per-level heights (10 lists to tune)
   and over heights computed from a formula (every level the same shape):
-  one shared profile + a scale per level. Profile in 4-bar phrases of
-  level 1's 120 BPM song so its music can follow the waves (level 1 path
-  85 → 88 s = 44 bars). Bots (20 seeds, SLOW): aces clear all 10 in
+  one shared profile + a scale per level. Profile in 4-bar phrases at
+  120 BPM so level 1's music can follow the waves (level 1 path 85 → 88
+  s = 44 bars); `npm run waves` prints every level's timeline for the
+  soundtrack. Bots (20 seeds, SLOW): aces clear all 10 in
   111–129 s; pilots 20/16/19/18/19/19/16/19/19/13; rookies 4/3/11/0/1/5/0/1/0/0.
   The monsters that hit come in during pushes (~90%), not rests
   (`npm run bots:story` now shows both when and where hitters came in).

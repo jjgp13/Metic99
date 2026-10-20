@@ -140,7 +140,7 @@ export const WAVES = {
  * rest back to the base after each, then a breath before the boss. Shares
  * are bars of level 1's song (120 BPM: a bar = 2 s, an 88 s path), in
  * 4-bar phrases so each stretch is one chord progression or two
- * (docs/MUSIC_PROMPTS.md).
+ * (`npm run waves` prints every level's timeline in seconds).
  */
 export const OWNER_WAVE: readonly WaveSegment[] = [
   { KIND: "rest", SHARE: 4 }, // warm-up under the level banner

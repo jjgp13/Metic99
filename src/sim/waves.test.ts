@@ -23,7 +23,7 @@ describe("story waves", () => {
     expect(peaks[peaks.length - 1]).toBe(1);
   });
 
-  it("level 1's stretches fall on the bars of its 120 BPM song (docs/MUSIC_PROMPTS.md)", () => {
+  it("level 1's stretches fall on whole bars at 120 BPM (a bar = 2 s)", () => {
     const backyard = LEVELS[0];
     const at = (s: number) => waveAt(backyard.WAVES.PROFILE, (s * 1000) / backyard.PATH_MS);
     expect(backyard.PATH_MS).toBe(88_000); // 44 bars of 2 s

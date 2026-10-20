@@ -24,9 +24,9 @@ export const BACKYARD: LevelDef = {
   PAGE: "backyard",
   SEED: 1001,
   // Owner's playtest: 3 min to the mole was too long and too easy. 88 s =
-  // 44 bars of its 120 BPM song, so the waves land on its phrases
-  // (docs/MUSIC_PROMPTS.md). Bots (20 seeds): rookie 4/20, pilot and ace
-  // 20/20; an ace clears in ~1:54.
+  // 44 bars at 120 BPM, so the waves land on whole 4-bar phrases (`npm run
+  // waves`). Bots (20 seeds): rookie 4/20, pilot and ace 20/20; an ace
+  // clears in ~1:54.
   PATH_MS: 88_000,
   D: { FROM: 0.1, TO: 0.35 },
   WAVES: { PROFILE: OWNER_WAVE, BASE: 1, PEAK: 2 },
