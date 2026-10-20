@@ -1,6 +1,8 @@
 import { BALL_LAYOUTS, DOODLE } from "../../config/constants";
+import { MOLE_HILLS } from "../../config/levels/backyard";
 import type Alien from "../../objects/Alien";
-import type { CreatureLook, PageDef } from "../pages";
+import { GiantMole } from "../../objects/mole";
+import type { BossLook, CreatureLook, PageDef } from "../pages";
 import type { DoodleRecipe, Point } from "../pencil";
 
 /**
@@ -346,6 +348,48 @@ const DIRT_MOUND: DoodleRecipe = {
   },
 };
 
+/** How far under the mole's center its molehill sits, and the hill's size. */
+const HILL = { DY: 30, RX: 34, RY: 15, CLODS: 4 } as const;
+
+/**
+ * The Giant Mole's three molehills, on the page under every alien. The one
+ * it is digging to shakes and spits dirt clods: that is where it pops out.
+ * The hill it is in sits under it, even where a dig was stopped short.
+ */
+function drawMolehills(ctx: CanvasRenderingContext2D, boss: Alien, alpha: number): void {
+  const mole = boss.ability;
+  if (!(mole instanceof GiantMole) || mole.hillsY === null) return;
+  const out = mole.phase === "peek" || mole.phase === "duck";
+  ctx.save();
+  ctx.lineWidth = 1.6;
+  ctx.strokeStyle = DOODLE.GRAPHITE;
+  MOLE_HILLS.X.forEach((hillX, i) => {
+    const shaking = mole.nextHill === i;
+    const x = (out && i === mole.hill ? boss.viewX(alpha) : hillX) + (shaking ? (Math.random() * 2 - 1) * 2.5 : 0);
+    const y = (out && i === mole.hill ? boss.viewY(alpha) : mole.hillsY!) + HILL.DY;
+    ctx.fillStyle = C.dirt;
+    ctx.globalAlpha = 0.55;
+    ctx.beginPath();
+    ctx.ellipse(x, y, HILL.RX, HILL.RY, 0, Math.PI, 0);
+    ctx.closePath();
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.stroke();
+    if (!shaking) return;
+    ctx.fillStyle = C.mole;
+    for (let k = 0; k < HILL.CLODS; k++) {
+      const cx = x + (Math.random() * 2 - 1) * HILL.RX * 0.8;
+      const cy = y - HILL.RY - Math.random() * 18;
+      ctx.beginPath();
+      ctx.arc(cx, cy, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  });
+  ctx.restore();
+}
+
+const MOLE_LOOK: BossLook = { up: MOLE, hidden: DIRT_MOUND, under: drawMolehills };
+
 export const BACKYARD_PAGE: PageDef = {
   paper: "#f3ead6",
   rule: "rgba(120, 140, 170, 0.28)",
@@ -364,5 +408,5 @@ export const BACKYARD_PAGE: PageDef = {
     { recipe: FALLING_LEAF, count: 1, vx: 10, vy: 16, swayPx: 18, swayHz: 0.2, spinPerS: 0.5, fps: 3 },
   ],
   creatures: { beetle: BEETLE, worm: WORM, butterfly: BUTTERFLY },
-  bosses: { boss_mole: { up: MOLE, hidden: DIRT_MOUND } },
+  bosses: { boss_mole: MOLE_LOOK },
 };

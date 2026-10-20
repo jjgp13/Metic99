@@ -1,11 +1,30 @@
 import type { BossDef, LevelDef } from "../tuning/story";
 import { OWNER_WAVE } from "../tuning/waves";
 
-/** Level 1's boss: a giant mole that digs around the backyard. */
+/**
+ * The Giant Mole's molehills (objects/mole.ts): whack-a-mole. Three hills
+ * across the page; it peeks out of one (numbers readable, still), ducks,
+ * and digs to another, which shakes and spits dirt while it comes (the
+ * telegraph: look there). Each new hill is STEP_DOWN_PX closer. Its sum
+ * never changes between peeks, so a sum read once can be typed any time.
+ * A dig stopped short by a creature (readability rule) goes on in
+ * RETRY_DIG_MS tries for up to EXTRA_DIG_MS more, then it pops out there.
+ */
+export const MOLE_HILLS = {
+  X: [96, 240, 384],
+  PEEK_MS: 2400,
+  DUCK_MS: 200,
+  DIG_MS: 450,
+  STEP_DOWN_PX: 30,
+  RETRY_DIG_MS: 150,
+  EXTRA_DIG_MS: 600,
+} as const;
+
+/** Level 1's boss: a giant mole that pops out of its molehills. */
 const GIANT_MOLE: BossDef = {
   NAME: "GIANT MOLE",
   MODEL: "boss_mole",
-  MECHANIC: "burrow",
+  MECHANIC: "molehills",
   BOX: { HALF_W: 42, BALLS_Y: 50, BOTTOM: 36 },
   KIND: "lumberer",
   HP: 5,
@@ -14,7 +33,7 @@ const GIANT_MOLE: BossDef = {
   SCORE_MULT: 5,
   BURROW_UP_PX: 110,
   BURROW_MS: 800,
-  REVEAL_MS: 900,
+  REVEAL_MS: MOLE_HILLS.PEEK_MS, // unused: a new sum gets a whole peek
   RETREAT_Y: 140,
   MIN_Y: 140,
 };

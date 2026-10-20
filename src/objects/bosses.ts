@@ -1,5 +1,6 @@
 import type { BossDef } from "../config/constants";
 import { Boss } from "./abilities";
+import { GiantMole } from "./mole";
 import { BigFrog } from "./pondCreatures";
 import type { BigFrogDef } from "../config/levels/pond";
 import { OwlBoss } from "./owlBoss";
@@ -19,6 +20,7 @@ import { UnderTheBed } from "./bedroom";
  */
 export const BOSS_MECHANICS: Record<string, (def: BossDef) => Boss> = {
   burrow: (def) => new Boss(def),
+  molehills: (def) => new GiantMole(def),
   leap: (def) => new BigFrog(def as BigFrogDef), // the pond's BIG_FROG is a BigFrogDef
   blink: (def) => new OwlBoss(def),
   split: (def) => new MudMonster(def),
