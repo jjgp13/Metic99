@@ -5,6 +5,10 @@ import { Ability, Shielded, blinkCover } from "./abilities";
 import { Glow, Peek, SlimeSplit } from "./swamp";
 import { Glowworm, Roost } from "./caveTraits";
 import { VOLCANO_TRAITS } from "./volcanoTraits";
+import { SKY_TRAITS } from "./skyTraits";
+import { SNOW_TRAITS } from "./snowTraits";
+import { NIGHT_TRAITS } from "./nightTraits";
+import { BEDROOM_TRAITS } from "./bedroom";
 
 /**
  * Story creatures' special rules (SpeciesDef.TRAIT): an Ability on the same
@@ -42,4 +46,8 @@ export const TRAITS: Record<string, () => Ability> = {
   glowworm: () => new Glowworm(),
   glow: () => new Glow(),
   ...VOLCANO_TRAITS,
+  ...SKY_TRAITS,
+  ...SNOW_TRAITS,
+  ...NIGHT_TRAITS,
+  ...BEDROOM_TRAITS,
 };

@@ -175,7 +175,7 @@ export class Swarm implements AbilityHost {
     // of waiting a full interval so deferred spawns don't pile up and burst.
     // A story level: at the end of the path no new spawns come until the
     // board is clear, then the boss comes in.
-    const pathDone = (this.director.progress(this.fieldMs) ?? 0) >= 1;
+    const pathDone = (this.director.progress(this) ?? 0) >= 1;
     const bossDue = pathDone && this.director.boss !== null && this.boss === null;
     this.spawnCountdown -= fieldDt;
     if (bossDue) {
@@ -192,7 +192,7 @@ export class Swarm implements AbilityHost {
 
     // The bonus drifter runs on its own clock and ignores the caps above: it is
     // optional, so it never takes a slot from the sums the player must solve.
-    if (this.director.drifters(this.fieldMs)) {
+    if (this.director.drifters(this)) {
       this.drifterCountdown -= fieldDt;
       if (this.drifterCountdown <= 0 && !this.spawnDrifter(diff)) {
         this.drifterCountdown = ENEMY.SPAWN_RETRY_MS;
@@ -288,6 +288,48 @@ export class Swarm implements AbilityHost {
     if (!this.aliens.every((o) => !o.active || !part.overlaps(o))) return null;
     this.addAlien(part);
     return part;
+  }
+
+  addBall(alien: Alien): boolean {
+    const max = this.difficulty.maxDigit;
+    const start = this.rng.int(1, max);
+    for (let k = 0; k < max; k++) {
+      const digit = ((start - 1 + k) % max) + 1;
+      const result = alien.result + digit;
+      if (this.byResult.has(result)) continue;
+      this.byResult.delete(alien.result);
+      alien.setSum([...alien.digits, digit], result, this.elapsedMs);
+      this.byResult.set(result, alien);
+      return true;
+    }
+    return false;
+  }
+
+  spawnMinion(kind: AlienKind, from: readonly [number, number], to: readonly [number, number], ms: number): Alien | null {
+    const diff = this.difficulty;
+    if (this.aliens.filter((a) => a.active && a.lethal).length >= diff.maxOnScreen) return null;
+    const sum = this.rollSum(this.rng, DIFFICULTY.MIN_BALLS, DIFFICULTY.MIN_BALLS, diff.maxDigit);
+    if (!sum) return null;
+    const minion = this.makeAlien(this.rng, { kind, sum, x: from[0], y: from[1], pace: diff });
+    const landing = this.makeAlien(this.rng, { kind, sum, x: to[0], y: to[1], pace: diff });
+    const clear = (a: Alien) => this.aliens.every((o) => !o.active || !a.overlaps(o));
+    if (!clear(minion) || !clear(landing)) return null;
+    minion.glideTo(to[0], to[1], ms);
+    this.addAlien(minion);
+    return minion;
+  }
+
+  spawnCreature(kind: AlienKind, x: number, y: number): Alien | null {
+    const diff = this.difficulty;
+    if (this.aliens.filter((a) => a.active && a.lethal).length >= diff.maxOnScreen) return null;
+    const balls = kind === "lumberer" ? ENEMY.HARD_BALL_THRESHOLD : DIFFICULTY.MIN_BALLS;
+    const sum = this.rollSum(this.rng, balls, balls, diff.maxDigit);
+    if (!sum) return null;
+    // Already where it lands: a strafer's band and a swooper's lane are here.
+    const alien = this.makeAlien(this.rng, { kind, sum, x, y, pace: diff, bandY: y, laneX: x });
+    if (!this.aliens.every((o) => !o.active || !alien.overlaps(o))) return null;
+    this.addAlien(alien);
+    return alien;
   }
 
   // ---------------------------------------------------------------------------
@@ -424,7 +466,7 @@ export class Swarm implements AbilityHost {
           : species?.TRAIT
             ? TRAITS[species.TRAIT]?.()
             : undefined,
-      box: boss?.BOX,
+      box: boss?.BOX ?? species?.BOX,
       sentBy: spec.sentBy,
       layout: species?.LAYOUT,
       species: species?.NAME,
@@ -476,18 +518,17 @@ export class Swarm implements AbilityHost {
    * behind it, in its lane and in step. A line is one event: followers skip
    * the unsolved cap (it would keep lines from ever forming early on) but
    * obey the threat budget and the on-screen cap. Each has its own sum.
+   * With MARCH.ROW they come side by side instead (the night's invaders).
    */
   private marchBehind(rng: Rng, leader: Alien, diff: DifficultyParams): void {
     const march = leader.species === null ? undefined : this.director.species(leader.kind)?.MARCH;
     if (!march || !rng.chance(march.CHANCE)) return;
+    if (march.ROW) return this.marchInRow(rng, leader, march.SIZE, diff);
     const size = march.SIZE;
     let ahead = leader;
     for (let i = 1; i < size; i++) {
-      if (this.currentThreat() >= diff.threatBudget) return;
-      if (this.aliens.filter((a) => a.active && a.lethal).length >= diff.maxOnScreen) return;
-      const sum = this.rollSum(rng, leader.ballCount, leader.ballCount, diff.maxDigit);
-      if (!sum) return;
-      const spec = { kind: leader.kind, sum, pace: diff, dir: leader.heading };
+      const spec = this.followerSpec(rng, leader, diff);
+      if (!spec) return;
       const probe = this.makeAlien(rng, { ...spec, x: leader.x, y: 0 });
       const y = ahead.y - ahead.top - ENEMY.READ_GAP - STORY.MARCH_GAP - probe.bottom;
       const follower = this.makeAlien(rng, { ...spec, x: leader.x, y });
@@ -495,6 +536,34 @@ export class Swarm implements AbilityHost {
       this.addAlien(follower);
       ahead = follower;
     }
+  }
+
+  /** Followers beside the leader, at its height: right, left, two right, two
+   * left… (whichever slots fit on the page and are clear). */
+  private marchInRow(rng: Rng, leader: Alien, size: number, diff: DifficultyParams): void {
+    const spacing = 2 * leader.halfW + ENEMY.READ_GAP + STORY.MARCH_GAP;
+    const fits = (x: number) => x - leader.halfW >= ENEMY.SPAWN_EDGE && x + leader.halfW <= GAME.WIDTH - ENEMY.SPAWN_EDGE;
+    const slots = [1, -1, 2, -2, 3, -3].map((k) => leader.x + k * spacing).filter(fits);
+    let placed = 1;
+    for (const x of slots) {
+      if (placed >= size) return;
+      const spec = this.followerSpec(rng, leader, diff);
+      if (!spec) return;
+      const follower = this.makeAlien(rng, { ...spec, x, y: leader.y });
+      if (!this.aliens.every((o) => !o.active || !follower.overlaps(o))) continue;
+      this.addAlien(follower);
+      placed++;
+    }
+  }
+
+  /** A follower of a marching line, or null if the threat budget, the
+   * on-screen cap or the sums run out. */
+  private followerSpec(rng: Rng, leader: Alien, diff: DifficultyParams) {
+    if (this.currentThreat() >= diff.threatBudget) return null;
+    if (this.aliens.filter((a) => a.active && a.lethal).length >= diff.maxOnScreen) return null;
+    const sum = this.rollSum(rng, leader.ballCount, leader.ballCount, diff.maxDigit);
+    if (!sum) return null;
+    return { kind: leader.kind, sum, pace: diff, dir: leader.heading };
   }
 
   /** Story: bring the level's boss in from the top. False if no room yet. */

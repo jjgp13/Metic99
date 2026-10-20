@@ -53,7 +53,7 @@ describe("story level 2, the pond", () => {
   it("dragonflies dart down and hover; ducks dive with their numbers hidden", () => {
     let hovered = false;
     let duckHidden = false;
-    for (const seed of [1, 2, 3]) {
+    for (const seed of [1, 2, 3, 4, 5, 6]) {
       playPond(seed, "pilot", (field) => {
         for (const a of field.aliens) {
           if (!a.active) continue;

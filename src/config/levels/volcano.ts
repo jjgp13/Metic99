@@ -1,5 +1,5 @@
 import type { BlinkTiming } from "../../objects/abilities";
-import type { BossDef, LevelDef } from "../tuning/story";
+import { OWNER_WAVE, type BossDef, type LevelDef } from "../tuning/story";
 
 /*
  * Level 6: THE VOLCANO (doodles: renderDoodle/levels/volcano.ts; rules for
@@ -86,8 +86,9 @@ export const VOLCANO: LevelDef = {
   NAME: "THE VOLCANO",
   PAGE: "volcano",
   SEED: 1006,
-  PATH_MS: 200_000,
+  PATH_MS: 78_000,
   D: { FROM: 0.6, TO: 0.75 },
+  WAVES: { PROFILE: OWNER_WAVE, BASE: 1, PEAK: 3 },
   // Lava drips (darters) and fireflies (strafers); 3-ball sums are tortoises.
   TWO_BALL_KINDS: { darter: 0.55, strafer: 0.45, swooper: 0 },
   ABILITIES: [],

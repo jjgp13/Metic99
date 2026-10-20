@@ -70,6 +70,9 @@ loop. See the Decision Log.
   `npm run bots` plays every bot level headless and prints a report
   (`scripts/bot-report.ts`; `-- --lives 1 --seeds 20 --minutes 5
   --ability splitter`), including which monsters cause the hits.
+  `npm run bots:story -- --stage 4` plays story levels from their start
+  (`scripts/story-report.ts`): clears, level/path/boss time, and in which
+  stretch of the wave the hits land.
   `npm run playtest -- runs.json` replays saved playtest runs and prints
   them next to the bots (`scripts/playtest-report.ts`). `npm run bots:fit --
   ace 1.15 2.27` fits a bot level to a player's answer times. `npm run match`
@@ -162,8 +165,9 @@ src/
                       movement + readability guard, AbilityHost. Asks its
                       SpawnDirector what to spawn.
     director.ts       SpawnDirector (strategy): EndlessDirector = today's
-                      curve; LevelDirector = a story level's path, roster,
-                      creatures and boss.
+                      curve; LevelDirector = a story level's path, wave,
+                      roster, creatures and boss.
+    waves.ts          A level's wave profile → the stretch and its intensity.
     Match.ts          Battle match: N Fields on one seed stepped together, bots
                       per seat, KOs, placement, standing messages (pressure),
                       targeting, KO credit, badges, attack delivery, and
@@ -637,7 +641,22 @@ Green=multiplication, Yellow=division.
   levels are data (`LEVELS`: page, seed, path length, difficulty range,
   roster, drifters, boss). Swarm asks a `SpawnDirector` (`sim/director.ts`)
   what to spawn: `LevelDirector` lerps d from `D.FROM` to `D.TO` along the
-  path, which runs on **field time** (freezes and SLOW hold it). At the end
+  path (speed, sum size). The path runs on **field time** (freezes and SLOW
+  hold it) but never slower than `STORY.PATH_MIN_PACE` (0.8) of the game
+  clock, so a level lasts about **2 minutes, boss included** however it is
+  played (path ~65–88 s). **Waves** (`LevelDef.WAVES`, `sim/waves.ts`):
+  **escalating** pushes with rests back to the same base. The shape is a
+  profile of rest / spike / ramp / burst stretches (shares of the path), a
+  push carrying its own `HEIGHT` 0..1; every level uses `OWNER_WAVE`
+  (in bars of level 1's song: rest 4, spike .35 ×4, rest 4, spike .7 ×8,
+  rest 4, ramp to 1 ×8, burst ×8, rest 4; `npm run waves` prints each
+  level's timeline in seconds, for its music). The intensity sets the unsolved cap (the
+  level's `BASE` at rest → its `PEAK` in a burst) and the spawn interval
+  (×1.5 → ×0.55, `WAVES`). The scale grows by level (BASE/PEAK: L1–2
+  1/2, L3–6 1/3, L7–9 1/4, L10 2/4) on top of the D range, so a level's
+  peaks are bigger than the last level's. The per-level
+  path lengths and bot numbers below are from when each level was built,
+  before the 2-minute change (docs/SOLO_MODES_DESIGN.md §2). At the end
   of the path no spawns come until the board is clear, then the **boss**
   comes in; while it's up, one minion at a time (`BOSS_PHASE_UNSOLVED`).
   The boss (`Boss` ability) takes `HP` answers: each but the last rolls a
@@ -711,6 +730,32 @@ Green=multiplication, Yellow=division.
   Level 6, THE VOLCANO: lava drips that drop in hops, fireflies that go
   dark together, lava tortoises (answer the shell first), a hopping spark;
   boss DRAGON, whose fire breath re-rolls its sum (docs/SOLO_MODES_DESIGN.md).
+  Level 7, THE WINDY SKY (140 s, d 0.65 → 0.8): one wind for the page
+  (calm, swirls, a gust, right then left; `objects/skyTraits.ts`); kites
+  (numbers = tail bows) climb in gusts, then their string snaps and they
+  tumble; swallows (eyes = numbers) swoop down on each gust; paper planes
+  loop the loop; a balloon bonus is blown along; boss STORM CLOUD (5
+  answers): rumbles, then thunder drops a raindrop (a 2-ball boss part),
+  and so does every answer it survives. Bots: rookie 0/20, pilot 11/20,
+  ace 20/20.
+  Level 8, THE SNOWY MOUNTAIN (135 s, d 0.7 → 0.85; `config/levels/snow.ts`):
+  penguins that lean and belly-slide (lines of 3), snowballs that pick up
+  one more number past mid-field (`AbilityHost.addBall`, box sized ahead via
+  `SpeciesDef.BOX`), ice blocks that speed up as they slide, a snowflake
+  blown in gusts; boss YETI (7 answers) stomps and throws snowballs
+  (`AbilityHost.spawnMinion`). Bots: rookie 0/20, pilot 6/20, ace 20/20.
+  Level 9, THE NIGHT SKY (140 s, d 0.75 → 0.9): invaders that step on a
+  beat in rows of three (Space Invaders, a nod to the original Metic),
+  comets that bounce off the edges, UFOs that warp, a shooting star that
+  burns out; boss THE MOON, whose numbers show only where it's lit
+  (`Ability.ballCover`: per-ball cover). Bots: rookie 0/20, pilot 8/20,
+  Level 10, THE KID'S BEDROOM, the finale (160 s, d 0.8 → 0.95): wind-up
+  soldiers that march in lines and stop when their key runs down, a
+  jack-in-the-box whose numbers show only when he pops, a bouncing rubber
+  ball, a teddy bear that naps, a loop-the-loop paper plane; boss
+  UNDER-THE-BED MONSTER (eyes peek from under a creeping bed, it flings toys
+  out via `AbilityHost.spawnCreature`, then climbs out in full: 4 + 3
+  answers). Bots: rookie 0/20, pilot 1/20, ace 20/20.
 - **Bullets hit only their target.** Results are unique on the field, and each
   bullet carries the alien whose answer fired it (`Bullet.target`); it flies
   through every other alien, so only the solved alien can die or lose its
@@ -959,6 +1004,84 @@ dMatch)`; it is 0 in solo play.
 ## Decision Log
 
 Newest first. Format: `YYYY-MM-DD — decision — rationale`.
+
+- **2026-10-20 — Level songs follow the level's waves (docs/MUSIC_PROMPTS.md).**
+  Owner's ask: the first soundtrack looped a short phrase; songs should
+  rise and fall with the difficulty. Each path song is 44 bars, one per
+  unit of the shared wave shape, with BPM = 10 560 ÷ path seconds, so its
+  sections (calm, wave 1, breath, wave 2, breath, climb, peak, settle)
+  play with their waves. Chords move away from home as intensity grows;
+  the peak changes key. Sync is approximate (freezes stretch the path).
+
+- **2026-10-20 — Story waves escalate: each peak bigger, every rest back to
+  the base, bigger swings level by level (owner's ask).** A push now
+  carries its own HEIGHT (wave 1 .35, wave 2 .7, then a climb to a full
+  burst) and each level sets its scale (`WAVES.BASE` / `PEAK` unsolved
+  sums), chosen by the owner over per-level heights (10 lists to tune)
+  and over heights computed from a formula (every level the same shape):
+  one shared profile + a scale per level. Profile in 4-bar phrases at
+  120 BPM so level 1's music can follow the waves (level 1 path 85 → 88
+  s = 44 bars); `npm run waves` prints every level's timeline for the
+  soundtrack. Bots (20 seeds, SLOW): aces clear all 10 in
+  111–129 s; pilots 20/16/19/18/19/19/16/19/19/13; rookies 4/3/11/0/1/5/0/1/0/0.
+  The monsters that hit come in during pushes (~90%), not rests
+  (`npm run bots:story` now shows both when and where hitters came in).
+  Two level tests assumed a calm field (a row's step held by the
+  readability guard, a snowball lifted by pushback) and were loosened.
+
+- **2026-10-19 — Story levels come in waves and last ~2 minutes (owner's
+  playtest notes 4 + 7).** The felt load was flat (the unsolved cap sat at
+  2 for whole levels; d only changed speed), so a level's wave is now data:
+  rest / spike / ramp / burst stretches that move the unsolved cap (1 →
+  `PEAK`) and the spawn rate (owner's pick over speed: count + rate), with
+  the D ramp kept underneath for speed. Path = max(field time, 0.8 × game
+  time) (owner's pick: SLOW on ~30% of the time stretched levels ~25%).
+  Paths 65–88 s. Bots (8 seeds, SLOW): aces clear every level in 111–121 s
+  (was 126–269 s); pilots now clear 7–8/8 everywhere (were 1–8/8: shorter
+  levels and rests make L8–L10 easier); rookies 0–8/8. Ace hits land in
+  bursts and boss fights. Not yet tuned per level (PEAK, D) or playtested.
+
+- **2026-10-19 — Level 7, THE WINDY SKY: one wind, a storm that rains
+  minions.** The page's wind is a rhythm on the game clock shared by every
+  creature (like the volcano's fireflies), and each species reacts to a gust
+  its own way (kites climb, swallows swoop, planes and the balloon are
+  swept). The Storm Cloud's raindrops are boss parts (`BossDef.PART`, no
+  shared change), so the level clears only when the last drop is answered.
+  Rain comes on a telegraphed timer AND on each answer the cloud survives:
+  a held target runs no rules, so an ace who keeps the cloud locked was
+  never rained on by the timer alone. Cloud HP 5 (drops add ~4 answers).
+  Known: every raindrop shows the "BOSS · RAINDROP!" banner (GameScene
+  banners every boss part; left for a shared fix).
+- **2026-10-19 — Level 8, THE SNOWY MOUNTAIN: a sum that grows, a boss
+  that throws minions.** A snowball adds one number (its old ones stay, so
+  work already done still counts) instead of re-rolling, chosen over a
+  sum that changes (the dragon's) to reward answering early without wiping
+  progress. Three small generic hooks, no-ops elsewhere (golden master
+  green): `SpeciesDef.BOX` (a box that already fits the last ball, since a
+  box is fixed when an alien is built), optional `AbilityHost.addBall` and
+  `spawnMinion` (optional so stand-in hosts in other levels' tests still
+  compile). Bots set the numbers: snowballs growing at y 235 at full speed
+  and ice blocks up to 1.4× cleared pilots 0/12; now pilot 6/20, ace 20/20.
+- **2026-10-19 — Level 9, THE NIGHT SKY: invaders march in rows, the Moon
+  is read by its light.** Invaders are scripted steps (glide + hold, field
+  time) on a beat that quickens lower down, and a march can now come side by
+  side (`MARCH.ROW`) as well as in a line. The Moon's shadow covers its
+  numbers one by one (`Ability.ballCover(i, n)`, default = `cover`), chosen
+  over a gravity pull on other creatures (traits can't see the field) and
+  over phases that change its ball count (the readability box follows it).
+  Bots set the numbers: pilots cleared 12–16/20 at first; faster invader
+  beat, rows on 60% of spawns, comets ×0.9 and the Moon ×0.3 give rookie
+  0/20, pilot 8/20, ace 20/20.
+- **2026-10-19 — Level 10, THE KID'S BEDROOM (the finale, own chat).**
+  The boss's two phases are two BossDefs (the bed, then `PART` = the
+  monster, same box so it always fits where the bed was) instead of one
+  boss with a phase switch: the view picks a look by model, and the swamp's
+  split already clears the level when no boss is left. New optional
+  `AbilityHost.spawnCreature(kind, x, y)` so a boss can call one of its
+  level's creatures (the pond wanted it too); optional, so test fakes and
+  other levels compile unchanged. Bots set the numbers: soldiers at full
+  darter speed in lines of 3 left pilots 0/12 and aces 7/12; ×0.6, lines on
+  25%, teddies ×0.8, balls 44 px a bounce: ace 20/20, pilot 1/20.
 
 - **2026-10-19 — Owner's first story playtest: faster start, pushback,
   music, map flow, saves, public logs.** Levels 1–2 felt long and easy

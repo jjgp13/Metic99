@@ -21,13 +21,26 @@ button and becomes METIC 99 when online play lands.
 A level is a **scrolling path** across one notebook page (like Aero Fighters
 flying a map): the page and its props scroll down, a progress bar shows how
 far along the map you are, and the **boss waits at the end**. The path is the
-timer: ~3–4 minutes to the boss, so the 10 levels take ~25–35 minutes.
+timer: about 2 minutes per level, boss included (owner's playtest,
+2026-10-19: 3–4 min felt long), so the 10 levels take ~20 minutes.
 
 - **Fair:** a slow player isn't stuck in a level that never ends (a kill
   quota could do that).
-- **Game clock:** the scroll runs on the game clock, so FREEZE, SLOW and the
-  hit freeze slow or stop it too. The sim only needs
-  "level progress = game time".
+- **Path clock:** the scroll runs on field time, so FREEZE, SLOW and the
+  hit freeze hold it back, but never below `STORY.PATH_MIN_PACE` (0.8) of
+  the game clock (owner's pick): a level played with SLOW on a third of the
+  time is no longer ~25% longer. Path time = max(field time, 0.8 × game time).
+- **Waves** (owner's playtest: "small spikes and then rest for some time,
+  then increase gradually, then a burst of difficulty and then rest
+  again"): a level's `WAVES.PROFILE` is a list of stretches (rest / spike /
+  ramp / burst) with shares of the path. A stretch pushes with an intensity
+  0..1 (rest 0, spike 0.6, a ramp climbing to 0.7, burst 1) that sets the
+  two knobs the owner picked: **how many unsolved sums may be up at once**
+  (1 at rest, the level's `WAVES.PEAK` in a burst) and **how fast they
+  come** (spawn interval ×1.5 at rest, ×0.55 in a burst). Speed and sum
+  size keep following the level's `D` range underneath. Before, the
+  unsolved cap sat at 2 for whole levels and the load felt flat. Every
+  level uses `OWNER_WAVE` for now; a level can get its own shape.
 
 A level is **data**, not code: one entry in a `LEVELS` table, so adding or
 retuning a level never touches the rules. Each has:
@@ -62,7 +75,7 @@ A kid's imagination of nature and the elements, doodled in a notebook.
 | 6 | Volcano (fire) | fireflies, lava drips | Dragon | + multiplication |
 | 7 | Windy sky (air) | birds, kites, paper planes | Storm Cloud | × mixed |
 | 8 | Snowy mountain | penguins, snowballs | Yeti | mixed |
-| 9 | Night sky | comets, aliens (the original game) | The Moon | everything |
+| 9 ✓ | Night sky | invaders (the original game), comets, UFOs, a shooting star | The Moon (numbers only where it's lit) | everything (sums for now) |
 | 10 | The kid's bedroom | toys come alive | Under-the-Bed Monster | everything |
 
 Ending idea: it was all the kid's homework doodles.
@@ -131,9 +144,10 @@ adds one seam and reuses everything else:
 - **Boss phase** in the director: normal spawns stop or slow while the boss
   is up. Field events gain `levelCleared` and `bossPhase`; GameScene shows
   them (banner, level-complete card), like it shows hits today.
-- **Bots play levels:** `npm run bots -- --story 3` runs each bot level
-  through level 3; that is how levels get tuned (e.g. a rookie clears 1–3,
-  an ace reaches 10).
+- **Bots play levels:** `npm run bots:story -- --stage 3` plays each bot
+  level through stage 3 from its start (3 lives, SLOW like the owner), and
+  prints clears, level time, path and boss time, and in which stretch of
+  the wave the hits land; that is how levels get tuned.
 - **Doodles:** each level's page, props, creatures and boss doodles live in
   `renderDoodle/levels/<page>.ts`; the scroll is the view reading level
   progress.
@@ -169,6 +183,7 @@ field (`BossLook.under`: the troll's lamp beam).
 | --- | --- | --- | --- |
 | 1 | THE BACKYARD | ✓ beetles (eyes, march), worms (chain), butterfly (wings fold); GIANT MOLE | rookie 16, pilot 20, ace 20 |
 | 5 | THE DARK CAVE | ✓ bats (hang → wake → drop), glowworms (chain, glow on/off), mine cart (wheels = numbers); CAVE TROLL (numbers only in a swinging lamp's beam) | rookie 2, pilot 18, ace 20 |
+| 8 | THE SNOWY MOUNTAIN | ✓ penguins (lean → belly-slide, march), snowballs (pick up a number), ice blocks (no brakes), snowflake (gusts); YETI (stomps, throws snowballs) | rookie 0, pilot 6, ace 20 |
 
 **Level 5, THE DARK CAVE** (`config/levels/cave.ts`, 200 s, d 0.45 → 0.6,
 sums only; + / − planned). Grey stone page (mid-grey, so pencil and the
@@ -207,6 +222,10 @@ white number balls still win) with stalactites, rocks, crystals, drips.
 3. New rules only if needed: a trait (an Ability class + one line in
    `TRAITS`), a boss mechanic (subclass `Boss` + one line in
    `BOSS_MECHANICS`), a layout (BALL_LAYOUTS + `Alien.boxFor`/`ballOffset`).
+   A creature whose sum grows gets `SpeciesDef.BOX` (a row box that fits
+   its last ball) and calls `AbilityHost.addBall`; a boss that throws or
+   calls minions uses `AbilityHost.spawnMinion` (the level's creature of
+   that kind). Both host methods are optional (stand-in hosts may skip them).
    More balls than the d range gives: `LevelDef.MAX_BALLS` (3+ ball sums
    ride on lumberers, one on screen at a time).
    A level's own rule classes can live in `src/objects/<page>.ts`. Hooks
@@ -228,7 +247,7 @@ white number balls still win) with stalactites, rocks, crystals, drips.
 | L4 ✓ | Boss phase + Giant Mole | level 1 complete |
 | L5 ✓ | Story map + per-level and full-run scores | runs save and restart at level 1 |
 | L6 ✓ | Levels 2–5 (pond, treetops, swamp, cave), 4-ball rows (`cluster`); still to do: subtraction, Bouncer, Heart balloon | bots clear them at the target rates |
-| L7 | Levels 6–10 (volcano ✓), multiplication | same |
+| L7 | Levels 6–10 (volcano ✓, sky ✓, snow ✓, night ✓), multiplication | same |
 | L8 | Story bots report + balance pass; leaderboard `level` column | `npm run bots -- --story` |
 
 L1–L4 is the smallest playable slice: one full level with a boss, to judge
@@ -252,6 +271,105 @@ three creatures. Rules `config/levels/volcano.ts`, `objects/volcanoTraits.ts`,
 "pick your power" card before each level (the menu's pick is used), monsters
 re-skinned per page (level 1 still draws the standard darter/swooper
 doodles), story scores on the leaderboard, a dev shortcut to a level.
+
+**Level 7, THE WINDY SKY (built 2026-10-19, on its own branch):** d 0.65 →
+0.8 over 140 s (the owner found long paths boring), sums only (× joins with
+the shared operations piece). Its signature is the **wind**: one rhythm on
+the game clock for the whole sky (5.6 s calm, 1 s picking up: swirls on
+every creature, the telegraph; a 1.4 s gust), gusts blowing right, then
+left, in turn. Each creature meets a gust its own way (`objects/skyTraits.ts`,
+every trait a `Windy` with one shared `Wind`; pushes are glides, so a frozen
+field isn't blown about):
+
+| Creature (kind) | Personality |
+| --- | --- |
+| Kite (strafer: 2 bows; lumberer: 3 bows ×0.7) | "chain" layout: its numbers are the bows on its tail. On its string a gust swings it 56 px across and lifts it 22 px (kites climb in wind); then the string snaps (the windup jerk) and it **tumbles** down at 0.6 of a dive, swinging side to side and carried by gusts (`sky_kite`) |
+| Swallow (darter, ×0.68) | its eyes are its numbers; it **rides the gust**: swoops 46 px down and across with it, so answer a low swallow while the wind picks up (`sky_swoop`) |
+| Paper plane (swooper) | a number on each wing; every 130 px of descent it noses up (the telegraph) and **loops the loop**, up and over, ending further along; gusts sweep it sideways (`sky_loop`) |
+| Hot-air balloon (drifter, bonus) | a gust carries it 90 px: with its drift it may leave early, against it it stays longer (`sky_balloon`) |
+
+**Boss, STORM CLOUD** (mechanic `sky_storm`, `objects/stormCloud.ts`; 5
+answers of 3 balls, ×0.2): drifts down and with the gusts; every 4 s of
+field time on the page (no raindrop falling) it **rumbles** (windup: it
+shakes, numbers readable) and **thunders**: lightning (the page flashes)
+and a **raindrop** falls out of it, a boss part (`BossDef.PART`, mechanic
+`sky_raindrop`) with a 2-ball sum that wobbles down at ×0.6; a raindrop that
+reaches the ship splashes (a life), evaporates and falls again. Every answer
+it survives also thunders (one raindrop at a time), because a held target
+runs no rules: an ace keeps the cloud locked, so a timer alone almost never
+rained (0.5 drops per fight; now ~4). The storm is over once the cloud and
+its last raindrop are answered (~9 answers, so 5 for the cloud, not 6).
+Bots (20 seeds, 3 fresh lives): rookie 0/20 (out ~2/3 along the path),
+pilot 11/20, ace 20/20 (losing ~0.3 lives); swallows cause most hits. Tuning:
+swallows at ×1 left pilots 1/20, 3-bow kites at ×1 hit even aces, raindrops
+at ×0.9 cost pilots ~13 lives in the boss phase. Rules
+`config/levels/sky.ts`; looks `renderDoodle/levels/sky.ts`; test
+`sim/sky.test.ts`.
+### Level 8, THE SNOWY MOUNTAIN (built 2026-10-19, sums only)
+`config/levels/snow.ts` + `renderDoodle/levels/snow.ts`; rules in
+`objects/snowTraits.ts` and `objects/yeti.ts`; test `sim/snow.test.ts`.
+135 s of path, d 0.7 → 0.85. Cold white page (slate, frost grey and teal:
+no blue, the sum balls' color) with snowflakes, pines, snowy rocks, peaks,
+drifts and ski tracks. The theme is the slope: everything slides, rolls
+and gathers speed, so every creature says "answer me early", each in its
+own way. Planned math (mixed operations) waits for the shared piece.
+- **Penguin** (darter ×0.4, "chain": the numbers sit on its white belly,
+  trait `snow_slide`, marches in lines of 3 on 30% of spawns): waddles for
+  1.9 s, stops and leans forward with its flippers swept back (0.5 s, the
+  telegraph, holding still), belly-slides 70 px in 0.38 s, gets up. All on
+  field time inside `Ability.pace`, so a line slides together.
+- **Snowball** (swooper ×0.75, its own row box sized for 3 balls, trait
+  `snow_grow`): rolls in from a side, then down, swelling as it goes; once
+  past y 250 it picks up one more number (`AbilityHost.addBall`: its old
+  numbers stay, so a player who already added them just adds one more),
+  then rolls at half pace (a harder sum moves slower: owner's rule).
+- **Ice block** (3-ball lumberer, numbers frozen inside, trait
+  `snow_ice`): no brakes: 0.4× its kind's pace at the top, rising steadily
+  to 1.0× at the ship's line; low down it sweats and grows speed lines.
+- **Snowflake** (the bonus drifter, "eyes", trait `snow_gust`): calm for
+  2.2 s at 0.45× (read it then), then a 0.9 s gust at 2.2× (it turns).
+- **YETI** (mechanic `snow_stomp`, 7 answers of 3 balls, ×0.17, the slowest
+  boss: owner's rule): walks 45 px, raises its fists (1 s, it shakes), then
+  STOMPS (rings of shaking snow) and throws a snowball to the roomier side
+  (`AbilityHost.spawnMinion`; one of its snowballs up at a time, kept above
+  the grow line so it lands as a 2-ball sum). Its own sum never changes.
+  After an answer it dives into a drift (horns poking out) and bursts out on
+  the other side. An ace answers it every ~3 s and rarely sees a stomp;
+  slower players face its snowballs.
+- Tuning by bots (20 seeds, 3 fresh lives): first try (snowballs growing at
+  y 235 at full speed, ice up to 1.4×) cleared pilots 0/12, grown snowballs
+  and ice blocks causing nearly every hit. Slower snowballs that grow at
+  250 and roll at half pace afterwards, and ice from 0.4× to 1.0×: rookie
+  0/20 (out at ~45% of the path), pilot 6/20, ace 20/20 (2.5 lives left);
+  pilots' hits: ice 26, penguins 14, snowballs 13. Hard for pilots, as a
+  late level should be (the volcano: pilot 9/12 on the same script).
+**Level 9, THE NIGHT SKY (built 2026-10-19, on its own branch):** d 0.75 →
+0.9 over 140 s, sums only (all four operations wait for the shared
+operations piece). Creatures: **invaders** (darters, "eyes", a nod to the
+original Metic: they move only in steps on a beat, down / two steps one way
+/ down / two back, like Space Invaders; 60% come in a **row of 3** side by
+side (`MARCH.ROW`) that steps together; the beat quickens up to 50% as they
+come down; trait `night_march`), **big invaders** (3-ball lumberers, same
+march on a slower beat; `night_bigMarch`), **comets** (swoopers, "chain":
+the numbers ride in the tail; once in from the side they keep flying on a
+slant and bounce off the edges and off other creatures; ×0.9;
+`night_bounce`), **UFOs** (strafers, ×0.95: every 1.3 s of patrol their
+lights spin, then they vanish and reappear 120 px toward the roomier side;
+`night_warp`), and the bonus **shooting star** (drifter, "eyes": crosses
+1.7× faster, falling a little, and burns out from 45% to 80% of the way:
+make a wish in time; `night_wish`). Boss **THE MOON** (mechanic
+`night_phases`, 6 answers of 3 balls, ×0.3): a shadow sweeps across its
+face (full → waning from the left → new → waxing out to the right) and its
+numbers show only where it's lit, so they go dark one by one; each answer
+makes the full moon shorter and the dark longer; after an answer it slips
+behind a cloud. Bots (20 seeds, 3 fresh lives): rookie 0/20 (out at ~30% of
+the path), pilot 8/20, ace 20/20 (2.5 lives left); comets cause about half
+of the hits. The Moon never reaches the ship in bot runs: it is a reading
+(memory) fight, ~30–45 s. Shared changes, all no-ops elsewhere:
+`SpeciesDef.MARCH.ROW` (Swarm `marchInRow`), `Ability.ballCover(i, n)` (per
+ball cover, default = `cover`; DoodleWorld draws it per ball). Rules
+`config/levels/night.ts`, `objects/nightTraits.ts`, `objects/moon.ts`;
+looks `renderDoodle/levels/night.ts`; test `sim/night.test.ts`.
 
 ### Level 2, THE POND (built 2026-10-18)
 
@@ -302,13 +420,43 @@ While both halves are up no minions come (the boss phase allows 2 unsolved).
 Bots (20 seeds): see the AGENTS.md Decision Log. Planned math: + and −
 (subtraction comes as its own shared piece).
 
+### Level 10: THE KID'S BEDROOM, the finale (built 2026-10-19, sums only)
+`config/levels/bedroom.ts` (rules), `objects/bedroom.ts` (its traits and
+boss), `renderDoodle/levels/bedroom.ts` (looks), `sim/bedroom.test.ts`.
+Path 160 s (the owner found long paths boring), d 0.8 → 0.95, seed 1010.
+Warm lamp-lit paper with toy blocks, crayons, socks, a braided rug, star
+stickers and a moon night light. At night the toys come alive:
+| Creature | Kind | Personality |
+| --- | --- | --- |
+| Toy soldier | darter, ×0.6 | his drum and his hat badge are the numbers ("chain"); trait `bedroom_windup`: marches, runs down (slower and slower), stands still while his key is wound, marches on; comes in lines of 3 (`MARCH`, 25%) that stop and start together |
+| Jack-in-the-box | strafer | shut, his numbers are inside; trait `bedroom_jack`: cranks (shakes at the end: the telegraph), then POP: the jack's eyes (the numbers) spring out and the box jumps 80 px closer; out 2.1 s, then he squeezes back in. It moves only when it pops |
+| Rubber ball | swooper | two painted spots are the numbers ("eyes"); trait `bedroom_bounce`: rolls in from a side, then bounces down 44 px a bounce, off the page's edges and off other toys |
+| Teddy bear | lumberer, ×0.8 | three tummy buttons (`cluster`): the page's hard sums; trait `bedroom_nap`: waddles side to side, yawns, then naps 1.5 s (holds still) |
+| Paper plane (bonus) | drifter | a number on each wing ("wings"); trait `bedroom_loop`: loops the loop every 2.6 s; the nod to the earlier sky levels |
+
+**Boss, UNDER-THE-BED MONSTER** (mechanic `bedroom_underbed`, 3-ball
+sums): a bed creeping down the page with the monster under it. Only its
+three eyes (the numbers) peek out of the dark, and they duck back in on a
+rhythm (real time, like the Blinker). After each answer it scoots across
+and up and, as it comes back up, flings a toy out beside the bed (a
+soldier, then a ball…: `AbilityHost.spawnCreature`). Its 4th answer flips
+the bed: **OUT FROM UNDER THE BED** (`BossDef.PART`, plain "burrow"), the
+monster in full, 3 more answers, no hiding, so faster (×0.32 vs the bed's
+×0.18: 7 answers in all, the slowest boss). Beating it ends the story (the
+last level in `LEVELS`).
+Bots (20 seeds, 3 fresh lives): rookie 0/20 (out at ~27% of the path),
+pilot 1/20 (~67%), ace 20/20 (2.5 lives left); pilots are hit most by teddy
+bears, then balls and soldiers. Jacks never hit anyone: they hide, and
+they are slow. Planned math once operations land: all four, mixed.
+
 ## 9. Decisions (owner, 2026-10-18)
 
 1. **Math:** levels 1–2 sums only; operations widen as levels go on; sum
    levels use 4+ ball monsters.
 2. **Lives:** carried across levels (arcade).
 3. **Power:** picked before each level; ships stay looks.
-4. **Length:** 3–4 min per level, ~25–35 min for the run.
+4. **Length:** 3–4 min per level, ~25–35 min for the run. *Changed
+   2026-10-19 (playtest): ~2 min per level, boss included.*
 5. **Goal:** a scrolling path that ends at the boss (path = timer).
 6. **Game over:** back to level 1.
 7. **Levels:** the 10 in §3, in that order, open to change.

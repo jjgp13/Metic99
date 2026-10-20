@@ -58,12 +58,44 @@ export interface SpeciesDef {
   /** × its kind's speed (default 1): a creature whose trait makes it harder
    * to beat moves slower (owner's rule, like ABILITY.SPEED). */
   SPEED?: number;
+  /** Readability box instead of its kind's, with its balls in a row (like
+   * BossDef.BOX): a creature whose sum grows (AbilityHost.addBall) gets a
+   * box that already fits its last ball, so growing never breaks the rule. */
+  BOX?: { HALF_W: number; BALLS_Y: number; BOTTOM: number };
   /** Sometimes comes in a marching line, in step: up to SIZE of them, with
    * chance CHANCE per spawn (a line skips the unsolved cap but not the
-   * threat budget). */
-  MARCH?: { SIZE: number; CHANCE: number };
+   * threat budget). One behind the other, or side by side with ROW. */
+  MARCH?: { SIZE: number; CHANCE: number; ROW?: boolean };
   /** One line shown the first time it appears in a run. */
   INTRO: string;
+}
+
+/**
+ * One stretch of a level's wave (owner's playtests: "small spikes and then
+ * rest, then increase gradually, then a burst and then rest again", and
+ * each peak bigger than the one before, back to the same base between):
+ * - rest: back to the base (WavesDef.BASE sums at once, slow spawns);
+ * - spike: a push held at its HEIGHT;
+ * - ramp: climbs from the base to its HEIGHT across the stretch;
+ * - burst: the level's top (WavesDef.PEAK sums at once, fast spawns).
+ * HEIGHT is how hard a push is, from 0 (the base) to 1 (a burst).
+ */
+export type WaveKind = "rest" | "spike" | "ramp" | "burst";
+
+/** Its share of the path (any unit: the shares are scaled to PATH_MS). */
+export type WaveSegment =
+  | { KIND: "rest" | "burst"; SHARE: number }
+  | { KIND: "spike" | "ramp"; SHARE: number; HEIGHT: number };
+
+/** How a level's pressure comes and goes along its path. The profile is the
+ * shape (shared by every level); BASE and PEAK are the level's scale. */
+export interface WavesDef {
+  /** The stretches in order, from the start of the path to the boss. */
+  PROFILE: readonly WaveSegment[];
+  /** Unsolved sums at once while resting. */
+  BASE: number;
+  /** Unsolved sums at once in a burst (a push of HEIGHT h: in between). */
+  PEAK: number;
 }
 
 export interface LevelDef {
@@ -73,10 +105,13 @@ export interface LevelDef {
   PAGE: string;
   /** Same seed every attempt: the same aliens come, so a level can be learned. */
   SEED: number;
-  /** Field time (ms) from the start of the path to the boss. */
+  /** Path time (ms) from its start to the boss: field time, but never less
+   * than STORY.PATH_MIN_PACE of real time (sim/director.ts). */
   PATH_MS: number;
-  /** Difficulty d at the start and at the end of the path (paramsAt). */
+  /** Difficulty d at the start and at the end of the path (paramsAt): how
+   * fast and how big the sums are. How many come at once is the wave's. */
   D: { FROM: number; TO: number };
+  WAVES: WavesDef;
   /** Most balls a sum may carry, instead of what the d range gives (3+ ball
    * sums ride on lumberers, one on screen at a time). */
   MAX_BALLS?: number;
@@ -88,6 +123,35 @@ export interface LevelDef {
   SPECIES: Partial<Record<AlienKind, SpeciesDef>>;
   BOSS: BossDef;
 }
+
+/**
+ * The waves' numbers (WaveKind). A stretch pushes with an intensity from 0
+ * (rest) to 1 (burst), and the intensity sets the two knobs the owner
+ * picked: how many unsolved sums may be up at once (BASE → PEAK), and how
+ * fast they come. Speed and sum size keep following the level's D underneath.
+ */
+export const WAVES = {
+  /** × the spawn interval at rest and at a full burst. */
+  INTERVAL_X: { REST: 1.5, BURST: 0.55 },
+} as const;
+
+/**
+ * The owner's wave: three pushes, each bigger than the one before, with a
+ * rest back to the base after each, then a breath before the boss. Shares
+ * are bars of level 1's song (120 BPM: a bar = 2 s, an 88 s path), in
+ * 4-bar phrases so each stretch is one chord progression or two
+ * (`npm run waves` prints every level's timeline in seconds).
+ */
+export const OWNER_WAVE: readonly WaveSegment[] = [
+  { KIND: "rest", SHARE: 4 }, // warm-up under the level banner
+  { KIND: "spike", SHARE: 4, HEIGHT: 0.35 }, // wave 1: a taste
+  { KIND: "rest", SHARE: 4 },
+  { KIND: "spike", SHARE: 8, HEIGHT: 0.7 }, // wave 2: bigger, longer
+  { KIND: "rest", SHARE: 4 },
+  { KIND: "ramp", SHARE: 8, HEIGHT: 1 }, // wave 3: climb to the top…
+  { KIND: "burst", SHARE: 8 }, // …and hold it
+  { KIND: "rest", SHARE: 4 }, // a breath before the boss
+];
 
 /** Story music (scenes/levelMusic.ts): a path and a boss track per level. */
 export const MUSIC = {
@@ -106,6 +170,10 @@ export const STORY = {
   CLEAR_MIN_MS: 1500,
   /** Room between two beetles of a marching line (on top of READ_GAP). */
   MARCH_GAP: 6,
+  /** The path follows field time (SLOW and FREEZE hold it back), but never
+   * falls further behind the game clock than this pace, so a level that is
+   * played with a time power on stays about as long (owner's pick). */
+  PATH_MIN_PACE: 0.8,
   /** Stages planned (docs/SOLO_MODES_DESIGN.md §3); LEVELS holds the built ones. */
   STAGES: 10,
 } as const;

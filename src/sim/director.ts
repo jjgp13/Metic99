@@ -1,17 +1,22 @@
-import { ENEMY, STORY, type AlienKind, type BossDef, type LevelDef, type SpeciesDef } from "../config/constants";
+import { ENEMY, STORY, WAVES, type AlienKind, type BossDef, type LevelDef, type SpeciesDef } from "../config/constants";
 import { difficultyAt, paramsAt, type DifficultyParams } from "../config/difficulty";
 import { unlockedAbilities, type AbilityKind } from "../objects/abilities";
+import { waveAt, type WavePoint } from "./waves";
 
 /** The kinds a 2-ball spawn picks from, by weight. */
 export type TwoBallKind = keyof typeof ENEMY.TWO_BALL_KINDS;
 
-/** Where a field is when its director is asked (all read from the sim). */
-export interface DirectorState {
+/** The two clocks a story level's path is measured on. */
+export interface PathClock {
   /** The game clock: ms of play (it keeps running through freezes). */
   elapsedMs: number;
   /** Field time: ms the field actually moved (stopped while frozen, slower
    * under SLOW). A story level's path advances with it. */
   fieldMs: number;
+}
+
+/** Where a field is when its director is asked (all read from the sim). */
+export interface DirectorState extends PathClock {
   score: number;
   /** Battle pressure from the match (0 in solo play). */
   dMatch: number;
@@ -33,9 +38,11 @@ export interface SpawnDirector {
   /** Weights for picking a 2-ball spawn's kind. */
   readonly twoBallKinds: Readonly<Record<TwoBallKind, number>>;
   /** Whether bonus drifters cross the field right now. */
-  drifters(fieldMs: number): boolean;
+  drifters(clock: PathClock): boolean;
   /** How far along a story level's path (0..1), or null without a path. */
-  progress(fieldMs: number): number | null;
+  progress(clock: PathClock): number | null;
+  /** Where a story level's path is in its wave, or null without a path. */
+  wave(clock: PathClock): WavePoint | null;
   /** The boss met at the end of the path, or null. */
   readonly boss: BossDef | null;
   /** What a monster kind is on this page (its personality), or null. */
@@ -62,6 +69,10 @@ export class EndlessDirector implements SpawnDirector {
     return null;
   }
 
+  wave(): null {
+    return null;
+  }
+
   species(): null {
     return null;
   }
@@ -71,9 +82,11 @@ export class EndlessDirector implements SpawnDirector {
 
 /**
  * A story level (config/tuning/story.ts): difficulty follows the path from
- * D.FROM to D.TO instead of the score, the roster is the level's own, and
- * at the end of the path the boss comes in. The path runs on field time, so
- * freezes and SLOW hold it back too.
+ * D.FROM to D.TO instead of the score, the level's wave decides how many
+ * sums come at once and how fast, the roster is the level's own, and at the
+ * end of the path the boss comes in. The path runs on field time, so
+ * freezes and SLOW hold it back, but never below STORY.PATH_MIN_PACE of
+ * the game clock, so a level stays about as long however it is played.
  */
 export class LevelDirector implements SpawnDirector {
   readonly boss: BossDef;
@@ -87,25 +100,41 @@ export class LevelDirector implements SpawnDirector {
   }
 
   difficulty(s: DirectorState): DifficultyParams {
-    const p = this.progress(s.fieldMs);
+    const p = this.progress(s);
     const { FROM, TO } = this.level.D;
     const d = FROM + (TO - FROM) * p;
     const base = paramsAt(d, d);
     const params = { ...base, maxBalls: this.level.MAX_BALLS ?? base.maxBalls };
     // Boss phase: the boss and a minion or two, no more.
-    return p < 1 ? params : { ...params, maxUnsolved: STORY.BOSS_PHASE_UNSOLVED };
+    if (p >= 1) return { ...params, maxUnsolved: STORY.BOSS_PHASE_UNSOLVED };
+    // The wave: from the level's base and slow spawns (rest) to its peak
+    // and fast spawns (burst).
+    const w = this.wave(s).intensity;
+    const lerp = (from: number, to: number) => from + (to - from) * w;
+    const { BASE, PEAK } = this.level.WAVES;
+    return {
+      ...params,
+      maxUnsolved: Math.round(lerp(BASE, PEAK)),
+      spawnInterval: params.spawnInterval * lerp(WAVES.INTERVAL_X.REST, WAVES.INTERVAL_X.BURST),
+    };
+  }
+
+  /** Where the path is in the level's wave right now. */
+  wave(clock: PathClock): WavePoint {
+    return waveAt(this.level.WAVES.PROFILE, this.progress(clock));
   }
 
   abilities(): readonly AbilityKind[] {
     return this.level.ABILITIES;
   }
 
-  drifters(fieldMs: number): boolean {
-    return this.level.DRIFTERS && this.progress(fieldMs) < 1;
+  drifters(clock: PathClock): boolean {
+    return this.level.DRIFTERS && this.progress(clock) < 1;
   }
 
-  progress(fieldMs: number): number {
-    return Math.min(1, fieldMs / this.level.PATH_MS);
+  progress({ fieldMs, elapsedMs }: PathClock): number {
+    const pathMs = Math.max(fieldMs, elapsedMs * STORY.PATH_MIN_PACE);
+    return Math.min(1, pathMs / this.level.PATH_MS);
   }
 
   species(kind: AlienKind): SpeciesDef | null {

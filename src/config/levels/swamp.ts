@@ -1,5 +1,5 @@
 import type { BlinkTiming } from "../../objects/abilities";
-import type { BossDef, LevelDef } from "../tuning/story";
+import { OWNER_WAVE, type BossDef, type LevelDef } from "../tuning/story";
 
 /**
  * Level 4: THE MUD SWAMP (doodles: renderDoodle/levels/swamp.ts; its own
@@ -90,11 +90,12 @@ export const SWAMP: LevelDef = {
   NAME: "THE MUD SWAMP",
   PAGE: "swamp",
   SEED: 1004,
-  PATH_MS: 200_000,
+  PATH_MS: 88_000,
   // Bots (20 seeds): pilot clears 15/20, ace 20/20, rookie 0/20 (out in ~1.5
   // min). Starts below level 3's end because every creature has a trait;
   // from d 0.5 (the last fifth) 3-ball turtles join.
   D: { FROM: 0.3, TO: 0.55 },
+  WAVES: { PROFILE: OWNER_WAVE, BASE: 1, PEAK: 3 },
   // Peepers (strafers), slime blobs (darters) and snails (swoopers). Slimes
   // are the rarest: their splitlings are what hits pilots most.
   TWO_BALL_KINDS: { darter: 0.3, strafer: 0.4, swooper: 0.3 },

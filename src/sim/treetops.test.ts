@@ -64,7 +64,7 @@ describe("story level 3: the treetops", () => {
   it("owls hide their numbers while perched, never while they swoop", () => {
     let hidden = 0;
     let hiddenSwooping = 0;
-    playLevel(5, "ace", (field) => {
+    for (const seed of [5, 1, 2, 3]) playLevel(seed, "ace", (field) => {
       for (const a of field.aliens) {
         if (!a.active || !(a.ability instanceof HeadTurn) || a.ability.cover < 1) continue;
         hidden++;
