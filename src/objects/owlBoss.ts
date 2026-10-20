@@ -1,30 +1,44 @@
-import { OWL_BLINK } from "../config/levels/treetops";
-import { Boss, blinkCover } from "./abilities";
+import { OWL_RIDDLE } from "../config/levels/treetops";
+import { Boss, type AbilityHost } from "./abilities";
+import type Alien from "./Alien";
 
 /**
- * The Great Owl (level 3's boss, MECHANIC "blink"): its two big eyes are its
- * numbers, and they blink on the Blinker's rhythm. It moves like every boss
- * (after an answer it flies to the other side, eyes shut, then perches), and
- * each answer makes it blink faster: the open phase shrinks by SHRINK_MS.
- * After every landing the rhythm starts over with a long first look, so the
- * new sum can always be read once.
+ * The Great Owl (level 3's boss, MECHANIC "riddle"): a wise owl asking
+ * "WHO?". Its two big eyes are its numbers, but only the first shows a
+ * digit: the second is a "?", and its belly shows the total ("= 8"). The
+ * answer is the missing number (3 + ? = 8: type 5), so its `result` is the
+ * second ball, not the sum (AbilityHost.rerollMissing keeps it unique).
+ * It moves like every boss: after an answer it flies to the other side
+ * (eyes shut while flying), perches and asks a new riddle.
+ *
+ * Its first riddle replaces the plain sum it was spawned with, at its first
+ * update (the same step, before anyone can read it). Without a host that
+ * can roll riddles (a test's stand-in) it stays a plain sum.
  */
-export class OwlBoss extends Boss {
-  private blinkMs = 0;
+export class WiseOwl extends Boss {
+  /** Its sum is a riddle (else a plain sum, if no riddle was free). */
+  riddle = false;
+  private asked = false;
 
-  update(delta: number): void {
+  update(delta: number, alien?: Alien, host?: AbilityHost): void {
     super.update(delta);
-    if (this.burrowing) {
-      this.blinkMs = 0; // flying: eyes shut (cover 1 from Boss)
-      return;
-    }
-    this.blinkMs += delta;
-    this.cover = blinkCover(this.blinkMs, { ...OWL_BLINK, OPEN_MS: this.openMs });
+    if (this.asked || !alien || !host) return;
+    this.asked = true;
+    this.newSum(alien, host);
   }
 
-  /** How long its eyes stay open now: shorter with every answer. */
-  get openMs(): number {
-    const answered = this.def.HP - this.hp;
-    return Math.max(OWL_BLINK.MIN_OPEN_MS, OWL_BLINK.OPEN_MS - answered * OWL_BLINK.SHRINK_MS);
+  /** A new riddle; if none is free it keeps the one it has. */
+  protected newSum(alien: Alien, host: AbilityHost): void {
+    if (host.rerollMissing?.(alien, OWL_RIDDLE.MIN_ANSWER)) this.riddle = true;
+    else if (!this.riddle) host.rerollSum(alien);
+  }
+
+  ballText(i: number, digit: number): string {
+    return this.riddle && i === 1 ? "?" : String(digit);
+  }
+
+  /** The total on its belly: what its two numbers add up to. */
+  total(alien: Alien): number {
+    return alien.digits.reduce((sum, d) => sum + d, 0);
   }
 }

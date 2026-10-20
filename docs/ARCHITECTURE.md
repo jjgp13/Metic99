@@ -315,6 +315,24 @@ fits here, and **what we didn't do**.
 - **Caution:** a missing file still costs one request and a console error
   per visit (dev servers answer with an HTML page, which fails to decode).
 
+### 2.20 Finite state machine (named phases)
+
+- **What:** an object is always in exactly one named phase, and a single
+  `switch` says what each phase does when it ends and which phase comes
+  next. Entering a phase also undoes what the previous one left running.
+- **Where:** `GiantMole.steer` in `objects/mole.ts`: `MolePhase` is
+  walk → duck → dig → peek → duck → …; each phase is one glide or hold, and
+  the next starts when it ends. The jack-in-the-box (`JackPhase` in
+  `objects/bedroom.ts`) works the same way.
+- **Why:** the mole's whole rhythm reads top to bottom in one place, and a
+  phase that can't happen (peeking while underground) can't be written.
+- **Caution:** a phase can be cut short from outside (an answer mid-peek
+  starts a dig). Whatever the old phase set up must be cancelled then:
+  `digTo` calls `alien.hold(0)`, or the rest of the peek's hold would keep
+  the mole underground.
+- **Instead of:** a handful of booleans (`peeking`, `digging`, …) that can
+  be true together by mistake.
+
 ---
 
 ## 3. Where to start when you want to…

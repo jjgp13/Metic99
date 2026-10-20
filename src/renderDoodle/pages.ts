@@ -58,6 +58,9 @@ export interface BossLook {
   /** Drawn on the page under every alien while the boss is up (a lamp's
    * beam, a shadow); `ctx` is in logical px. */
   under?(ctx: CanvasRenderingContext2D, boss: Alien, alpha: number): void;
+  /** Drawn over everything, with the number balls (a sum's total written on
+   * the boss); `ctx` is in logical px. */
+  over?(ctx: CanvasRenderingContext2D, boss: Alien, alpha: number): void;
 }
 
 /** A prop placed on the page: `pathY` px along the path from the start. */
