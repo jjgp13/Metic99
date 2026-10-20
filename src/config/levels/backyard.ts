@@ -1,4 +1,5 @@
-import { OWNER_WAVE, type BossDef, type LevelDef } from "../tuning/story";
+import type { BossDef, LevelDef } from "../tuning/story";
+import { OWNER_WAVE } from "../tuning/waves";
 
 /** Level 1's boss: a giant mole that digs around the backyard. */
 const GIANT_MOLE: BossDef = {

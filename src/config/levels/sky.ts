@@ -1,4 +1,5 @@
-import { OWNER_WAVE, type BossDef, type LevelDef } from "../tuning/story";
+import type { BossDef, LevelDef } from "../tuning/story";
+import { OWNER_WAVE } from "../tuning/waves";
 
 /*
  * Level 7: THE WINDY SKY (doodles: renderDoodle/levels/sky.ts; rules for its

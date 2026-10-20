@@ -1,5 +1,6 @@
 import type { BlinkTiming } from "../../objects/abilities";
-import { OWNER_WAVE, type BossDef, type LevelDef } from "../tuning/story";
+import type { BossDef, LevelDef } from "../tuning/story";
+import { OWNER_WAVE } from "../tuning/waves";
 
 /*
  * Level 6: THE VOLCANO (doodles: renderDoodle/levels/volcano.ts; rules for

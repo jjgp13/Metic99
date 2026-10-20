@@ -1,4 +1,5 @@
-import { OWNER_WAVE, type BossDef, type LevelDef } from "../tuning/story";
+import type { BossDef, LevelDef } from "../tuning/story";
+import { OWNER_WAVE } from "../tuning/waves";
 
 /*
  * Level 9: THE NIGHT SKY (doodles: renderDoodle/levels/night.ts; rules for
