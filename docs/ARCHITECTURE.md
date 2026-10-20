@@ -189,6 +189,9 @@ fits here, and **what we didn't do**.
 - **Where:** `scenes/GameScene.ts`, `ui/hud/*.ts`.
 - **Why:** each screen part (energy meter, answer display, pause overlay,
   game-over screen) is one short file you can read alone.
+- **Components get data, not choices:** `TopHud` is handed its life
+  icon's texture key; `GameScene` decides it from the art mode and the
+  picked ship (`lifeIconKey`), so the HUD part doesn't depend on either.
 - **Instead of:** one scene class drawing everything (what `GameScene` was
   before the 2026-10-08 refactor: ~1300 lines, ten jobs).
 

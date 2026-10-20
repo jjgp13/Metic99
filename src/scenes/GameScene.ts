@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { DOODLE, LEADERBOARD, LEVEL_CLEAR, LEVELS, MATCH, MUSIC, POWER_CUE, RECOVERY, STORY, TARGET_STRATEGIES, type TargetStrategy } from "../config/constants";
+import { artMode } from "../config/artMode";
 import { inputMode } from "../config/inputMode";
 import type { InkEvent } from "../handwriting/inkReader";
 import type Alien from "../objects/Alien";
@@ -9,7 +10,8 @@ import { rankFor, recordRun } from "../services/masteryStats";
 import { hitRecord, initPlaytestLog, logRun, type InputSource, type RunExtras } from "../services/playtestLog";
 import { clearSavedRun, loadStoryProgress, recordLevel, recordStoryRun, saveRun as saveStoryRun } from "../services/storyProgress";
 import { newShips, rewardLine } from "../services/shipUnlocks";
-import type { ShipChoice } from "../config/ships";
+import { selectedShip, type ShipChoice } from "../config/ships";
+import { shipIconFrames } from "../renderDoodle/shipIcons";
 import type { Bot } from "../sim/Bot";
 import { ANSWER_MAX_DIGITS, type Field, type FieldEvent, type FieldInput } from "../sim/Field";
 import type { Match, MatchEvent } from "../sim/Match";
@@ -30,7 +32,7 @@ import { PauseOverlay } from "../ui/hud/PauseOverlay";
 import { Popups } from "../ui/hud/Popups";
 import { Reticle } from "../ui/hud/Reticle";
 import { SendButton } from "../ui/hud/SendButton";
-import { TopHud } from "../ui/hud/TopHud";
+import { LIFE_ICON_PX, TopHud } from "../ui/hud/TopHud";
 import { onKeyDown } from "../ui/keyboard";
 import { createFieldView, type FieldView } from "./fieldView";
 import type { EndingData, EndingNext } from "./EndingScene";
@@ -168,6 +170,7 @@ export default class GameScene extends Phaser.Scene {
     this.ducker = new Ducker(this);
     this.topHud = new TopHud(this, this.ducker, {
       lives: this.field.lives,
+      lifeIcon: lifeIconKey(this.textures),
       autopilotLevel: this.autopilot?.level ?? null,
       onPause: () => this.togglePause(),
     });
@@ -712,4 +715,12 @@ export default class GameScene extends Phaser.Scene {
 function storyBoards(total: number, levelScores: number[]): BoardScore[] {
   const stages = levelScores.map((score, i) => ({ board: stageBoard(i), score, label: `stage ${i + 1}` }));
   return [{ board: LEADERBOARD.STORY_RUN_BOARD, score: total, label: "run" }, ...stages.filter((s) => s.score > 0)];
+}
+
+/** The picture for each life in the top HUD: the picked ship's doodle in
+ * doodle art (one boil frame, drawn at 2× so it stays sharp), the old ship
+ * sprite in 3D art. */
+function lifeIconKey(textures: Phaser.Textures.TextureManager): string {
+  if (artMode() !== "doodle") return "life";
+  return shipIconFrames(textures, selectedShip().model, 2 * LIFE_ICON_PX)[0];
 }

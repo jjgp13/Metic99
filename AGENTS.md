@@ -58,7 +58,8 @@ loop. See the Decision Log.
   GameScene talks to a `FieldView` (`scenes/fieldView.ts`) that DoodleWorld
   and World3D both fill from the same snapshot; `?art=3d` picks the 3D view.
   Each ship has its own doodle (`SHIPS` in `recipes.ts`), also shown in the
-  menu picker (`renderDoodle/shipIcons.ts`).
+  menu picker and as the top HUD's life icons (`renderDoodle/shipIcons.ts`;
+  `?art=3d` keeps the old life sprite).
   **Ships the story unlocks** (`RENDER3D.SHIPS[].beat`, a look only like
   every ship): FALCON, DART and POD from the start; beating the Great Owl
   (stage 3) unlocks LEAF GLIDER, the Dragon (6) LAVA ROCKET, the Moon (9)
@@ -1135,9 +1136,9 @@ Newest first. Format: `YYYY-MM-DD — decision — rationale`.
 - **2026-10-21 — Playtest round 2 merged into master: one music player.**
   Round 2 (energy rework, boss tricks, level-clear sequence, ending,
   credits, ship unlocks) had its own song helpers; master's shared player
-  (scenes/music.ts) now plays every song, the ending's included (once,
+  (`scenes/music.ts`) now plays every song, the ending's included (once,
   on through name entry and the map). Kept from round 2: the level-clear
-  jingle (scenes/extraMusic.ts) and its waves module (	uning/waves.ts),
+  jingle (`scenes/extraMusic.ts`) and its waves module (`tuning/waves.ts`),
   now holding master's escalating waves.
 
 - **2026-10-20 — New soundtrack in; one shared music player for every
@@ -1186,6 +1187,12 @@ Newest first. Format: `YYYY-MM-DD — decision — rationale`.
   (`npm run bots:story` now shows both when and where hitters came in).
   Two level tests assumed a calm field (a row's step held by the
   readability guard, a snowball lifted by pushback) and were loosened.
+- **2026-10-20 — Life icons show the picked ship.** They always drew the
+  old FALCON sprite. GameScene picks the picture (the ship's doodle, one
+  boil frame, or the sprite in 3D art) and hands TopHud a texture key,
+  which TopHud fits into a 22 px slot (owner's pick over TopHud reading
+  the art mode itself, or the FieldView supplying it).
+
 - **2026-10-20 — The power shows when it's ready (owner's Playtest 3
   note: "the energy bar is very small").** Replayed: in dangerous moments
   the power was ready but off 12–74% of the time per level, the owner took
