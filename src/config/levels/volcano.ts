@@ -63,6 +63,7 @@ export const DRAGON_BREATH = {
 /** Level 6's boss: a dragon that breathes fire over its own numbers. */
 const DRAGON: BossDef = {
   NAME: "DRAGON",
+  INTRO: "FIRE BREATH · answer before it breathes",
   MODEL: "boss_dragon",
   MECHANIC: "breath",
   BOX: { HALF_W: 46, BALLS_Y: 46, BOTTOM: 40 },

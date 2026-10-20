@@ -84,6 +84,7 @@ export const MOON_PHASES = {
 /** Level 9's boss: the Moon, read only where it is lit. */
 const MOON: BossDef = {
   NAME: "THE MOON",
+  INTRO: "PHASES · read its numbers while they're lit",
   MODEL: "boss_moon",
   MECHANIC: "night_phases",
   // Its numbers ride across the upper half of its face.

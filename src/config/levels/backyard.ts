@@ -23,6 +23,7 @@ export const MOLE_HILLS = {
 /** Level 1's boss: a giant mole that pops out of its molehills. */
 const GIANT_MOLE: BossDef = {
   NAME: "GIANT MOLE",
+  INTRO: "WHACK-A-MOLE · watch the hill that shakes",
   MODEL: "boss_mole",
   MECHANIC: "molehills",
   BOX: { HALF_W: 42, BALLS_Y: 50, BOTTOM: 36 },

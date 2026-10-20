@@ -96,6 +96,7 @@ export const STORM = {
  * reaches the ship it splashes (a life), evaporates back up and falls again. */
 const RAINDROP: BossDef = {
   NAME: "RAINDROP",
+  INTRO: "RAINDROPS · answer every drop to win",
   MODEL: "boss_raindrop",
   MECHANIC: "sky_raindrop",
   BOX: { HALF_W: 19, BALLS_Y: 10, BOTTOM: 22 },
@@ -114,6 +115,7 @@ const RAINDROP: BossDef = {
 /** Level 7's boss: a thundercloud that rains raindrops (its minions). */
 const STORM_CLOUD: BossDef = {
   NAME: "STORM CLOUD",
+  INTRO: "THUNDER · every rumble drops a raindrop",
   MODEL: "boss_storm",
   MECHANIC: "sky_storm",
   BOX: { HALF_W: 52, BALLS_Y: 30, BOTTOM: 30 },

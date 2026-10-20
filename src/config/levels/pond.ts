@@ -34,6 +34,7 @@ export interface BigFrogDef extends BossDef {
 /** Level 2's boss: a big, hungry frog that croaks and leaps from pad to pad. */
 const BIG_FROG: BigFrogDef = {
   NAME: "BIG FROG",
+  INTRO: "HUNGRY · each snack it eats adds a number",
   MODEL: "boss_frog",
   MECHANIC: "leap",
   // Its balls ride on its back, at the top of its body.

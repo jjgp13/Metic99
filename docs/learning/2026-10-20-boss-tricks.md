@@ -42,7 +42,7 @@ before any rule changed.
 molehills (numbers readable, still), ducks, and digs to another hill. That
 hill shakes and spits dirt while the mole comes, which is the telegraph.
 Each new hill is 30 px closer. After an answer it digs to a hill higher up.
-**Pattern:** finite state machine (§2.19): `MolePhase` = walk / peek /
+**Pattern:** finite state machine (§2.20): `MolePhase` = walk / peek /
 duck / dig, one `switch` in `GiantMole.steer`.
 **Why this way:** every phase is one glide or one hold, and `steer` runs on
 field time. FREEZE and SLOW therefore hold the rhythm, and it stops while
