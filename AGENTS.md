@@ -1005,6 +1005,14 @@ dMatch)`; it is 0 in solo play.
 
 Newest first. Format: `YYYY-MM-DD — decision — rationale`.
 
+- **2026-10-20 — Level songs follow the level's waves (docs/MUSIC_PROMPTS.md).**
+  Owner's ask: the first soundtrack looped a short phrase; songs should
+  rise and fall with the difficulty. Each path song is 44 bars, one per
+  unit of the shared wave shape, with BPM = 10 560 ÷ path seconds, so its
+  sections (calm, wave 1, breath, wave 2, breath, climb, peak, settle)
+  play with their waves. Chords move away from home as intensity grows;
+  the peak changes key. Sync is approximate (freezes stretch the path).
+
 - **2026-10-20 — Story waves escalate: each peak bigger, every rest back to
   the base, bigger swings level by level (owner's ask).** A push now
   carries its own HEIGHT (wave 1 .35, wave 2 .7, then a climb to a full
