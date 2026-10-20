@@ -211,6 +211,7 @@ src/
     abilities.ts      Monster abilities (Blinker, Shielded, Splitter): pure
                       state with update/steer/onHit/onKilled hooks + `AbilityHost`.
     traits.ts, bosses.ts  Story registries: creature traits, boss mechanics.
+    mole.ts, owlBoss.ts, caveTroll.ts, …  One file per boss mechanic.
     pondCreatures.ts  Level 2's rules: Hop, Dart, Dive traits + the BigFrog.
     Bullet.ts         Pure bullet state {x, y, active}.
   renderDoodle/        The default view: DoodleWorld (FieldView), recipes.ts
@@ -691,7 +692,11 @@ Green=multiplication, Yellow=division.
   The boss (`Boss` ability) takes `HP` answers: each but the last rolls a
   new sum and burrows to the other side and up (numbers hidden while it
   digs), then holds still to be read; reaching the ship costs a life and
-  sends it back up; BLAST doesn't touch it. The last answer clears the
+  sends it back up; BLAST doesn't touch it. **Every boss has one signature
+  trick** on top (owner: that's what makes a boss memorable; table in
+  docs/SOLO_MODES_DESIGN.md §4): it changes how the fight feels, never its
+  HP, with numbers readable when they count and a telegraph before danger.
+  The last answer clears the
   level (`levelCleared`, the clear sequence below, then the next level
   with the same lives, score and energy). Game over = back to the story map (every run starts at
   level 1). The top bar shows the path's progress; the page scrolls
@@ -748,15 +753,18 @@ Green=multiplication, Yellow=division.
   rising blip fanfare) and is not asked for again that visit.
   Built: level 1, THE BACKYARD (now 100 s, d 0.1 → 0.35; beetles whose eyes are
   the numbers and sometimes march in pairs, worms made of numbers, a
-  butterfly that folds its wings over its numbers; boss GIANT MOLE, 5
-  answers of 3 balls). Bots: rookie clears 16/20, pilot and ace 20/20.
+  butterfly that folds its wings over its numbers; boss GIANT MOLE, 4
+  answers of 3 balls (5 before its trick), whack-a-mole: it peeks out of one of three molehills,
+  ducks and digs to another, which shakes first; `objects/mole.ts`). Bots: rookie clears 16/20, pilot and ace 20/20.
   Level 2, THE POND (3:20, d 0.1 → 0.28, sums of 2–4 balls via
   `LevelDef.MAX_BALLS`): goldfish whose numbers are bubbles, swimming in
   schools of 3; dragonflies whose eyes are the numbers, darting down in
   zips with hovers (trait `dart`); frogs with 3–4 spots (`cluster` layout)
   that sit longer the more spots they carry (trait `hop`); a duck that dives
-  and pops up further along (trait `dive`); boss BIG FROG (6 answers of 4
-  balls, `leap`: sits, croaks, leaps from pad to pad). Rules for the pond's
+  and pops up further along (trait `dive`); boss BIG FROG (6 answers of 3–4
+  balls, `leap`: sits, croaks, leaps from pad to pad; hungry: while it
+  croaks its tongue aims at the nearest creature, then eats it and its sum
+  grows a number, via `AbilityHost.preyNear` / `swallow` / `addBall`). Rules for the pond's
   traits/boss in `objects/pondCreatures.ts`; they move themselves through
   `Ability.steer(alien, fieldDelta)` (field time). Bots: rookie 11/20,
   pilot and ace 20/20.
@@ -765,8 +773,10 @@ Green=multiplication, Yellow=division.
   acorns (numbers) in their paws; owls whose eyes are the numbers turn
   their heads away while perched, never while they swoop; birds in flocks
   of up to three, a number on each wing (0.6× speed); a hummingbird bonus
-  that darts and hovers; boss GREAT OWL (6 answers, eyes = numbers, blinks
-  faster after each answer, flies to another branch). Traits that move
+  that darts and hovers; boss GREAT OWL (6 riddles, `riddle`: its eyes
+  show "3" and "?", its belly "= 8", and the answer is the missing number,
+  so its `result` is not its sum: `AbilityHost.rerollMissing`,
+  `Ability.ballText`; flies to another branch after each). Traits that move
   their creature use `Ability.steer` (field time, glideTo/hold only).
   Bots: rookie clears 10/20, pilot 19/20, ace 20/20.
   Level 4, THE MUD SWAMP (200 s, d 0.3 → 0.55; slime blobs that pop in
@@ -1060,6 +1070,27 @@ dMatch)`; it is 0 in solo play.
 ## Decision Log
 
 Newest first. Format: `YYYY-MM-DD — decision — rationale`.
+
+- **2026-10-20 — Every boss gets a signature trick; the three plain ones
+  got theirs (owner's picks).** Audit: 7 bosses already had one (split,
+  lamp, breath, rain, stomp-and-throw, moon phases, under-the-bed); the
+  mole, frog and owl were "answer, move away" (the owl's blink repeated the
+  butterfly's). Owner picked from two each: **mole = whack-a-mole** (three
+  molehills, the next one shakes; over "it hears wrong answers"), **frog =
+  hungry** (tongue aims while it croaks, eats a creature, its sum grows a
+  number; over a belly-flop that shoves creatures back), **owl = "WHO?"
+  riddles** (3 + ? = 8, answer the missing number; over a hoot that
+  freezes the page). Rule: a trick changes the feel, not the HP. The
+  hiding made mole fights ~5 s longer, so it takes 4 answers (was 5); the
+  frog starts at 3 numbers (was 4); the owl stopped blinking (riddle + blink
+  was harder, not different) and moves at 0.35 (was 0.4). New hooks, all
+  no-ops elsewhere (levels 4–10 bots identical): `Boss.newSum`,
+  `Ability.ballText`, `BossLook.over`, optional `AbilityHost.preyNear` /
+  `swallow` / `rerollMissing`; bots answer `alien.result` (the owl's answer
+  isn't its sum). Bots (24 seeds, rookie/pilot/ace clears, SLOW then
+  FREEZE): mole 6/24/24 → 6/24/24 and 11/24/24 → 15/24/24, fight 38 → 37 s
+  (rookie); frog 4/22/24 → 8/21/24 and 9/23/24 → 13/24/24; owl 17/24/24 →
+  17/24/24 and 19/24/24 → 18/24/24. Not yet playtested by the owner.
 
 - **2026-10-20 — The energy meter is a small vertical bar, top right
   (owner's phone playtest).** The long horizontal meter under the progress

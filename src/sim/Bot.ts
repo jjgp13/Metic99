@@ -196,7 +196,7 @@ export class Bot {
     if (!this.rng.chance(this.skill.FOCUS)) return;
     this.switches++;
     this.answers--; // the dropped answer was never entered
-    if (plan.answer !== sumOf(plan.alien)) this.slips--;
+    if (plan.answer !== plan.alien.result) this.slips--;
     this.plan = this.read(worst);
   }
 
@@ -278,7 +278,7 @@ export class Bot {
 
   private read(alien: Alien): Plan {
     const s = this.skill;
-    const sum = sumOf(alien);
+    const sum = alien.result; // what it shows adds up to (the Great Owl: its missing number)
     this.weighed.add(alien);
     const think =
       (s.THINK_BASE + s.PER_ADD * (alien.ballCount - 1) + s.PER_CARRY * carries(alien.digits)) *
@@ -314,10 +314,6 @@ export class Bot {
 function danger(a: Alien): number {
   if (!a.lethal) return -Infinity;
   return a.y + (a.mode === "windup" || a.mode === "dive" ? BOT.DIVE_DANGER_PX : 0);
-}
-
-function sumOf(a: Alien): number {
-  return a.digits.reduce((t, d) => t + d, 0);
 }
 
 /** How many times a running sum crosses a ten (7 + 5: once). */
