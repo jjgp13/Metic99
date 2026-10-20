@@ -71,7 +71,14 @@ describe("saved story run", () => {
       score: 1234,
       levelScores: [400, 834],
       energy: 62,
+      playedMs: 0,
     });
+  });
+
+  it("keeps the run's play time, and reads an old save without it as 0", () => {
+    expect(parseSavedRun({ level: 3, lives: 2, score: 10, playedMs: 361_500 })?.playedMs).toBe(361_500);
+    expect(parseSavedRun({ level: 3, lives: 2, score: 10 })?.playedMs).toBe(0);
+    expect(parseSavedRun({ level: 3, lives: 2, score: 10, playedMs: -5 })?.playedMs).toBe(0);
   });
 
   it("reads a run saved before energy carried over as an empty bar, and caps junk", () => {

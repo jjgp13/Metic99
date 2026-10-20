@@ -184,13 +184,34 @@ export const ENDING = {
   MOVE_MS: 800,
   /** The crayon's scribble up and down while coloring. */
   SCRIBBLE_HZ: 4,
-  /** A tap leaves only after this long (it may still be the clear card's tap). */
+  /** Taps count only after this long (the first may still be the clear
+   * card's tap). A tap on the drawing turns to the credits; it never leaves. */
   TAP_AFTER_MS: 2000,
   FADE_IN_MS: 900,
+  /** The drawing stays this long once the last doodle is colored in. */
+  DRAWING_HOLD_MS: 2500,
   /** Crayons the hand picks up, one per doodle colored in. */
   CRAYONS: ["#f08a2c", "#8e4fd8", "#e0679f", "#1f9e8f"],
-  /** Music: a jingle, played once if the file exists (docs/MUSIC_PROMPTS.md). */
+  /** How the owner is credited ("a game by …"). */
+  CREDIT_NAME: "J²",
+  /** The credits page: it slides in over the desk, then each line is
+   * written left to right at WRITE_MS_PER_CHAR, LINE_GAP_MS apart. */
+  PAGE_FLIP_MS: 800,
+  WRITE_MS_PER_CHAR: 38,
+  LINE_GAP_MS: 280,
+  /** Once every line is written, a tap leaves only after this long, so the
+   * thank-you is never skipped by accident. */
+  READ_MIN_MS: 4000,
+  /** Leaving: the music and the picture fade out together. */
+  FADE_OUT_MS: 1000,
+  /** Music: ending.mp3, played once if the file exists (docs/MUSIC_PROMPTS.md);
+   * without it, the bedroom's path track, slower and softer (a rate below 1
+   * also lowers its pitch, like a music box winding down). Both fade in. */
   MUSIC_FILE: "ending.mp3",
+  FALLBACK_MUSIC_FILE: "level10-path.mp3",
+  FALLBACK_RATE: 0.8,
+  FALLBACK_VOLUME: 0.25,
+  MUSIC_FADE_IN_MS: 2500,
 } as const;
 
 /**

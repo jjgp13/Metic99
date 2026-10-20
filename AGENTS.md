@@ -130,7 +130,10 @@ src/
     NameEntryScene.ts Arcade 5-char initials entry shown at game over
     LeaderboardScene.ts Global top-N board; dual-mode (post-run / menu browse)
     EndingScene.ts    After the last level: a kid's hands color the bosses in
-                      crayon, THANK YOU FOR PLAYING, the score (`?ending=1`)
+                      crayon, THANK YOU FOR PLAYING, the score; then the
+                      credits on a new page (`?ending=1`)
+    endingCredits.ts  The credits' lines (pure): author, thank-you, the run
+                      told back (time, worlds, score), an unlock line
     HandwritingLabScene.ts `?lab=draw`: records real handwriting, exports JSON
   services/
     masteryStats.ts   Personal bests in localStorage (pure mergeRun + shell)
@@ -743,16 +746,28 @@ Green=multiplication, Yellow=division.
   stamp (beat an earlier best on that stage); a tap mid-count skips to the
   end, the next tap returns to the map, the ship flies to the next island,
   and a tap starts it. The run is saved when each level
-  starts (`STORAGE.STORY_SAVE`: level, lives, score, energy), so it can be left
+  starts (`STORAGE.STORY_SAVE`: level, lives, score, energy, and `playedMs`,
+  the game-clock time of the levels finished), so it can be left
   (pause → SAVE & QUIT TO MAP) and continued from that level's start; a
   game over deletes it. **The ending** (`EndingScene`, owner's pick of
   three looks): beating level 10 shows, after the clear card, a top-down
   desk where a kid's hands color the game's bosses (their real doodle
   recipes, in crayon: `Pencil` look `"crayon"`) and the player's ship on a
   small sheet; the last ones start as gray sketches and get colored in. THANK
-  YOU FOR PLAYING is on the sheet, the score on a sticky note; a tap goes on
-  to the `next` scene GameScene handed it (name entry, else the map).
-  `ending.mp3` plays once if it exists (silent without it). Dev: `?ending=1`.
+  YOU FOR PLAYING is on the sheet, the score on a sticky note. Then **the
+  credits** (owner's ask: "the game made by me, thanking the player a
+  lot"): a fresh notebook page slides over the desk and lines are written
+  on its rules one by one (`scenes/endingCredits.ts`): THE END, "a game by
+  J²" (`ENDING.CREDIT_NAME`), a thank-you, the run told back (time played,
+  worlds, score), "You unlocked …" when `EndingData.unlocked` names a
+  reward (filled by `storyReward()` in GameScene), and a signed heart.
+  **Taps never skip the thank-you:** taps count after 2 s; on the drawing
+  a tap turns the page, while writing it shows every line, and only once
+  all lines have been up `READ_MIN_MS` (4 s, "tap to continue" shows) does
+  a tap fade out (music and picture) to the `next` scene GameScene handed
+  it (name entry, else the map). **Music** fades in with the drawing:
+  `ending.mp3` once if it exists, else the bedroom's path track looping at
+  0.8× and softer. Dev: `?ending=1` (with a made-up unlock line).
   **Music:** each level loads its own path + boss
   track (`public/assets/music/levelNN-{path,boss}.mp3`, `scenes/levelMusic.ts`)
   and crossfades to the boss track when the boss comes in. The main theme
@@ -1093,6 +1108,19 @@ Newest first. Format: `YYYY-MM-DD — decision — rationale`.
   event (owner's first pick): it is two numbers the HUD already reads, and
   in Field every bot, replay and the future server would compute it for
   nothing. Not yet playtested by the owner.
+
+- **2026-10-20 — The ending gets credits, the run's time and music
+  (owner's Playtest 3 ask).** Owner's picks: credited as **J²**; the
+  credits go on a new notebook page after the drawing (over a note on the
+  desk or text under the drawing: more room, readable on a phone); the
+  run's time is the sum of each level's game-clock time, saved in the run
+  (`playedMs`, 0 for old saves), over a wall-clock start time, which would
+  count pauses, breaks and days between quit and continue. A quit level's
+  attempt isn't counted (the level restarts). The reward line is data
+  (`EndingData.unlocked`), so the unlockable-ships work fills it without
+  touching the scene. Fallback music = the level-10 track slowed (Claude's
+  pick, over a blip melody: a real track for ~40 s), so the ending is never
+  silent.
 
 - **2026-10-20 — The energy meter is a small vertical bar, top right
   (owner's phone playtest).** The long horizontal meter under the progress

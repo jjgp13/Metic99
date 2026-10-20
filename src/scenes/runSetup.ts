@@ -16,6 +16,8 @@ export interface StoryRun {
   levelScores: number[];
   /** Energy carried over from the last level (missing = 0: a new run). */
   energy?: number;
+  /** Game-clock time of the levels already finished (missing = 0). */
+  playedMs?: number;
 }
 
 /** Which mode GameScene was started in. */

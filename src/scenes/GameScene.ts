@@ -628,6 +628,7 @@ export default class GameScene extends Phaser.Scene {
       score: f.score,
       levelScores: [...story.levelScores, f.score - f.startScore],
       energy: f.carriedEnergy(),
+      playedMs: (story.playedMs ?? 0) + f.elapsedMs,
     };
   }
 
@@ -674,7 +675,15 @@ export default class GameScene extends Phaser.Scene {
               },
             }
           : { scene: "StoryMapScene", data: {} };
-        if (f.cleared) this.scene.start("EndingScene", { score: f.score, next: after } satisfies EndingData);
+        if (f.cleared) {
+          const ending: EndingData = {
+            score: f.score,
+            playedMs: (this.story.playedMs ?? 0) + f.elapsedMs,
+            unlocked: storyReward(),
+            next: after,
+          };
+          this.scene.start("EndingScene", ending);
+        }
         else this.scene.start(after.scene, after.data);
       }
     } else if (isLeaderboardEnabled() && !this.match) {
@@ -683,6 +692,12 @@ export default class GameScene extends Phaser.Scene {
       this.scene.start("MenuScene");
     }
   }
+}
+
+/** What beating the story unlocked, named for the credits ("the crayon
+ * ship"), or undefined when it unlocked nothing. Nothing is unlockable yet. */
+function storyReward(): string | undefined {
+  return undefined;
 }
 
 /** A finished story run's scores, by board: the run's total first (shown

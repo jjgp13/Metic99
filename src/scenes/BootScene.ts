@@ -128,5 +128,11 @@ export default class BootScene extends Phaser.Scene {
   }
 }
 
-/** `?ending=1`: the ending with a made-up score, then the story map. */
-const DEV_ENDING: EndingData = { score: 123456, next: { scene: "StoryMapScene", data: {} } };
+/** `?ending=1`: the ending with a made-up run (with a reward line, to
+ * check its spot), then the story map. */
+const DEV_ENDING: EndingData = {
+  score: 123456,
+  playedMs: 34 * 60_000,
+  unlocked: "the crayon ship",
+  next: { scene: "StoryMapScene", data: {} },
+};
