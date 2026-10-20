@@ -32,6 +32,18 @@ export function storyComplete(progress: StoryProgress): boolean {
   return progress.furthest >= STORY.STAGES;
 }
 
+/** The credits' reward line for ships just unlocked: "the crayon ship",
+ * "the lava rocket and the crayon ship"; undefined when nothing is new (a
+ * second finish unlocks nothing). One-word names get " ship" added. */
+export function rewardLine(ships: readonly ShipChoice[]): string | undefined {
+  if (ships.length === 0) return undefined;
+  const names = ships.map((s) => {
+    const name = s.name.toLowerCase();
+    return `the ${name.includes(" ") ? name : `${name} ship`}`;
+  });
+  return names.length === 1 ? names[0] : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+}
+
 /** How to unlock a ship, for the menu picker: "beat the GREAT OWL",
  * "finish the story"; "" for ships that are never locked. */
 export function unlockHint(ship: ShipChoice): string {

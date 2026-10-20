@@ -8,7 +8,7 @@ import { isLeaderboardEnabled, stageBoard, startMatch } from "../services/leader
 import { rankFor, recordRun } from "../services/masteryStats";
 import { hitRecord, initPlaytestLog, logRun, type InputSource, type RunExtras } from "../services/playtestLog";
 import { clearSavedRun, loadStoryProgress, recordLevel, recordStoryRun, saveRun as saveStoryRun } from "../services/storyProgress";
-import { newShips } from "../services/shipUnlocks";
+import { newShips, rewardLine } from "../services/shipUnlocks";
 import type { ShipChoice } from "../config/ships";
 import type { Bot } from "../sim/Bot";
 import { ANSWER_MAX_DIGITS, type Field, type FieldEvent, type FieldInput } from "../sim/Field";
@@ -688,7 +688,7 @@ export default class GameScene extends Phaser.Scene {
           const ending: EndingData = {
             score: f.score,
             playedMs: (this.story.playedMs ?? 0) + f.elapsedMs,
-            unlocked: storyReward(),
+            unlocked: rewardLine(this.unlockedShips),
             next: after,
           };
           this.scene.start("EndingScene", ending);
@@ -701,12 +701,6 @@ export default class GameScene extends Phaser.Scene {
       this.scene.start("MenuScene");
     }
   }
-}
-
-/** What beating the story unlocked, named for the credits ("the crayon
- * ship"), or undefined when it unlocked nothing. Nothing is unlockable yet. */
-function storyReward(): string | undefined {
-  return undefined;
 }
 
 /** A finished story run's scores, by board: the run's total first (shown

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { RENDER3D } from "../config/constants";
-import { isUnlocked, newShips, storyComplete, unlockHint, unlockedShips } from "./shipUnlocks";
+import { isUnlocked, newShips, rewardLine, storyComplete, unlockHint, unlockedShips } from "./shipUnlocks";
 import { NO_PROGRESS, mergeLevel, type StoryProgress } from "./storyProgress";
 
 const reached = (furthest: number): StoryProgress => ({ ...NO_PROGRESS, furthest });
@@ -55,5 +55,23 @@ describe("unlockHint", () => {
     expect(unlockHint(ship("LEAF GLIDER"))).toBe("beat the GREAT OWL");
     expect(unlockHint(ship("STAR CRUISER"))).toBe("beat THE MOON");
     expect(unlockHint(ship("CRAYON"))).toBe("finish the story");
+  });
+});
+
+describe("rewardLine", () => {
+  it("names the ships a finish unlocked for the credits", () => {
+    expect(rewardLine([ship("CRAYON")])).toBe("the crayon ship");
+    expect(rewardLine([ship("LAVA ROCKET"), ship("CRAYON")])).toBe("the lava rocket and the crayon ship");
+  });
+
+  it("says nothing when a finish unlocked nothing new (a second finish)", () => {
+    expect(rewardLine([])).toBeUndefined();
+  });
+
+  it("the first finish unlocks the crayon ship, a second one nothing", () => {
+    const beforeLastBoss = { furthest: 9, best: [], bestRun: 0 };
+    const finished = mergeLevel(beforeLastBoss, 9, 1000, true);
+    expect(rewardLine(newShips(beforeLastBoss, finished))).toBe("the crayon ship");
+    expect(rewardLine(newShips(finished, mergeLevel(finished, 9, 2000, true)))).toBeUndefined();
   });
 });
