@@ -59,6 +59,16 @@ loop. See the Decision Log.
   and World3D both fill from the same snapshot; `?art=3d` picks the 3D view.
   Each ship has its own doodle (`SHIPS` in `recipes.ts`), also shown in the
   menu picker (`renderDoodle/shipIcons.ts`).
+  **Ships the story unlocks** (`RENDER3D.SHIPS[].beat`, a look only like
+  every ship): FALCON, DART and POD from the start; beating the Great Owl
+  (stage 3) unlocks LEAF GLIDER, the Dragon (6) LAVA ROCKET, the Moon (9)
+  STAR CRUISER, and finishing the story the kid's own CRAYON ship (drawn
+  in crayon: `DoodleRecipe.look`). Unlocks are worked out from the stored
+  story progress (`services/shipUnlocks.ts`: `progress.furthest > beat`),
+  never saved, so a game over never takes one away. The picker shows a
+  locked ship as a dashed "?" with its name and what to beat; finishers
+  get a crown + STORY COMPLETE over the menu title and crowns on the map.
+  They are doodles only (the 3D view flies a voxel ship for them).
   **Story pages are alive** (owner's playtest note): props with an `fps`
   loop their pre-drawn frames (grass sways, ripples spread, stars twinkle,
   lava cracks glow), and each page has `drifts` (`renderDoodle/drifts.ts`:
@@ -136,6 +146,9 @@ src/
     masteryStats.ts   Personal bests in localStorage (pure mergeRun + shell)
     storyProgress.ts  Story map progress in localStorage: furthest stage,
                       best per stage, best run (pure mergeLevel + shell)
+    shipUnlocks.ts    Which ships the story progress unlocks (pure, derived:
+                      isUnlocked, newShips(before, after), storyComplete,
+                      unlockHint)
     leaderboard.ts    Supabase global high scores, one board per `level`
                       (Endless, each stage, story runs): startMatch(board) +
                       match-gated submitScore, plus getTop/getRank reads
@@ -715,6 +728,12 @@ Green=multiplication, Yellow=division.
   (`STORY_MAP.LABEL_CLEAR_PX`). Built levels come from LEVELS; a
   reached stage that isn't built yet says "coming soon". Islands are not
   entry points: PLAY always starts at island 1 (no practice mode).
+  **Ship unlocks on the map:** a clear that unlocks a ship hands its model
+  to the map (`{ travelTo, newShips }`, from `newShips(before, after)` in
+  `GameScene.clearLevel`); a NEW SHIP card (FLY IT picks it, LATER) comes
+  before the ship flies on. Once the story is finished a gold crown sits
+  over island 10 and beside the title. Every start of the map passes data
+  (`{}` at least), so Phaser can't hand it a stale flight or card.
   **Creatures** (`LevelDef.SPECIES`): a level turns monster kinds into its
   own creatures with a ball layout (`BALL_LAYOUTS`: eyes, chain, wings; it
   sets the readability box), a trait (`objects/traits.ts`), an optional
@@ -1070,6 +1089,16 @@ dMatch)`; it is 0 in solo play.
 ## Decision Log
 
 Newest first. Format: `YYYY-MM-DD — decision — rationale`.
+
+- **2026-10-20 — Story unlocks ships; finishers get the kid's crayon ship
+  and a crown (owner's picks).** Three themed ships after the Great Owl,
+  the Dragon and the Moon (over five or ten: fewer doodles, each one an
+  event), and all three finisher rewards (crayon ship, crown on the map,
+  STORY COMPLETE on the menu). Unlocks are derived from `furthest` instead
+  of a saved list (the owner first picked the list, then switched): it is
+  the same fact twice otherwise, and players who beat a boss before this
+  change get their ship with no migration. Ships stay looks only (rule of
+  2026-09-29); no 3D models for them.
 
 - **2026-10-20 — The energy meter is a small vertical bar, top right
   (owner's phone playtest).** The long horizontal meter under the progress

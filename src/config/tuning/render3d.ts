@@ -54,13 +54,20 @@ export const RENDER3D = {
     "alien_splitling",
   ],
 
-  // Player ships selectable on the menu (model name + label). The first one is
-  // the default. Icons: public/assets/icons/<model>.png (built with the models).
+  // Player ships selectable on the menu (model name + label), a look only.
+  // The first one is the default. `beat` = the story stage (index) whose boss
+  // unlocks it (services/shipUnlocks.ts); the last stage = finish the story.
+  // Icons: public/assets/icons/<model>.png (built with the 3D models); the
+  // unlockable ships are doodles only (the 3D view flies a voxel ship).
   SHIPS: [
     { model: "ship_player", name: "FALCON" },
     { model: "ship_dart", name: "DART" },
     { model: "ship_pod", name: "POD" },
-  ],
+    { model: "ship_leaf", name: "LEAF GLIDER", beat: 2 },
+    { model: "ship_lava", name: "LAVA ROCKET", beat: 5 },
+    { model: "ship_star", name: "STAR CRUISER", beat: 8 },
+    { model: "ship_crayon", name: "CRAYON", beat: 9 },
+  ] as { model: string; name: string; beat?: number }[],
 
   // Debris colors each monster model bursts into (model per kind: MONSTERS).
   ALIEN_MODELS: {

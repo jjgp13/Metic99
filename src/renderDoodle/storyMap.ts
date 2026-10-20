@@ -170,6 +170,42 @@ const WORLDS: ((p: Pencil) => void)[] = [
   },
 ];
 
+/** The finisher's gold crown (story complete): over the last island and
+ * beside the map's title, and on the menu. */
+export const CROWN: DoodleRecipe = {
+  w: 40,
+  h: 30,
+  draw(p) {
+    const points: Point[] = [
+      [-16, -9],
+      [0, -12],
+      [16, -9],
+    ];
+    p.shape(
+      [
+        [-14, 9],
+        [-16, -9],
+        [-7, 0],
+        [0, -12],
+        [7, 0],
+        [16, -9],
+        [14, 9],
+      ],
+      DOODLE.INK.gold,
+      { hachureGap: 2 },
+    );
+    p.line(-14, 4, 14, 4, { strokeWidth: 1 }); // the band
+    for (const [x, y] of points) p.dot(x, y, 1.8, DOODLE.TARGET);
+  },
+};
+
+/** The crown as a Phaser texture (one frame: it stays still), drawn once. */
+export function crownTexture(textures: Phaser.Textures.TextureManager, pxPerUnit: number): string {
+  const key = `storyMap:crown:${pxPerUnit}`;
+  if (!textures.exists(key)) textures.addCanvas(key, drawFrames(CROWN, pxPerUnit, 1, 9)[0]);
+  return key;
+}
+
 /** A small flag on a cleared island (its boss is beaten). */
 function flag(p: Pencil): void {
   p.line(26, 2, 26, -18);

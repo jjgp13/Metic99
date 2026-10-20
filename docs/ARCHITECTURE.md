@@ -283,6 +283,10 @@ fits here, and **what we didn't do**.
   forgot would show the ship on the wrong island.
 - **Instead of:** a `runFurthest` field in the stored progress, reset on a
   game over: it works, but it is the same fact twice, with two writers.
+- **Also:** `services/shipUnlocks.ts`: which ships are unlocked is
+  `progress.furthest > ship.beat`, not a saved list. A "NEW SHIP!" is the
+  difference between the unlocks before and after a clear
+  (`newShips(before, after)`), so even an event can be derived.
 
 ### 2.18 Pre-rendering + recycling (cheap animation)
 

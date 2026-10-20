@@ -118,11 +118,215 @@ export const POD: DoodleRecipe = {
   },
 };
 
+/** A leaf's outline from its stem (`root`) to its tip, `len` long and
+ * `width` wide at the middle, turned `angle` radians from pointing right. */
+function leaf(root: Point, len: number, width: number, angle: number): Point[] {
+  const n = 6;
+  const half: Point[] = Array.from({ length: n + 1 }, (_, k) => [(len * k) / n, (-width / 2) * Math.sin((Math.PI * k) / n)]);
+  const outline = [...half, ...half.slice(1, -1).reverse().map(([x, y]): Point => [x, -y])];
+  const [cos, sin] = [Math.cos(angle), Math.sin(angle)];
+  return outline.map(([x, y]) => [root[0] + x * cos - y * sin, root[1] + x * sin + y * cos]);
+}
+
+/** LEAF GLIDER (beat the Great Owl): an acorn riding on two leaf wings. */
+export const LEAF_GLIDER: DoodleRecipe = {
+  w: 60,
+  h: 50,
+  draw(p, t) {
+    flames(p, t, [0], 11);
+    for (const side of [-1, 1]) {
+      // The wings tip up and down a little as the frames go round, like gliding.
+      const angle = -0.3 + 0.06 * Math.sin(TAU * t + side);
+      const wing = leaf([4, 0], 24, 12, angle);
+      p.shape(side > 0 ? wing : mirror(wing), INK.leaf, { hachureAngle: side * 30 });
+      const tip: Point = [4 + 24 * Math.cos(angle), 24 * Math.sin(angle)];
+      p.line(side * 4, 0, side * tip[0], tip[1], { strokeWidth: 0.9 }); // the vein
+    }
+    p.ellipse(0, 3, 12, 18, INK.acorn, { hachureAngle: 60 });
+    p.shape(
+      [
+        [-7, -4],
+        [-6, -9],
+        [0, -12],
+        [6, -9],
+        [7, -4],
+      ],
+      INK.leaf,
+      { hachureAngle: -20 },
+    ); // the acorn's cap is the cockpit
+    p.line(0, -12, 1, -17, { strokeWidth: 1.4 }); // its stem, the nose
+  },
+};
+
+/** LAVA ROCKET (beat the Dragon): a dark rock rocket with glowing cracks. */
+export const LAVA_ROCKET: DoodleRecipe = {
+  w: 46,
+  h: 66,
+  draw(p, t) {
+    flames(p, t, [-4, 4], 18);
+    const fin: Point[] = [
+      [6, 5],
+      [15, 15],
+      [15, 22],
+      [6, 16],
+    ];
+    for (const side of [-1, 1]) p.shape(side > 0 ? fin : mirror(fin), INK.ember, { hachureAngle: 40 });
+    p.shape(
+      [
+        [0, -28],
+        [6, -16],
+        [8, 0],
+        [7, 18],
+        [-7, 18],
+        [-8, 0],
+        [-6, -16],
+      ],
+      INK.lava,
+      { hachureAngle: 70, hachureGap: 1.8 },
+    );
+    p.shape(
+      [
+        [0, -28],
+        [5, -18],
+        [-5, -18],
+      ],
+      INK.ember,
+    ); // a glowing nose
+    // Lava shows through the cracks; they glow brighter and dimmer.
+    const crack = { stroke: INK.ember, strokeWidth: 1.3 + 0.5 * Math.abs(Math.sin(TAU * t)) };
+    p.curve(
+      [
+        [-4, -3],
+        [-1, 1],
+        [-3, 6],
+        [0, 11],
+      ],
+      crack,
+    );
+    p.curve(
+      [
+        [5, 4],
+        [3, 8],
+        [5, 13],
+      ],
+      crack,
+    );
+    p.paper(0, -10, 8, { stroke: INK.canopy, strokeWidth: 1.4 }); // porthole
+  },
+};
+
+/** A five-pointed star's outline around (cx, cy). */
+function star(cx: number, cy: number, outer: number, inner: number): Point[] {
+  return Array.from({ length: 10 }, (_, i) => {
+    const a = -Math.PI / 2 + (i / 10) * TAU;
+    const r = i % 2 === 0 ? outer : inner;
+    return [cx + Math.cos(a) * r, cy + Math.sin(a) * r];
+  });
+}
+
+/** STAR CRUISER (beat the Moon): wide night-blue wings, a gold star cockpit. */
+export const STAR_CRUISER: DoodleRecipe = {
+  w: 62,
+  h: 54,
+  draw(p, t) {
+    flames(p, t, [-7, 7], 12);
+    const wing: Point[] = [
+      [4, -6],
+      [27, 7],
+      [26, 13],
+      [5, 9],
+    ];
+    for (const side of [-1, 1]) p.shape(side > 0 ? wing : mirror(wing), INK.star, { hachureAngle: 25 });
+    p.shape(
+      [
+        [0, -24],
+        [7, -6],
+        [6, 13],
+        [-6, 13],
+        [-7, -6],
+      ],
+      INK.star,
+      { hachureAngle: 65 },
+    );
+    p.shape(star(0, -3, 7, 3), INK.gold, { fillStyle: "solid", strokeWidth: 1 });
+    // A twinkle at each wingtip.
+    for (const side of [-1, 1]) {
+      const r = 1.5 + 1.5 * Math.abs(Math.sin(TAU * t + side));
+      const [x, y] = [side * 28, 2];
+      p.line(x - r, y, x + r, y, { stroke: INK.gold, strokeWidth: 1.1 });
+      p.line(x, y - r, x, y + r, { stroke: INK.gold, strokeWidth: 1.1 });
+    }
+  },
+};
+
+/** CRAYON (finish the story): the kid's own drawing of a rocket, lopsided,
+ * in waxy crayon, with a smiling pilot in the window. */
+export const CRAYON_SHIP: DoodleRecipe = {
+  w: 56,
+  h: 60,
+  look: "crayon",
+  draw(p, t) {
+    for (const [i, x] of [-5, 4].entries()) {
+      const len = 8 + 5 * Math.abs(Math.sin(TAU * t * 2 + i));
+      p.curve(
+        [
+          [x, 15],
+          [x - 3, 15 + len / 3],
+          [x + 2, 15 + (2 * len) / 3],
+          [x - 1, 15 + len],
+        ],
+        { stroke: INK.crayonFlame, strokeWidth: 2.4, roughness: 1.6 },
+      );
+    }
+    const wing: Point[] = [
+      [8, 1],
+      [21, 17],
+      [9, 14],
+    ];
+    p.shape(wing, INK.crayonWindow, { roughness: 1.8 });
+    p.shape(
+      mirror([
+        [9, 3],
+        [19, 15],
+        [9, 15],
+      ]),
+      INK.crayonWindow,
+      { roughness: 1.8 },
+    ); // the kid drew this wing a bit smaller
+    p.shape(
+      [
+        [1, -26],
+        [9, -9],
+        [10, 15],
+        [-9, 16],
+        [-10, -7],
+      ],
+      INK.crayonBody,
+      { roughness: 1.8 },
+    );
+    p.paper(0, -5, 12, { stroke: INK.crayonWindow, strokeWidth: 2 });
+    p.dot(-2.2, -6.5, 0.9);
+    p.dot(2.2, -6.5, 0.9);
+    p.curve(
+      [
+        [-2.8, -4],
+        [0, -2.2],
+        [2.8, -4],
+      ],
+      { strokeWidth: 1 },
+    );
+  },
+};
+
 /** The player's ships by model name (RENDER3D.SHIPS). */
 export const SHIPS: Record<string, DoodleRecipe> = {
   ship_player: FALCON,
   ship_dart: DART,
   ship_pod: POD,
+  ship_leaf: LEAF_GLIDER,
+  ship_lava: LAVA_ROCKET,
+  ship_star: STAR_CRUISER,
+  ship_crayon: CRAYON_SHIP,
 };
 
 /** A cartoon star circling a dazed ship after a hit. */

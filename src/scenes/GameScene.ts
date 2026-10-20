@@ -8,6 +8,8 @@ import { isLeaderboardEnabled, stageBoard, startMatch } from "../services/leader
 import { rankFor, recordRun } from "../services/masteryStats";
 import { hitRecord, initPlaytestLog, logRun, type InputSource, type RunExtras } from "../services/playtestLog";
 import { clearSavedRun, loadStoryProgress, recordLevel, recordStoryRun, saveRun as saveStoryRun } from "../services/storyProgress";
+import { newShips } from "../services/shipUnlocks";
+import type { ShipChoice } from "../config/ships";
 import type { Bot } from "../sim/Bot";
 import { ANSWER_MAX_DIGITS, type Field, type FieldEvent, type FieldInput } from "../sim/Field";
 import type { Match, MatchEvent } from "../sim/Match";
@@ -72,6 +74,8 @@ export default class GameScene extends Phaser.Scene {
   private leaveAllowedAt = 0;
   /** Whether this run set a new personal best (name entry says so). */
   private newHighScore = false;
+  /** Story clear: the ships this clear unlocked (the map announces them). */
+  private unlockedShips: ShipChoice[] = [];
   /** Story clear: the ship flying off, the minions popped, the results. */
   private launch: ShipLaunch | null = null;
   private readonly popped = new Set<Alien>();
@@ -108,6 +112,7 @@ export default class GameScene extends Phaser.Scene {
     this.leaving = false;
     this.leaveAllowedAt = 0;
     this.newHighScore = false;
+    this.unlockedShips = [];
     this.launch = null;
     this.popped.clear();
     this.clearCard = null;
@@ -174,7 +179,7 @@ export default class GameScene extends Phaser.Scene {
     this.pauseOverlay = new PauseOverlay(
       this,
       () => this.togglePause(),
-      this.story ? () => this.scene.start("StoryMapScene") : null,
+      this.story ? () => this.scene.start("StoryMapScene", {}) : null,
     );
 
     this.unseenMatchEvents = [];
@@ -557,8 +562,9 @@ export default class GameScene extends Phaser.Scene {
     const stage = this.story.level;
     const levelScore = f.score - f.startScore;
     const hasNext = stage + 1 < LEVELS.length;
-    const priorBest = loadStoryProgress().best[stage] ?? 0;
-    recordLevel(stage, levelScore, true);
+    const prior = loadStoryProgress();
+    const priorBest = prior.best[stage] ?? 0;
+    this.unlockedShips = newShips(prior, recordLevel(stage, levelScore, true));
     // The last level built: the run ends here (the next stage isn't built yet).
     if (!hasNext) this.newHighScore = recordStoryRun(f.score);
     if (hasNext) saveStoryRun(this.nextRun());
@@ -644,7 +650,7 @@ export default class GameScene extends Phaser.Scene {
       const levelScores = [...this.story.levelScores, f.score - f.startScore];
       if (f.cleared && next < LEVELS.length) {
         // Back to the map: the ship flies to the next island, then a tap starts it.
-        this.scene.start("StoryMapScene", { travelTo: next });
+        this.scene.start("StoryMapScene", { travelTo: next, newShips: this.unlockedShips.map((s) => s.model) });
       } else {
         // The run is over: name entry when the leaderboard is on, else the
         // map. Beating the last level shows the ending first.
