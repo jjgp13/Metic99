@@ -211,7 +211,7 @@ export function islandRecipe(stage: number, view: IslandView): DoodleRecipe {
  * darkness but loses its color, then gets a little lighter. Done on the
  * pixels, so the island recipes need no gray version of each color.
  */
-function grayPencil(canvas: HTMLCanvasElement, lighten: number): void {
+export function grayPencil(canvas: HTMLCanvasElement, lighten: number): void {
   const ctx = canvas.getContext("2d")!;
   const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
   const px = image.data;

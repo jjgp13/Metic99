@@ -129,6 +129,8 @@ src/
                       jingle (a blip fanfare until its file exists)
     NameEntryScene.ts Arcade 5-char initials entry shown at game over
     LeaderboardScene.ts Global top-N board; dual-mode (post-run / menu browse)
+    EndingScene.ts    After the last level: a kid's hands color the bosses in
+                      crayon, THANK YOU FOR PLAYING, the score (`?ending=1`)
     HandwritingLabScene.ts `?lab=draw`: records real handwriting, exports JSON
   services/
     masteryStats.ts   Personal bests in localStorage (pure mergeRun + shell)
@@ -217,7 +219,8 @@ src/
                       pages.ts (story pages: tinted paper + faint props that
                       scroll and loop), drifts.ts (things floating across a
                       page), shipIcons.ts, storyMap.ts (map islands +
-                      trail), font.ts
+                      trail), ending.ts (the ending's desk, hands, crayons),
+                      font.ts
   render3d/
     World3D.ts        Three.js view: camera, lights, starfield, ship/alien/bullet
                       meshes, voxel-debris explosions, shake. Page-wide singleton.
@@ -299,7 +302,7 @@ docs/SOLO_MODES_DESIGN.md   Story mode plan: 10 scrolling levels + bosses, Endle
   `LeaderboardScene` (post-run mode, shows world rank) → `MenuScene`. All restart
   triggers route through one idempotent `GameScene.leaveGameOver()`; when the
   leaderboard is disabled it goes straight to `MenuScene`. A story run ends
-  (game over, or the last built level cleared) the same way, but names are
+  (game over, or the last level cleared, which shows `EndingScene` first) the same way, but names are
   entered once and submitted to several boards (the run's total, shown
   after, then each stage played, ranks in one line), and it goes back to
   the story map.
@@ -727,7 +730,15 @@ Green=multiplication, Yellow=division.
   and a tap starts it. The run is saved when each level
   starts (`STORAGE.STORY_SAVE`: level, lives, score, energy), so it can be left
   (pause → SAVE & QUIT TO MAP) and continued from that level's start; a
-  game over deletes it. **Music:** each level loads its own path + boss
+  game over deletes it. **The ending** (`EndingScene`, owner's pick of
+  three looks): beating level 10 shows, after the clear card, a top-down
+  desk where a kid's hands color the game's bosses (their real doodle
+  recipes, in crayon: `Pencil` look `"crayon"`) and the player's ship on a
+  small sheet; the last ones start as gray sketches and get colored in. THANK
+  YOU FOR PLAYING is on the sheet, the score on a sticky note; a tap goes on
+  to the `next` scene GameScene handed it (name entry, else the map).
+  `ending.mp3` plays once if it exists (silent without it). Dev: `?ending=1`.
+  **Music:** each level loads its own path + boss
   track (`public/assets/music/levelNN-{path,boss}.mp3`, `scenes/levelMusic.ts`)
   and crossfades to the boss track when the boss comes in. The main theme
   (`menu.mp3`, a loop) plays on the menu and the map and keeps playing
@@ -1066,6 +1077,17 @@ Newest first. Format: `YYYY-MM-DD — decision — rationale`.
   is its own component so the story ending can fly the ship off too. Music
   files made one at a time are optional: `menu.mp3` and `level-clear.mp3`
   play when present, else silence / a blip fanfare.
+
+- **2026-10-20 — The story's ending: a kid coloring the game's monsters
+  (owner's idea and pick).** Three looks were sketched (kid at a desk seen
+  from the side, top-down hands on the sheet, kid on the floor with the
+  bosses on the wall); the owner picked top-down hands: the monsters stay
+  big enough to read on a phone. The sheet reuses every level's boss
+  recipe (and the picked ship) drawn with a new crayon look of the same
+  `Pencil`, so new bosses appear there for free. GameScene decides where
+  the run goes after the ending and hands it over as data (`next`), so
+  EndingScene doesn't need to know about the leaderboard. Music is
+  optional: loaded at the ending, played only if it reached the cache.
 
 - **2026-10-19 — Powers rebalanced after the energy cut: the weak three
   got cheaper (owner picked C).** With scarce energy SLOW's cheap drain made
