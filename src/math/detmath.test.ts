@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DET, cos, exp, sin } from "./detmath";
+import { DET, atan, atan2, cos, exp, hypot, sin } from "./detmath";
 
 /** Every rule source file, as text (Vite reads them at test time). */
 const sources = import.meta.glob(["../sim/**/*.ts", "../objects/**/*.ts", "../config/**/*.ts"], {
@@ -55,6 +55,24 @@ describe("detmath", () => {
       expect(ulps(sin(x), Math.sin(x))).toBeLessThanOrEqual(1);
       expect(ulps(cos(x), Math.cos(x))).toBeLessThanOrEqual(1);
       expect(ulps(exp(x), Math.exp(x))).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it("atan, atan2 and hypot stay within 1 ulp of Math too", () => {
+    for (let i = 0; i < 20_000; i++) {
+      const x = -50 + i * 0.005_017;
+      const y = 30 - i * 0.003_001;
+      expect(ulps(atan(x), Math.atan(x))).toBeLessThanOrEqual(1);
+      expect(ulps(atan2(y, x), Math.atan2(y, x))).toBeLessThanOrEqual(1);
+      // Plain sqrt(x² + y²): up to 2 ulps from Math.hypot (which guards
+      // against overflow with extra steps). Identical everywhere is what counts.
+      expect(ulps(hypot(x, y), Math.hypot(x, y))).toBeLessThanOrEqual(2);
+    }
+  });
+
+  it("atan2 gets the quadrants and the zeros right", () => {
+    for (const [y, x] of [[1, 1], [1, -1], [-1, -1], [-1, 1], [0, -1], [-0, -1], [0, 1], [-0, 1], [1, 0], [-1, 0]]) {
+      expect(Object.is(atan2(y, x), Math.atan2(y, x))).toBe(true);
     }
   });
 

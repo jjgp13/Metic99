@@ -1,4 +1,5 @@
 import { BAT, GLOW } from "../config/levels/cave";
+import { sin } from "../math/detmath";
 import { Ability, blinkCover } from "./abilities";
 import type Alien from "./Alien";
 
@@ -50,7 +51,7 @@ export class Roost extends Ability {
         // Incremental, so a sideways move refused by the readability rule
         // never makes it jump later.
         const g = this.flap + (TAU * delta) / BAT.FLUTTER_MS;
-        alien.x += BAT.FLUTTER_PX * (Math.sin(g) - Math.sin(this.flap));
+        alien.x += BAT.FLUTTER_PX * (sin(g) - sin(this.flap));
         this.flap = g % TAU;
         return delta * BAT.DROP_PACE;
       }

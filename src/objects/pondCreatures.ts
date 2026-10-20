@@ -1,5 +1,6 @@
 import { GAME } from "../config/constants";
 import { DRAGONFLY, DUCK, FROG, type BigFrogDef } from "../config/levels/pond";
+import { sin } from "../math/detmath";
 import { Ability, Boss } from "./abilities";
 import type Alien from "./Alien";
 
@@ -25,7 +26,7 @@ export class Hop extends Ability {
   private inAir = false;
 
   steer(alien: Alien): void {
-    const inAir = Math.sin(alien.gait) > 0; // the lumberer moves while sin(gait) > 0
+    const inAir = sin(alien.gait) > 0; // the lumberer moves while sin(gait) > 0
     if (this.inAir && !inAir) alien.hold(FROG.SIT_PER_BALL_MS * alien.ballCount);
     this.inAir = inAir;
   }

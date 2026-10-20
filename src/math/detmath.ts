@@ -10,7 +10,8 @@
  * and Chrome 152/155 (both V8!) disagree in the last bit on 3% of the `sin`
  * and 10% of the `exp` inputs the rules use.
  *
- * So the rules call `sin`, `cos` and `exp` from here instead: ports of fdlibm
+ * So the rules call `sin`, `cos`, `exp`, `atan`, `atan2` and `hypot` from
+ * here instead: ports of fdlibm
  * (Sun's freely distributable math library, the algorithms V8 started from)
  * written with exact operations only, so every engine computes the same
  * bits. They also give exactly Node 24's answers on every input the S0
@@ -246,8 +247,101 @@ function detCos(x: number): number {
   }
 }
 
+// ---------------------------------------------------------------------------
+// atan / atan2 (fdlibm s_atan.c, e_atan2.c): added for the story levels'
+// Cave Troll lamp (angles to the lamp).
+// ---------------------------------------------------------------------------
+const ATAN_HI = [4.63647609000806093515e-1, 7.85398163397448278999e-1, 9.82793723247329054082e-1, 1.57079632679489655800e0];
+const ATAN_LO = [2.26987774529616870924e-17, 3.06161699786838301793e-17, 1.39033110312309984516e-17, 6.12323399573676603587e-17];
+const AT = [
+  3.33333333333329318027e-1, -1.99999999998764832476e-1, 1.42857142725034663711e-1, -1.11111104054623557880e-1,
+  9.09088713343650656196e-2, -7.69187620504482999495e-2, 6.66107313738753120669e-2, -5.83357013379057348645e-2,
+  4.97687799461593236017e-2, -3.65315727442169155270e-2, 1.62858201153657823623e-2,
+];
+
+function detAtan(x: number): number {
+  const hx = hi(x);
+  const ix = hx & 0x7fffffff;
+  if (ix >= 0x44100000) {
+    // |x| >= 2^66 (or NaN): ±π/2
+    if (Number.isNaN(x)) return x;
+    return hx > 0 ? ATAN_HI[3] + ATAN_LO[3] : -ATAN_HI[3] - ATAN_LO[3];
+  }
+  let id: number;
+  if (ix < 0x3fdc0000) {
+    // |x| < 0.4375
+    if (ix < 0x3e200000) return x; // |x| < 2^-29
+    id = -1;
+  } else {
+    x = Math.abs(x);
+    if (ix < 0x3ff30000) {
+      // |x| < 1.1875
+      if (ix < 0x3fe60000) {
+        id = 0; // 7/16 <= |x| < 11/16
+        x = (2 * x - 1) / (2 + x);
+      } else {
+        id = 1; // 11/16 <= |x| < 19/16
+        x = (x - 1) / (x + 1);
+      }
+    } else if (ix < 0x40038000) {
+      id = 2; // |x| < 2.4375
+      x = (x - 1.5) / (1 + 1.5 * x);
+    } else {
+      id = 3; // 2.4375 <= |x| < 2^66
+      x = -1 / x;
+    }
+  }
+  const z = x * x;
+  const w = z * z;
+  const s1 = z * (AT[0] + w * (AT[2] + w * (AT[4] + w * (AT[6] + w * (AT[8] + w * AT[10])))));
+  const s2 = w * (AT[1] + w * (AT[3] + w * (AT[5] + w * (AT[7] + w * AT[9]))));
+  if (id < 0) return x - x * (s1 + s2);
+  const r = ATAN_HI[id] - (x * (s1 + s2) - ATAN_LO[id] - x);
+  return hx < 0 ? -r : r;
+}
+
+const PI = 3.1415926535897931160e0;
+const PI_LO = 1.2246467991473531772e-16;
+const PI_O_2 = 1.5707963267948965580e0;
+const PI_O_4 = 7.8539816339744827900e-1;
+
+/** The angle of the point (x, y), like Math.atan2(y, x). */
+function detAtan2(y: number, x: number): number {
+  if (Number.isNaN(x) || Number.isNaN(y)) return x + y;
+  if (x === 1) return detAtan(y);
+  // 2·sign(x) + sign(y), signs read from the bits (so -0 counts as negative).
+  const m = (hi(y) < 0 ? 1 : 0) | (hi(x) < 0 ? 2 : 0);
+  if (y === 0) return m === 0 || m === 1 ? y : m === 2 ? PI : -PI;
+  if (x === 0) return y < 0 ? -PI_O_2 : PI_O_2;
+  if (!Number.isFinite(x)) {
+    if (!Number.isFinite(y)) return [PI_O_4, -PI_O_4, 3 * PI_O_4, -3 * PI_O_4][m];
+    return [0, -0, PI, -PI][m];
+  }
+  if (!Number.isFinite(y)) return y < 0 ? -PI_O_2 : PI_O_2;
+  const k = ((hi(y) & 0x7fffffff) - (hi(x) & 0x7fffffff)) >> 20;
+  let z: number;
+  if (k > 60) z = PI_O_2 + 0.5 * PI_LO; // |y/x| > 2^60
+  else if (x < 0 && k < -60) z = 0; // |y|/x < -2^60
+  else z = detAtan(Math.abs(y / x));
+  switch (m) {
+    case 0:
+      return z;
+    case 1:
+      return -z;
+    case 2:
+      return PI - (z - PI_LO);
+    default:
+      return z - PI_LO - PI;
+  }
+}
+
+/** sqrt(x² + y²) with exact operations (Math.hypot may round differently). */
+function detHypot(x: number, y: number): number {
+  return Math.sqrt(x * x + y * y);
+}
+
 /** The deterministic implementations, whatever the mode. */
-export const DET = { sin: detSin, cos: detCos, exp: detExp } as const;
+export const DET = { sin: detSin, cos: detCos, exp: detExp, atan: detAtan } as const;
 
 /**
  * Lab only: route the rules through the engine's Math again (the code as it
@@ -271,4 +365,16 @@ export function cos(x: number): number {
 
 export function exp(x: number): number {
   return native ? Math.exp(x) : detExp(x);
+}
+
+export function atan(x: number): number {
+  return native ? Math.atan(x) : detAtan(x);
+}
+
+export function atan2(y: number, x: number): number {
+  return native ? Math.atan2(y, x) : detAtan2(y, x);
+}
+
+export function hypot(x: number, y: number): number {
+  return native ? Math.hypot(x, y) : detHypot(x, y);
 }
