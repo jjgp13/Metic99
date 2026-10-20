@@ -14,7 +14,7 @@ for (const [i, level] of LEVELS.entries()) {
   let start = 0;
   for (const seg of PROFILE) {
     const end = start + (seg.SHARE / total) * level.PATH_MS;
-    const height = seg.KIND === "rest" ? "0" : seg.KIND === "burst" ? "1" : String(seg.HEIGHT);
+    const height = "HEIGHT" in seg ? String(seg.HEIGHT) : seg.KIND === "burst" ? "1" : "0";
     const shape = seg.KIND === "ramp" ? `0 → ${height}` : height;
     console.log(`  ${sec(start).padStart(5)} – ${sec(end).padStart(5)} s  ${seg.KIND.padEnd(5)}  ${shape}`);
     start = end;
