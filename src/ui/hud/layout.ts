@@ -41,15 +41,16 @@ export const GUTTER = {
  * first life icon and the progress bar (y 44), where the eyes already are
  * (under the keypad it went unseen in playtests). Vertical so it can't be
  * mistaken for the progress bar (owner's pick). It fills from the bottom;
- * the value and the power's name sit left of it. X is the bar's center.
+ * the value, the power's name and the READY / FULL tag sit left of it. X is
+ * the bar's center. 14 × 60 since Playtest 3 ("very small"; was 10 × 44).
  */
 export const METER = {
   X: GAME.WIDTH - 18,
   TOP: 54,
-  W: 10,
-  H: 44,
-  /** Right edge of the value and name, left of the bar. */
-  TEXT_X: GAME.WIDTH - 18 - 12,
+  W: 14,
+  H: 60,
+  /** Right edge of the value, name and tag, left of the bar. */
+  TEXT_X: GAME.WIDTH - 18 - 14,
 } as const;
 
 /** Solo: the key hint in the strip under the keypad (a battle puts its dock there). */

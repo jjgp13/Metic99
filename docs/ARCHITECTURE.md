@@ -113,6 +113,11 @@ fits here, and **what we didn't do**.
 - **Instead of:** callbacks/listeners passed into the sim (`onHit: () =>
   sound.play()`): the sim would call view code in the middle of its own
   update, which is hard to follow and to run headless.
+- **When not to add one:** if the view can work the moment out from what
+  it already reads, derive it there by comparing with last frame (edge
+  detection). "The power is ready" is `energy ≥ cost`, so `EnergyHud`
+  spots it (`ui/hud/powerCue.ts`) and the sim, bots and replays never
+  carry a look. Events are for facts only the rules know (a hit, a kill).
 
 ### 2.6 Strategy pattern, data-driven (powers, targeting, bot skill)
 
