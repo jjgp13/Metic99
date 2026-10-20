@@ -45,10 +45,15 @@ export const ENERGY = {
  * - time: a toggle that drains PER_SEC while on and runs the player's own
  *   field (aliens + spawn clock) at FACTOR; the ship, bullets and difficulty
  *   clock keep full speed. Needs MIN_START to switch on.
- * - blast: pay COST (a full bar) to destroy every alien on the field. No score,
- *   no energy, splitters don't split.
+ * - blast: pay COST to destroy every alien on the field. No score, no energy,
+ *   splitters don't split.
  * - shield: pay COST to arm it; the next alien that reaches the ship is
  *   destroyed instead of costing a life. One at a time; buy it in the calm.
+ *
+ * Balanced by bots (`npm run bots`, `npm run match -- --powers
+ * freeze,slow,blast,shield`): ace bots (≈ the owner) should survive about as
+ * long with any of the four. Each number moves its power's survival on its
+ * own, so retune one power at a time and re-run.
  */
 export type PowerKind = "freeze" | "slow" | "blast" | "shield";
 
@@ -66,9 +71,10 @@ export type PowerDef = PowerInfo &
   );
 
 export const POWERS: Record<PowerKind, PowerDef> = {
-  // The panic button: total safety, twice the burn of SLOW per second saved.
+  // The panic button: total safety, ~1.4x SLOW's burn per second of alien
+  // movement saved.
   freeze: {
-    EFFECT: "time", FACTOR: 0, PER_SEC: 25, MIN_START: 10,
+    EFFECT: "time", FACTOR: 0, PER_SEC: 15, MIN_START: 10,
     NAME: "FREEZE", BLURB: "stop the field", COLOR: 0xb8d8ff,
   },
   // The tempo power: aliens still creep, but a bar lasts far longer.
@@ -77,11 +83,11 @@ export const POWERS: Record<PowerKind, PowerDef> = {
     NAME: "SLOW", BLURB: "field at half speed, cheap", COLOR: 0x5ef0ff,
   },
   blast: {
-    EFFECT: "blast", COST: 60,
-    NAME: "BLAST", BLURB: "full bar: clear the screen", COLOR: 0xff9f5a,
+    EFFECT: "blast", COST: 40,
+    NAME: "BLAST", BLURB: "clear the screen", COLOR: 0xff9f5a,
   },
   shield: {
-    EFFECT: "shield", COST: 50,
+    EFFECT: "shield", COST: 33,
     NAME: "SHIELD", BLURB: "the next hit is blocked", COLOR: 0xffd166,
   },
 };

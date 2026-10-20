@@ -99,7 +99,7 @@ describe("story level 1", () => {
     const field = new Field({ seed: 3, level: LEVEL_1, power: "shield", energy: 70 });
     field.apply({ type: "power" });
     expect(field.power.shieldArmed).toBe(true);
-    expect(field.energy.value).toBe(20);
+    expect(field.energy.value).toBe(70 - field.power.cost);
     expect(field.carriedEnergy()).toBe(70);
   });
 });
