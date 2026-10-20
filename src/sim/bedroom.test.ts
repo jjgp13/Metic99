@@ -74,25 +74,27 @@ describe("story level 10: the kid's bedroom", () => {
   });
 
   it("soldiers that march in together run down and stop together", () => {
-    const lines = new Map<number, Alien[]>(); // by spawn time
     let comparedSteps = 0;
     let stopped = 0;
-    watchUnplayed(1, 20_000, (field) => {
-      for (const a of field.aliens) {
-        if (!(a.ability instanceof Windup) || field.aliens.indexOf(a) < 0) continue;
-        const line = lines.get(a.spawnedAt) ?? [];
-        if (!line.includes(a)) line.push(a);
-        lines.set(a.spawnedAt, line);
-      }
-      for (const line of lines.values()) {
-        const live = line.filter((a) => a.active);
-        if (live.length < 2) continue;
-        const phases = live.map((a) => (a.ability as Windup).phase);
-        expect(new Set(phases).size).toBe(1);
-        comparedSteps++;
-        if (phases[0] === "stop") stopped++;
-      }
-    });
+    for (const seed of [1, 2, 3, 4]) {
+      const lines = new Map<number, Alien[]>(); // by spawn time
+      watchUnplayed(seed, 20_000, (field) => {
+        for (const a of field.aliens) {
+          if (!(a.ability instanceof Windup) || field.aliens.indexOf(a) < 0) continue;
+          const line = lines.get(a.spawnedAt) ?? [];
+          if (!line.includes(a)) line.push(a);
+          lines.set(a.spawnedAt, line);
+        }
+        for (const line of lines.values()) {
+          const live = line.filter((a) => a.active);
+          if (live.length < 2) continue;
+          const phases = live.map((a) => (a.ability as Windup).phase);
+          expect(new Set(phases).size).toBe(1);
+          comparedSteps++;
+          if (phases[0] === "stop") stopped++;
+        }
+      });
+    }
     expect(comparedSteps).toBeGreaterThan(0); // a line came
     expect(stopped).toBeGreaterThan(0); // and stood still together
   });

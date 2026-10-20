@@ -70,7 +70,7 @@ describe("story level 9: the night sky", () => {
     let together = 0;
     let resting = 0;
     let wasResting = new Set<Alien>();
-    watch(1, 12_000, (field) => {
+    for (const seed of [2, 3, 5]) watch(seed, 12_000, (field) => {
       const invaders = live(field, March).filter((a) => a.species === "invader");
       // Side by side at the same height, the same step in their walk: a row.
       const pairs = invaders.flatMap((a, i) => invaders.slice(i + 1).map((b) => [a, b] as const));
@@ -141,7 +141,7 @@ describe("story level 9: the night sky", () => {
   it("comets fly on a slant and bounce", () => {
     const flips = new Set<Alien>();
     const dirs = new Map<Alien, number>();
-    watch(3, 20_000, (field) => {
+    for (const seed of [3, 1, 2, 4]) watch(seed, 20_000, (field) => {
       for (const a of live(field, Bounce)) {
         const dir = (a.ability as Bounce).dir;
         if (dir === 0) continue;

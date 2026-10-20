@@ -1,4 +1,4 @@
-import type { BossDef, LevelDef } from "../tuning/story";
+import { OWNER_WAVE, type BossDef, type LevelDef } from "../tuning/story";
 
 /*
  * Level 8: THE SNOWY MOUNTAIN (doodles: renderDoodle/levels/snow.ts; rules
@@ -105,8 +105,9 @@ export const SNOW: LevelDef = {
   NAME: "THE SNOWY MOUNTAIN",
   PAGE: "snow",
   SEED: 1008,
-  PATH_MS: 135_000,
+  PATH_MS: 68_000,
   D: { FROM: 0.7, TO: 0.85 },
+  WAVES: { PROFILE: OWNER_WAVE, PEAK: 3 },
   // Penguins (darters) and snowballs (swoopers); 3-ball sums are ice blocks.
   TWO_BALL_KINDS: { darter: 0.55, strafer: 0, swooper: 0.45 },
   ABILITIES: [],

@@ -1,5 +1,5 @@
 import type { BlinkTiming } from "../../objects/abilities";
-import type { BossDef, LevelDef } from "../tuning/story";
+import { OWNER_WAVE, type BossDef, type LevelDef } from "../tuning/story";
 
 /*
  * Level 10: THE KID'S BEDROOM, the finale (doodles:
@@ -145,8 +145,9 @@ export const BEDROOM: LevelDef = {
   NAME: "THE KID'S BEDROOM",
   PAGE: "bedroom",
   SEED: 1010,
-  PATH_MS: 160_000,
+  PATH_MS: 65_000,
   D: { FROM: 0.8, TO: 0.95 },
+  WAVES: { PROFILE: OWNER_WAVE, PEAK: 3 },
   // Soldiers (darters), jacks-in-the-box (strafers) and rubber balls
   // (swoopers); 3-ball sums are teddy bears.
   TWO_BALL_KINDS: { darter: 0.4, strafer: 0.3, swooper: 0.3 },

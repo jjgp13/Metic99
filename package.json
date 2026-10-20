@@ -11,6 +11,7 @@
     "bots": "vite-node scripts/bot-report.ts",
     "playtest": "vite-node scripts/playtest-report.ts",
     "playtest:build": "vite build --mode playtest && vite-node scripts/playtest-page.ts",
+    "bots:story": "vite-node scripts/story-report.ts",
     "bots:fit": "vite-node scripts/bot-fit.ts",
     "match": "vite-node scripts/match-report.ts"
   },

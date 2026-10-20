@@ -1,4 +1,4 @@
-import type { BossDef, LevelDef } from "../tuning/story";
+import { OWNER_WAVE, type BossDef, type LevelDef } from "../tuning/story";
 
 /**
  * The Big Frog moves only by leaps: it sits (time to read its sum), puffs its
@@ -81,8 +81,9 @@ export const POND: LevelDef = {
   SEED: 1002,
   // Owner's playtest: too long and too easy. Bots (12 seeds): rookie 1/12,
   // pilot 10/12, ace 12/12 (~2:40 to clear).
-  PATH_MS: 120_000,
+  PATH_MS: 80_000,
   D: { FROM: 0.18, TO: 0.4 },
+  WAVES: { PROFILE: OWNER_WAVE, PEAK: 2 },
   MAX_BALLS: 4,
   // Fish (darters) and dragonflies (strafers); 3–4 ball sums are frogs.
   TWO_BALL_KINDS: { darter: 0.55, strafer: 0.45, swooper: 0 },
