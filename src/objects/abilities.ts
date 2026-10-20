@@ -50,6 +50,13 @@ export interface AbilityHost {
    * null (nothing placed) if the field is full or its box there would break
    * the readability rule. Optional: hosts without levels (test fakes) skip it. */
   spawnCreature?(kind: AlienKind, x: number, y: number): Alien | null;
+  /** Story: the creature nearest to `hunter` (center to center) within
+   * `reachPx` that a boss could eat: a lethal, non-boss alien. Null if none. */
+  preyNear?(hunter: Alien, reachPx: number): Alien | null;
+  /** Story: a boss eats `prey`: it leaves the field, scoring nothing. False
+   * (and it stays) if the player has typed or fired at it: a committed
+   * answer is never taken away. */
+  swallow?(prey: Alien): boolean;
 }
 
 export abstract class Ability {

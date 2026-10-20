@@ -1,6 +1,7 @@
 import { BALL_LAYOUTS, DOODLE } from "../../config/constants";
 import type Alien from "../../objects/Alien";
-import type { CreatureLook, PageDef } from "../pages";
+import { BigFrog } from "../../objects/pondCreatures";
+import type { BossLook, CreatureLook, PageDef } from "../pages";
 import type { DoodleRecipe, Pencil, Point } from "../pencil";
 
 /**
@@ -452,6 +453,65 @@ const BIG_FROG_LEAP: DoodleRecipe = {
   },
 };
 
+/** Where the Big Frog's tongue starts: its mouth, below its center. */
+const MOUTH_DY = 28;
+
+/**
+ * The Big Frog's tongue, on the page under every alien: a dotted line to
+ * the creature it is aiming at while it croaks (the telegraph: answer that
+ * one to save it), then a quick strike where it ate one.
+ */
+function drawTongue(ctx: CanvasRenderingContext2D, boss: Alien, alpha: number): void {
+  const frog = boss.ability;
+  if (!(frog instanceof BigFrog)) return;
+  const mx = boss.viewX(alpha);
+  const my = boss.viewY(alpha) + MOUTH_DY;
+  ctx.save();
+  ctx.strokeStyle = C.tongue;
+  ctx.fillStyle = C.tongue;
+  ctx.lineCap = "round";
+  if (frog.prey?.active) {
+    ctx.lineWidth = 2;
+    ctx.setLineDash([3, 6]);
+    ctx.beginPath();
+    ctx.moveTo(mx, my);
+    ctx.lineTo(frog.prey.viewX(alpha), frog.prey.viewY(alpha));
+    ctx.stroke();
+  }
+  if (frog.gulpLeftMs > 0 && frog.gulpAt) {
+    // The tongue shoots out and snaps back.
+    const k = Math.sin((Math.PI * frog.gulpLeftMs) / frog.frog.GULP_MS);
+    const [tx, ty] = frog.gulpAt;
+    const ex = mx + (tx - mx) * k;
+    const ey = my + (ty - my) * k;
+    ctx.setLineDash([]);
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.moveTo(mx, my);
+    ctx.lineTo(ex, ey);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(ex, ey, 6, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+/** "gulp!" next to the Big Frog's mouth just after it ate a creature. */
+function drawGulp(ctx: CanvasRenderingContext2D, boss: Alien, alpha: number): void {
+  const frog = boss.ability;
+  if (!(frog instanceof BigFrog) || frog.gulpLeftMs <= 0) return;
+  ctx.save();
+  ctx.globalAlpha = Math.min(1, frog.gulpLeftMs / (frog.frog.GULP_MS / 2));
+  ctx.font = `20px "${DOODLE.FONT}", cursive`;
+  ctx.textAlign = "center";
+  ctx.fillStyle = DOODLE.GRAPHITE;
+  ctx.fillText("gulp!", boss.viewX(alpha) + 52, boss.viewY(alpha) + MOUTH_DY + 18);
+  ctx.restore();
+}
+
+const FROG_LOOK: BossLook = { up: BIG_FROG, hidden: BIG_FROG_LEAP, under: drawTongue, over: drawGulp };
+
 export const POND_PAGE: PageDef = {
   paper: "#e8f1ee",
   rule: "rgba(92, 145, 205, 0.32)",
@@ -467,5 +527,5 @@ export const POND_PAGE: PageDef = {
   propGap: 44,
   drifts: [{ recipe: FLOATING_PETAL, count: 3, vx: 9, vy: 5, swayPx: 6, swayHz: 0.2, spinPerS: 0.3 }],
   creatures: { fish: FISH, dragonfly: DRAGONFLY, frog: FROG, duck: DUCK },
-  bosses: { boss_frog: { up: BIG_FROG, hidden: BIG_FROG_LEAP } },
+  bosses: { boss_frog: FROG_LOOK },
 };

@@ -6,6 +6,13 @@ import { OWNER_WAVE } from "../tuning/waves";
  * throat to croak (the telegraph), then leaps down and across to the next
  * lily pad. Its pace is LEAP_PX per sit + croak + leap (owner's rule: it
  * takes more answers than the mole, so it is slower: ~13 px/s vs ~20).
+ *
+ * It is hungry: while it croaks, its tongue aims at the nearest creature
+ * within TONGUE_REACH_PX (a dotted line), and as the croak ends, GULP: it
+ * eats it (no points) and its sum gets one more number, up to MAX_BALLS
+ * (the numbers it had stay, so a sum read so far still counts). Answering
+ * the creature first saves it. A fatter frog sits SIT_PER_BALL_MS longer
+ * per extra number (owner's rule: harder = slower).
  */
 export interface BigFrogDef extends BossDef {
   /** It leaps onto the page down to MIN_Y, this fast. */
@@ -17,9 +24,14 @@ export interface BigFrogDef extends BossDef {
    * between lily pads, turning back at the edges). */
   LEAP_PX: number;
   LEAP_SIDE_PX: number;
+  TONGUE_REACH_PX: number;
+  MAX_BALLS: number;
+  SIT_PER_BALL_MS: number;
+  /** How long the view shows the tongue's strike (real time). */
+  GULP_MS: number;
 }
 
-/** Level 2's boss: a big frog that croaks and leaps from pad to pad. */
+/** Level 2's boss: a big, hungry frog that croaks and leaps from pad to pad. */
 const BIG_FROG: BigFrogDef = {
   NAME: "BIG FROG",
   MODEL: "boss_frog",
@@ -28,7 +40,7 @@ const BIG_FROG: BigFrogDef = {
   BOX: { HALF_W: 46, BALLS_Y: 34, BOTTOM: 40 },
   KIND: "lumberer",
   HP: 6,
-  BALLS: 4,
+  BALLS: 3, // 4 once it has eaten (MAX_BALLS)
   SPEED: 0, // no walking: the leaps below are all its moves
   SCORE_MULT: 6,
   // After an answer it jumps back up and across (numbers hidden in the air).
@@ -38,11 +50,15 @@ const BIG_FROG: BigFrogDef = {
   RETREAT_Y: 140,
   MIN_Y: 140,
   ENTER_MS: 900,
-  SIT_MS: 1900,
+  SIT_MS: 1700, // with 3 numbers; with 4: + SIT_PER_BALL_MS
   CROAK_MS: 700,
   LEAP_MS: 450,
   LEAP_PX: 40,
   LEAP_SIDE_PX: 60,
+  TONGUE_REACH_PX: 190,
+  MAX_BALLS: 4,
+  SIT_PER_BALL_MS: 300,
+  GULP_MS: 350,
 };
 
 /** The frog hops like any lumberer but sits longer after each hop, the more
