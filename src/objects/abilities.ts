@@ -65,6 +65,12 @@ export abstract class Ability {
     return this.cover;
   }
 
+  /** What ball `i` shows: its digit, unless an ability writes something
+   * else on it (the Great Owl's "?"). */
+  ballText(_i: number, digit: number): string {
+    return String(digit);
+  }
+
   /** Kill score multiplier (on top of the normal formula). */
   get scoreMult(): number {
     return (ABILITY.SCORE_MULT as Record<string, number>)[this.kind] ?? 1;
@@ -221,10 +227,15 @@ export class Boss extends Ability {
   onHit(alien: Alien, host: AbilityHost): boolean {
     this.hp -= 1;
     if (this.hp <= 0) return false;
-    host.rerollSum(alien); // if no free sum is found it keeps the old one
+    this.newSum(alien, host);
     const [x, y] = this.surfaceAt(alien);
     this.burrow(alien, x, y);
     return true;
+  }
+
+  /** Its next sum after an answer it survives. */
+  protected newSum(alien: Alien, host: AbilityHost): void {
+    host.rerollSum(alien); // if no free sum is found it keeps the old one
   }
 
   /** Where it pops up after an answer: the other side of the field and up. */

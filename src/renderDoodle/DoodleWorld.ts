@@ -185,6 +185,7 @@ export default class DoodleWorld {
     this.drawBursts(delta);
     this.drawShipWords(delta);
     for (const a of aliens) this.drawBalls(a, s.alpha, boil, delta);
+    for (const a of aliens) this.bossLook(a)?.over?.(this.ctx, a, s.alpha);
     for (const a of aliens) if (a.ability instanceof Boss) this.drawBossPips(a, a.ability, s.alpha);
   }
 
@@ -418,7 +419,7 @@ export default class DoodleWorld {
       ctx.scale(pop, pop);
       this.drawSprite(`ball:${a.ballTexture}`, () => R.ballRing(ring), boil + look.phase + i);
       ctx.fillStyle = DOODLE.BALL_INK;
-      ctx.fillText(String(a.digits[i]), 0, 1);
+      ctx.fillText(a.ability?.ballText(i, a.digits[i]) ?? String(a.digits[i]), 0, 1);
       const ballCover = a.ability?.ballCover(i, n) ?? 0;
       if (ballCover > 0) {
         // The Blinker's eyelid: pencil shading pulled down over the digit.
