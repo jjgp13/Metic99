@@ -1,7 +1,8 @@
-import { BALL_LAYOUTS, DOODLE } from "../../config/constants";
+import { BALL_LAYOUTS, DOODLE, GAME } from "../../config/constants";
 import type Alien from "../../objects/Alien";
+import { WiseOwl } from "../../objects/owlBoss";
 import { Leap } from "../../objects/treetopsTraits";
-import type { CreatureLook, PageDef } from "../pages";
+import type { BossLook, CreatureLook, PageDef } from "../pages";
 import type { DoodleRecipe, Point } from "../pencil";
 
 /**
@@ -495,6 +496,61 @@ const GREAT_OWL_FLYING: DoodleRecipe = {
   },
 };
 
+/** Where the Great Owl writes its riddle's total (its belly) and asks "who?". */
+const RIDDLE = { TOTAL_Y: 18, FONT_PX: 22, ASK_DX: 66, ASK_DY: -50 } as const;
+
+/**
+ * The Great Owl's riddle total, over everything like its numbers: on its
+ * belly, so its eyes read "3 ?" and the belly "= 8". Hidden while it flies,
+ * like its eyes.
+ */
+function drawRiddle(ctx: CanvasRenderingContext2D, boss: Alien, alpha: number): void {
+  const owl = boss.ability;
+  if (!(owl instanceof WiseOwl) || !owl.riddle || owl.burrowing) return;
+  const x = boss.viewX(alpha);
+  const y = boss.viewY(alpha);
+  ctx.save();
+  ctx.font = `${RIDDLE.FONT_PX}px "${DOODLE.FONT}", cursive`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  const text = `= ${owl.total(boss)}`;
+  const w = ctx.measureText(text).width + 10;
+  ctx.fillStyle = DOODLE.PAPER;
+  ctx.strokeStyle = DOODLE.GRAPHITE;
+  ctx.lineWidth = 1.4;
+  ctx.beginPath();
+  ctx.ellipse(x, y + RIDDLE.TOTAL_Y, w / 2, RIDDLE.FONT_PX * 0.6, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = DOODLE.BALL_INK;
+  ctx.fillText(text, x, y + RIDDLE.TOTAL_Y + 1);
+  ctx.restore();
+}
+
+/** "who?" in a speech bubble by its ear tuft: on the page under every
+ * alien, since it reaches outside the owl's box. */
+function drawAsk(ctx: CanvasRenderingContext2D, boss: Alien, alpha: number): void {
+  const owl = boss.ability;
+  if (!(owl instanceof WiseOwl) || !owl.riddle || owl.burrowing) return;
+  const x = boss.viewX(alpha);
+  const y = boss.viewY(alpha);
+  ctx.save();
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.lineWidth = 1.4;
+  ctx.font = `16px "${DOODLE.FONT}", cursive`;
+  ctx.fillStyle = DOODLE.GRAPHITE;
+  ctx.strokeStyle = DOODLE.GRAPHITE;
+  const askX = x + (x < GAME.WIDTH / 2 ? 1 : -1) * RIDDLE.ASK_DX; // toward the page's middle
+  ctx.fillText("who?", askX, y + RIDDLE.ASK_DY);
+  ctx.beginPath();
+  ctx.ellipse(askX, y + RIDDLE.ASK_DY, 22, 12, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+}
+
+const OWL_LOOK: BossLook = { up: GREAT_OWL, hidden: GREAT_OWL_FLYING, under: drawAsk, over: drawRiddle };
+
 export const TREETOPS_PAGE: PageDef = {
   paper: "#eef3df",
   rule: "rgba(110, 140, 120, 0.3)",
@@ -513,5 +569,5 @@ export const TREETOPS_PAGE: PageDef = {
     { recipe: FEATHER, count: 1, vx: 4, vy: 8, swayPx: 24, swayHz: 0.15, spinPerS: 0.4 },
   ],
   creatures: { squirrel: SQUIRREL, owl: OWL, bird: BIRD, hummingbird: HUMMINGBIRD },
-  bosses: { boss_owl: { up: GREAT_OWL, hidden: GREAT_OWL_FLYING } },
+  bosses: { boss_owl: OWL_LOOK },
 };

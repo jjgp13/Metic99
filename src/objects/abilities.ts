@@ -50,6 +50,11 @@ export interface AbilityHost {
    * null (nothing placed) if the field is full or its box there would break
    * the readability rule. Optional: hosts without levels (test fakes) skip it. */
   spawnCreature?(kind: AlienKind, x: number, y: number): Alien | null;
+  /** Story: a missing-number riddle on `alien` (2 balls): it shows the
+   * first number and a "?", and the answer is the second number, at least
+   * `minAnswer` (the first plus it is the total the boss shows). The answer
+   * is unique on the field. False if none is free (it keeps its sum). */
+  rerollMissing?(alien: Alien, minAnswer: number): boolean;
   /** Story: the creature nearest to `hunter` (center to center) within
    * `reachPx` that a boss could eat: a lethal, non-boss alien. Null if none. */
   preyNear?(hunter: Alien, reachPx: number): Alien | null;

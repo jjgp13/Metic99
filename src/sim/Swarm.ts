@@ -334,6 +334,20 @@ export class Swarm implements AbilityHost {
     return alien;
   }
 
+  rerollMissing(alien: Alien, minAnswer: number): boolean {
+    const max = Math.max(minAnswer, this.difficulty.maxDigit);
+    for (let attempt = 0; attempt < 12; attempt++) {
+      const first = this.rng.int(1, max);
+      const answer = this.rng.int(minAnswer, max);
+      if (this.byResult.has(answer)) continue;
+      this.byResult.delete(alien.result);
+      alien.setSum([first, answer], answer, this.elapsedMs);
+      this.byResult.set(answer, alien);
+      return true;
+    }
+    return false;
+  }
+
   preyNear(hunter: Alien, reachPx: number): Alien | null {
     let best: Alien | null = null;
     let bestDist = reachPx;
