@@ -44,6 +44,22 @@ One row per concept. Add new rows at the bottom.
 | Content hash as a version | Identify code by a hash of what matters, not by where or when it was built | `rulesId()` in `vite.config.ts` | engineering | 2026-10-18 | launch hardening |
 | Fail open vs fail closed | When a check can't be sure, choose which mistake is cheaper (here: let a faker through rather than lock real players out) | `clientIp()` in `server/main.ts` | security | 2026-10-18 | launch hardening |
 | Hash / fingerprint (checksum) | A short number computed from all the data; any change gives a different one, so two copies compare cheaply | `sim/hash.ts` (FNV-1a), `sim/fingerprint.ts` | netcode | 2026-10-08 | NETCODE S0 step 2 |
+| Interface with two implementations | Callers depend on what a part can do, so another part can stand in for it | `FieldView` (`scenes/fieldView.ts`): World3D or DoodleWorld | design | 2026-10-18 | doodle art prototype |
+| Pre-rendering (cache) | Draw an expensive picture once, then copy it every frame | `drawFrames` (`renderDoodle/pencil.ts`), the boil frames | game dev | 2026-10-18 | doodle art prototype |
+| Edge detection (state change) | Notice the moment something happens by comparing a value with last frame's, so the view needs no new event | `DoodleWorld.drawShip`: `shipHurt` jumps up = a hit | game dev | 2026-10-18 | ship doodles + hit animation |
+| Position-triggered behavior | Trigger an action when a thing reaches a place, not after a time, so pausing the world pauses it too | `Leap.steer` (`objects/treetopsTraits.ts`): a squirrel leaps at each branch line | game dev | 2026-10-18 | level 3 treetops |
+| Template method (protected hook) | The base class runs the steps and calls a small `protected` method a subclass may override; the subclass changes one step only | `Boss.surfaceAt`, overridden by `MudHalf` (`objects/swamp.ts`) | design | 2026-10-18 | level 4, the mud swamp |
+| Goal as a question, not a flag | "Is any boss left?" instead of "the boss died", so a boss that splits needs no special case | `Field.onBulletHit` (`bossLeft`) | design | 2026-10-18 | level 4, the mud swamp |
+| Hook with a default (template method) | The base class calls a method that does nothing special by default; a subclass overrides just that step | `Ability.pace(alien, delta)` returns `delta`; the cave's `Roost` / `CaveTroll` override it | design | 2026-10-18 | level 5, the dark cave |
+| One class, many configs | A general class takes its numbers as data, so two creatures share one rule | `Hops` with `DRIP` and `SPARK` (`objects/volcanoTraits.ts`) | design | 2026-10-18 | level 6 volcano |
+| Subclass that extends a hook (super) | Override a method, add your part, and call the parent's version for the rest | `Dragon.update/onHit` → `Boss` (`objects/dragon.ts`) | design | 2026-10-18 | level 6 volcano |
+| Strategy pattern | One interface, several interchangeable classes; the caller asks the interface and never checks which one it has | `SpawnDirector` (`sim/director.ts`): `EndlessDirector` or `LevelDirector`, asked by `Swarm` | design | 2026-10-18 | story slice L2 |
+| Content as data | New levels are table entries, not new code, so tuning one never touches the rules | `LEVELS` in `config/tuning/story.ts` | design | 2026-10-18 | story slice L3 |
+| Registry | A table from a name to the code that makes it, so new kinds are added with one line instead of a new `if` | `TRAITS` (`objects/traits.ts`), `BOSS_MECHANICS` (`objects/bosses.ts`), `LEVELS`, `PAGES` | design | 2026-10-18 | creatures with personality |
+| Presentation delay | Let an animation play before the next screen, without slowing the rules | `RECOVERY.GAME_OVER_DELAY_MS` + `time.delayedCall` in `GameScene` | game dev | 2026-10-18 | ship doodles + hit animation |
+| Functional core, imperative shell | Decide in pure functions (easy to test), and keep reading/writing storage in a thin outer layer | `mergeLevel` / `recordLevel` in `services/storyProgress.ts` (like `masteryStats.ts`) | design | 2026-10-18 | story map (L5) |
+| Don't trust stored data | Data read back from storage (or the network) is checked and cleaned before use, so a bad value can't break the screen | `parseProgress` in `services/storyProgress.ts` | engineering | 2026-10-18 | story map (L5) |
+| Backward-compatible migration | Change the database so the old client still works (new column with a default, new parameters with defaults), then deploy the new client | `supabase/story-boards.sql` (`level` default 0, `p_level default 0`) | backend | 2026-10-18 | story map (L5) |
 
 ## In the code, not studied yet
 
@@ -52,3 +68,7 @@ been walked through with the owner: model–view separation (§2.1), command
 pattern (§2.2), event queue (§2.5), data-driven strategies (§2.6), hooks for
 abilities (§2.7), small interfaces (§2.8), reconciliation (§2.10). Good
 material for "your turn" tasks and quiz transfer questions.
+| Template method (hook) | A base class calls an empty method at a fixed moment; a subclass fills it in to change one step | `Ability.steer` (called by `Swarm.step`), filled by `Dart`, `Dive`, `Hop`, `BigFrog` | design | 2026-10-18 | level 2, the pond |
+| Real time vs game (field) time | Timers that must stop with FREEZE/SLOW run on the field's clock, not the wall clock | `steer(alien, fieldDelta)` vs `update(delta)` in `objects/abilities.ts` | game dev | 2026-10-18 | level 2, the pond |
+| Tuning by simulation | Pick numbers by running bots many times and measuring, not by guessing | 20-seed bot runs per level (like `src/sim/pond.test.ts`): pond d range 0.2→0.35 = rookies 0/20, 0.1→0.28 = 11/20 | game dev | 2026-10-18 | level 2, the pond |
+| Cleanup on shutdown (owned resources) | Whatever an object starts (sounds, timers, tweens) it must also stop when its owner goes away, including things still "on their way out" | `LevelMusic.fading`: songs fading out are destroyed when the scene shuts down | game dev | 2026-10-19 | music fade fix |

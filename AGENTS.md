@@ -52,7 +52,14 @@ loop. See the Decision Log.
 - **Phaser 3** — scenes, menus, HUD, keypad, input, audio and the asset loader.
   Its canvas is **transparent** and stacked above the 3D canvas. Arcade physics
   is no longer used (hits are a swept test in `Field.moveBullets`).
-- **Three.js** — renders the gameplay playfield in 3D (`src/render3d/`). Chosen
+- **Doodle view (default art)** — the playfield is pencil doodles on lined
+  notebook paper (`src/renderDoodle/`, Rough.js wobble, Patrick Hand font),
+  drawn on a 2D canvas under Phaser's. The rules don't know which view draws:
+  GameScene talks to a `FieldView` (`scenes/fieldView.ts`) that DoodleWorld
+  and World3D both fill from the same snapshot; `?art=3d` picks the 3D view.
+  Each ship has its own doodle (`SHIPS` in `recipes.ts`), also shown in the
+  menu picker (`renderDoodle/shipIcons.ts`).
+- **Three.js** — the older 3D view of the playfield (`src/render3d/`, `?art=3d`). Chosen
   over Babylon.js / Unity WebGL for desktop + phone browsers: small bundle
   (~150 kB gz), fast mobile load, and plain TS that a future Node game server can
   share with the client.
@@ -92,7 +99,7 @@ src/
     constants.ts      Re-exports every tuning file (import constants from here)
     tuning/           Tuning numbers, one file per domain: game, monsters,
                       difficulty, scoring, powers, answer, battle, bots,
-                      storage, render3d
+                      storage, render3d, doodle, story (LEVELS + bosses)
     palette.ts        Named UI colors (PALETTE.GOLD, .ATTACK…) + css()
     difficulty.ts     Logistic difficulty curve
     ships.ts          Player's ship choice (menu picker, saved in localStorage)
@@ -101,13 +108,16 @@ src/
   scenes/
     BootScene.ts      Preloads assets; defers animations (static frames for now)
     MenuScene.ts      Title screen: ship picker + PLAY / BATTLE / HOW TO PLAY / SCORES
+    StoryMapScene.ts  The STORY button: one island per stage, best scores,
+                      "?" for stages not reached; PLAY = a run from island 1
     HowToPlayScene.ts Static rules screen reached from the menu
     GameScene.ts      Composition root: builds the run and the HUD parts,
                       maps keypad/keyboard/pad to Field inputs, steps the
                       Field (or the battle Match) at a fixed 60 Hz (SimClock),
                       turns its events into sound and HUD calls, and hands
                       World3D a snapshot every frame.
-    runSetup.ts       A run's seed + Field or Match (+ dev URL params)
+    runSetup.ts       A run's seed + Field or Match, or a story level
+                      (`StoryRun`: level, lives, score) (+ dev URL params)
     NameEntryScene.ts Arcade 5-char initials entry shown at game over
     LeaderboardScene.ts Global top-N board; dual-mode (post-run / menu browse)
     LobbyScene.ts     Online lobby: name, who waits, countdown, START NOW;
@@ -115,8 +125,11 @@ src/
     HandwritingLabScene.ts `?lab=draw`: records real handwriting, exports JSON
   services/
     masteryStats.ts   Personal bests in localStorage (pure mergeRun + shell)
-    leaderboard.ts    Supabase global high scores: startMatch + match-gated
-                      submitScore, plus getTop/getRank reads
+    storyProgress.ts  Story map progress in localStorage: furthest stage,
+                      best per stage, best run (pure mergeLevel + shell)
+    leaderboard.ts    Supabase global high scores, one board per `level`
+                      (Endless, each stage, story runs): startMatch(board) +
+                      match-gated submitScore, plus getTop/getRank reads
     playtestLog.ts    Playtest logger: in the claude.ai playtest Artifact,
                       saves each finished run (seed + input log + extras)
                       to the Artifact's `db`; a no-op anywhere else
@@ -168,7 +181,11 @@ src/
                       fired, solved, hit, power, blasted, shielded,
                       knockedOut).
     Swarm.ts          The aliens inside a Field: game clock, seeded spawners,
-                      movement + readability guard, AbilityHost.
+                      movement + readability guard, AbilityHost. Asks its
+                      SpawnDirector what to spawn.
+    director.ts       SpawnDirector (strategy): EndlessDirector = today's
+                      curve; LevelDirector = a story level's path, roster,
+                      creatures and boss.
     Match.ts          Battle match: N Fields on one seed stepped together, bots
                       per seat, KOs, placement, standing messages (pressure),
                       targeting, KO credit, badges, attack delivery, and
@@ -198,13 +215,23 @@ src/
                       Built from one `AlienConfig`. Optional `model` +
                       `ability`; `glideTo`/`hold` override the pattern for
                       scripted moves (knockback, splits).
+    swamp.ts          Level 4's own rules: peeper/firefly traits, the slime's
+                      split, the Mud Monster and its halves.
     abilities.ts      Monster abilities (Blinker, Shielded, Splitter): pure
-                      state with update/onHit/onKilled hooks + `AbilityHost`.
+                      state with update/steer/onHit/onKilled hooks + `AbilityHost`.
+    traits.ts, bosses.ts  Story registries: creature traits, boss mechanics.
+    pondCreatures.ts  Level 2's rules: Hop, Dart, Dive traits + the BigFrog.
     Bullet.ts         Pure bullet state {x, y, active}.
   lab/
     determinismLab.ts `?lab=determinism`: plain DOM page (no Phaser) that
                       replays Node's recording on this engine; report box
     determinism-recording.json  Written by `npm run determinism:record`
+  renderDoodle/        The default view: DoodleWorld (FieldView), recipes.ts
+                      (one short stroke recipe per ship/monster/boss),
+                      pencil.ts (Rough.js + pre-drawn boil frames), paper.ts,
+                      pages.ts (story pages: tinted paper + faint props that
+                      scroll), shipIcons.ts, storyMap.ts (map islands +
+                      trail), font.ts
   render3d/
     World3D.ts        Three.js view: camera, lights, starfield, ship/alien/bullet
                       meshes, voxel-debris explosions, shake. Page-wide singleton.
@@ -243,6 +270,7 @@ docs/learning/        The owner's learning: HOW_WE_LEARN.md (the science),
 docs/ART_SPEC.md      3D art style, budgets, axes, pipeline
 docs/MULTIPLAYER_DESIGN.md  Battle-royale design: energy, attacks, backend plan
 docs/NETCODE.md       Phase 1 (online server) plan S0–S6 + learning journal
+docs/SOLO_MODES_DESIGN.md   Story mode plan: 10 scrolling levels + bosses, Endless
   env.d.ts            Types for Vite `import.meta.env` (Supabase env vars)
 ```
 
@@ -251,21 +279,31 @@ docs/NETCODE.md       Phase 1 (online server) plan S0–S6 + learning journal
 - **Backend: Supabase** (hosted Postgres). Reads use `supabase-js` with the
   **anon public key** (public by design — top scores/rank are world-readable).
   No server to host.
-- `scores(id, name varchar(6), score int 0..1_000_000, created_at)`; RLS allows
-  anon `SELECT` of all rows. `name` is `^[A-Z0-9]{3,6}$` (the player picks 3–6
-  initials at game over). `get_rank(s int)` RPC = `count(*)+1 WHERE score > s`
-  (competition ranking; ties share a rank).
+- `scores(id, name varchar(6), score int 0..1_000_000, level smallint,
+  created_at)`; RLS allows anon `SELECT` of all rows. `name` is
+  `^[A-Z0-9]{3,6}$` (the player picks 3–6 initials at game over). **`level`
+  is the board** (`supabase/story-boards.sql`): 0 = Endless, 1–10 = story
+  stage N (points scored in that stage), 99 = a whole story run
+  (`LEADERBOARD.*_BOARD`). `get_rank(s, p_level)` RPC = `count(*)+1 WHERE
+  level = p_level AND score > s` (competition ranking; ties share a rank).
 - **Score writes are server-gated (no anon INSERT).** Direct anon `INSERT` into
   `scores` is revoked, so a forged REST insert with the public key can't write a
   score. Two `SECURITY DEFINER` functions (anon-executable via RPC) are the only
   write path — schema in `supabase/match-gate.sql`:
-  - `start_match()` → issues a single-use, server-timestamped `matches` row id;
-    called by `GameScene` (via `startMatch()`) when a run begins.
-  - `submit_run(p_match, p_name, p_score)` → in ONE transaction: atomically
-    consumes the match (rejects missing/used, age <2s or >4h), plausibility-checks
-    the score against elapsed time (cap `≈ elapsed·3000 + 5000`, far above real
-    play), inserts the score, and returns `{row_id, rank}`. A rejected/failed
-    submit rolls back, so a legit match is never burned.
+  - `start_match(p_level)` → issues a single-use, server-timestamped `matches`
+    row id for one board; called by `GameScene` (via `startMatch(board)`) when
+    a run begins. A story run opens one for the run board and one per stage
+    as each starts.
+  - `submit_run(p_match, p_name, p_score, p_level)` → in ONE transaction:
+    atomically consumes the match (rejects missing/used, another board's
+    ticket, age <2s or >4h), plausibility-checks the score against elapsed
+    time (cap `≈ elapsed·3000 + 5000`, far above real play) and the board's
+    cap (a stage ≤ 300k; an ace scores ~40k on stage 1), inserts the score,
+    and returns `{row_id, rank}`. A rejected/failed submit rolls back, so a
+    legit match is never burned. `p_level` defaults to 0 (Endless), so the
+    old call shapes still work.
+  - **Migration order:** run `story-boards.sql` (after `match-gate.sql`)
+    before deploying a build with the story map (it reads `scores.level`).
   - `matches` has RLS on with NO policies (only the definer functions touch it).
   - **Honest limit:** this blocks devtools/REST forgery and bots that skip the
     flow, but — like any client-scored game — can't stop a scripted
@@ -275,16 +313,24 @@ docs/NETCODE.md       Phase 1 (online server) plan S0–S6 + learning journal
   (baked in at build, public by design). `isLeaderboardEnabled()` is true only
   when both are present, so the game **builds and runs locally without them** —
   game over just returns to the menu instead of routing to name entry.
-- **Navigation:** `BootScene` → `MenuScene` (ship picker ◀ ▶ / ←→, then PLAY /
-  BATTLE (beta) / ONLINE / HOW TO PLAY / SCORES). ONLINE → `LobbyScene` →
-  `GameScene` with `{ online: NetBattle }` → results → `LobbyScene`. PLAY →
-  `GameScene`; BATTLE → `GameScene` with `{ battle: true }` (no leaderboard); HOW TO PLAY → `HowToPlayScene`; SCORES → `LeaderboardScene` in
+- **Navigation:** `BootScene` → `MenuScene` (ship picker ◀ ▶ / ←→, then STORY /
+  ENDLESS / BATTLE (beta) / ONLINE / HOW TO PLAY / SCORES). STORY → `StoryMapScene`
+  (islands; tap a reached island = that stage's board, RUN SCORES = the run
+  board, both `LeaderboardScene` browse with BACK → map; PLAY / Enter →
+  `GameScene` with `{ story: { level: 0, lives, score, levelScores: [] } }`);
+  ONLINE → `LobbyScene` → `GameScene` with `{ online: NetBattle }` → results →
+  `LobbyScene`; ENDLESS (and
+  Enter) → `GameScene`; BATTLE → `GameScene` with `{ battle: true }` (no leaderboard); HOW TO PLAY → `HowToPlayScene`; SCORES → `LeaderboardScene` in
   **browse** mode (fetches `getTop()` itself, BACK → menu).
 - Game-over flow (when enabled): GAME OVER overlay → `NameEntryScene` (3–6 char
   length selector + initials) → `submitScore` (via the match gate) →
   `LeaderboardScene` (post-run mode, shows world rank) → `MenuScene`. All restart
   triggers route through one idempotent `GameScene.leaveGameOver()`; when the
-  leaderboard is disabled it goes straight to `MenuScene`.
+  leaderboard is disabled it goes straight to `MenuScene`. A story run ends
+  (game over, or the last built level cleared) the same way, but names are
+  entered once and submitted to several boards (the run's total, shown
+  after, then each stage played, ranks in one line), and it goes back to
+  the story map.
 - **Hosting: GitHub Pages** via `.github/workflows/deploy.yml` (build on push to
   `main`, deploy `dist`). Supabase env injected from repo **secrets**. Vite
   `base: "./"` keeps asset paths relative so the project subpath works.
@@ -585,6 +631,14 @@ Green=multiplication, Yellow=division.
   summary, solves, hits, input sources (keypad/keyboard/pad), pad reads vs
   "?", pauses. GAME OVER shows "run saved for analysis". Claude reads the
   runs (ArtifactData) and `npm run playtest -- runs.json` replays them.
+  **Public run log:** outside the Artifact (GitHub Pages, any player) the
+  same record goes to Supabase `run_logs` through the write-only RPC
+  `log_run` (`supabase/run-logs.sql`; shape and size checked, a global flood
+  guard, RLS with no policies, so the API can't read it). No user agent,
+  name or IP: only screen size and touch. Story levels log one record per
+  attempt (cleared or not). The menu footer says runs are saved
+  anonymously. Claude reads them with SQL (Supabase MCP) and replays them
+  with `npm run playtest`.
 - **Keyboard:** raw key listeners use `onKeyDown` (`src/ui/keyboard.ts`).
   Phaser 3.90 re-delivers earlier keys when several arrive in one frame
   ("12" → "112", a power toggled twice); the helper drops repeats.
@@ -629,6 +683,84 @@ Green=multiplication, Yellow=division.
     banner.
   - **Play-testing (dev only):** `?ability=blinker,shielded,splitter` makes
     every allowed spawn one of the listed abilities, ignoring unlocks.
+- **Story mode** (`config/tuning/story.ts`, docs/SOLO_MODES_DESIGN.md):
+  levels are data (`LEVELS`: page, seed, path length, difficulty range,
+  roster, drifters, boss). Swarm asks a `SpawnDirector` (`sim/director.ts`)
+  what to spawn: `LevelDirector` lerps d from `D.FROM` to `D.TO` along the
+  path, which runs on **field time** (freezes and SLOW hold it). At the end
+  of the path no spawns come until the board is clear, then the **boss**
+  comes in; while it's up, one minion at a time (`BOSS_PHASE_UNSOLVED`).
+  The boss (`Boss` ability) takes `HP` answers: each but the last rolls a
+  new sum and burrows to the other side and up (numbers hidden while it
+  digs), then holds still to be read; reaching the ship costs a life and
+  sends it back up; BLAST doesn't touch it. The last answer clears the
+  level (`levelCleared`, a card, then the next level with the same lives
+  and score). Game over = back to the story map (every run starts at
+  level 1). The top bar shows the path's progress; the page scrolls
+  (`DOODLE.PAGE_*`).
+  **Story map** (`StoryMapScene`, `STORY_MAP`, owner's design): 10 islands
+  (`STORY.STAGES`) up a notebook page joined by a pencil trail. A stage is
+  reached once the previous boss is beaten (`services/storyProgress.ts`,
+  `STORAGE.STORY`): reached islands are shaded with a sketch of their world
+  and the best score under them (a flag = boss beaten, the ship sits on the
+  furthest one); the rest are a dashed "?". Built levels come from LEVELS; a
+  reached stage that isn't built yet says "coming soon". Islands are not
+  entry points: PLAY always starts at island 1 (no practice mode).
+  **Creatures** (`LevelDef.SPECIES`): a level turns monster kinds into its
+  own creatures with a ball layout (`BALL_LAYOUTS`: eyes, chain, wings; it
+  sets the readability box), a trait (`objects/traits.ts`), an optional
+  march (lines in step) and an intro line. Bosses fight by a mechanic
+  (`objects/bosses.ts`). One file per level: `config/levels/<page>.ts`
+  (rules) + `renderDoodle/levels/<page>.ts` (looks), each listed in its
+  folder's index (docs/SOLO_MODES_DESIGN.md "Adding a level").
+  **Flow:** STORY opens the map (CONTINUE a saved run, or a new run from
+  island 1). After a clear the game returns to the map, the ship flies to
+  the next island, and a tap starts it. The run is saved when each level
+  starts (`STORAGE.STORY_SAVE`: level, lives, score), so it can be left
+  (pause → SAVE & QUIT TO MAP) and continued from that level's start; a
+  game over deletes it. **Music:** each level loads its own path + boss
+  track (`public/assets/music/levelNN-{path,boss}.mp3`, `scenes/levelMusic.ts`)
+  and crossfades to the boss track when the boss comes in.
+  Built: level 1, THE BACKYARD (now 100 s, d 0.1 → 0.35; beetles whose eyes are
+  the numbers and sometimes march in pairs, worms made of numbers, a
+  butterfly that folds its wings over its numbers; boss GIANT MOLE, 5
+  answers of 3 balls). Bots: rookie clears 16/20, pilot and ace 20/20.
+  Level 2, THE POND (3:20, d 0.1 → 0.28, sums of 2–4 balls via
+  `LevelDef.MAX_BALLS`): goldfish whose numbers are bubbles, swimming in
+  schools of 3; dragonflies whose eyes are the numbers, darting down in
+  zips with hovers (trait `dart`); frogs with 3–4 spots (`cluster` layout)
+  that sit longer the more spots they carry (trait `hop`); a duck that dives
+  and pops up further along (trait `dive`); boss BIG FROG (6 answers of 4
+  balls, `leap`: sits, croaks, leaps from pad to pad). Rules for the pond's
+  traits/boss in `objects/pondCreatures.ts`; they move themselves through
+  `Ability.steer(alien, fieldDelta)` (field time). Bots: rookie 11/20,
+  pilot and ace 20/20.
+  Level 3, THE TREETOPS (3.5 min, d 0.3 → 0.45; `config/levels/treetops.ts`):
+  squirrels leap in from the trunks and then from branch to branch, two
+  acorns (numbers) in their paws; owls whose eyes are the numbers turn
+  their heads away while perched, never while they swoop; birds in flocks
+  of up to three, a number on each wing (0.6× speed); a hummingbird bonus
+  that darts and hovers; boss GREAT OWL (6 answers, eyes = numbers, blinks
+  faster after each answer, flies to another branch). Traits that move
+  their creature use `Ability.steer` (field time, glideTo/hold only).
+  Bots: rookie clears 10/20, pilot 19/20, ace 20/20.
+  Level 4, THE MUD SWAMP (200 s, d 0.3 → 0.55; slime blobs that pop in
+  two, peepers whose eyes duck under the mud, snails that lose their
+  shell, bog turtles, a firefly whose light flickers out; boss MUD
+  MONSTER, which splits into two halves that must both be beaten, 6
+  answers). A boss that splits clears the level only when no boss part is
+  left (`BossDef.PART`, `AbilityHost.spawnBossPart`).
+  Level 5, THE DARK CAVE (200 s, d 0.45 → 0.6): bats hang upside down,
+  wake with a shake and drop (trait `roost`), glowworms on silk threads
+  glow on and off (trait `glow`), a mine cart whose wheels are its numbers;
+  boss CAVE TROLL (6 answers), whose numbers show only in a swinging
+  lamp's beam; the light holds it still (`objects/caveTroll.ts`). Bots:
+  rookie 2/20, pilot 18/20, ace 20/20. Traits can scale or hold their
+  kind's movement with `Ability.pace(alien, delta)`; `update(delta, alien)`
+  gets the alien; a boss look can draw under the field (`BossLook.under`).
+  Level 6, THE VOLCANO: lava drips that drop in hops, fireflies that go
+  dark together, lava tortoises (answer the shell first), a hopping spark;
+  boss DRAGON, whose fire breath re-rolls its sum (docs/SOLO_MODES_DESIGN.md).
 - **Bullets hit only their target.** Results are unique on the field, and each
   bullet carries the alien whose answer fired it (`Bullet.target`); it flies
   through every other alien, so only the solved alien can die or lose its
@@ -745,6 +877,13 @@ Green=multiplication, Yellow=division.
   absolute speed still climbs over time. The ship can still fire during the
   freeze (so a frozen board can be cleared). The freeze is a countdown that
   only runs while unpaused, so pausing doesn't eat it.
+  During the freeze every monster is also **pushed back up** the field by
+  `RECOVERY.PUSHBACK_PX` (70) over `PUSHBACK_MS` (owner's ask: room to
+  recover), all by the same amount so readability gaps hold (every mode).
+  The ship shows it (doodle view): knocked down with an "ouch!", then blinks
+  with stars circling it for the freeze. The last hit snaps it in two
+  ("CRASH!"), and GAME OVER waits `RECOVERY.GAME_OVER_DELAY_MS` (1.6 s,
+  presentation only) so the destruction is seen.
 
 ## Difficulty design
 
@@ -846,6 +985,16 @@ dMatch)`; it is 0 in solo play.
        slow-motion guard), [ ] fast-solve flag, [ ] name filter + privacy
        note, [ ] reconnect (only if needed).
 
+14. [ ] **Solo modes: STORY + ENDLESS** — 10 notebook-page levels, each
+       with a new monster and a boss; today's game becomes ENDLESS. Plan
+       and milestones L1–L8: `docs/SOLO_MODES_DESIGN.md` (decided
+       2026-10-18). [x] L1 menu modes, [x] L2 director seam, [x] L3 level
+       engine (level 1 page + path), [x] L4 boss (Giant Mole), level 2 the pond (Big Frog); next: L5
+       table of contents + scores, power card before each level.
+       engine (level 1 page + path), [x] L4 boss (Giant Mole), [x] L5 story
+       map + per-stage and run boards (SQL not applied yet); next: power
+       card before each level.
+
 ## Conventions
 
 - Follow `docs/ENGINEERING.md` (readability rules, layers, verification) and
@@ -883,6 +1032,115 @@ dMatch)`; it is 0 in solo play.
 
 Newest first. Format: `YYYY-MM-DD — decision — rationale`.
 
+- **2026-10-19 — Owner's first story playtest: faster start, pushback,
+  music, map flow, saves, public logs.** Levels 1–2 felt long and easy
+  (shield never needed): paths 180/200 s → 100/120 s and d up (bots:
+  ace clears L1 in ~2:10, was ~3:30; rookie 4/12). A hit now also pushes
+  every monster back 70 px during the freeze (every mode; golden master
+  updated). The 20-track soundtrack ships as 96 kbps MP3 (6.9 MB, was 35
+  MB WAV), loaded per level, not at boot. After a clear the ship flies to
+  the next island on the map and waits for a tap; runs are saved per
+  level and can be continued. Logs: the Artifact keeps the owner's runs;
+  the public game now logs to Supabase `run_logs` (anonymous, write-only)
+  so other players' runs can be studied; the MeticWeb project was
+  restored (it had been paused) and story-boards + run-logs applied (an
+  old 1–5 char name check that refused 6-letter initials was dropped).
+
+- **2026-10-18 — Level 2, THE POND, and three small generic rules.**
+  `Ability.steer(alien, fieldDelta)` lets a trait or boss script its own
+  moves on field time (`update` runs on real time, so it can't drive
+  movement fairly under FREEZE/SLOW); `LevelDef.MAX_BALLS` lets a level
+  carry 3–4 ball sums below the d that would give them; the `cluster`
+  layout keeps 3–4+ balls compact (rows of 2). The owner's speed rule
+  applied to creatures: a frog sits 250 ms longer per spot. Bots set the
+  range: d 0.2 → 0.35 cleared rookies 0/20 (fish schools + frogs), d 0.1
+  → 0.28 with schools on 15% of fish spawns clears 11/20 (level 1: 16/20).
+- **2026-10-18 — Level 3, THE TREETOPS (built in its own chat).** Creature
+  traits that move their alien go through `Ability.steer(alien, fieldDt)`
+  (glideTo/hold on field time; same hook as the pond branch) and trigger
+  on position, so freezes stop them too; `SpeciesDef.SPEED` (same as the
+  swamp branch) slows creatures that are harder to beat. Bots set the
+  numbers: flocks of three full-speed darters knocked out every rookie
+  (0/20), so birds fly at 0.6 and owls (they hide) at 0.9: rookie 10/20
+  (level 1: 16/20), pilot 19/20, ace 20/20. Sums only; subtraction comes
+  with the shared operations piece.
+- **2026-10-18 — Level 4, THE MUD SWAMP: every creature has a trait; the
+  Mud Monster splits.** Slime = Splitter, snail = Shielded, peeper and
+  firefly = blink rhythms, given as species traits; `SpeciesDef.SPEED`
+  slows a creature whose trait makes it harder (owner's rule). The boss's
+  last answer spawns two boss parts (`spawnBossPart`), and the level now
+  clears when no boss is left instead of when "the" boss dies (chosen over
+  a dying boss that waits as a hidden puddle: it would block the field and
+  keep a typeable answer). Bots (20 seeds): rookie 0/20 (out in ~1.5 min),
+  pilot 15/20, ace 20/20; d 0.4 → 0.55 gave pilots 5–9/20 (splitlings
+  caused ~70% of their hits), so d starts at 0.3 and splitlings land no
+  lower than y 190 (Endless: 260).
+- **2026-10-18 — Level 5, THE DARK CAVE: creatures by movement, a boss read
+  by lamplight.** Bats hang still (easy read), shake, then drop; glowworms
+  glow on a telegraphed rhythm and move at 60% (they hide: owner's rule);
+  the troll's numbers show only in a steady sweeping beam and it freezes
+  while lit (a beam from the ship was rejected: the ship only moves toward
+  a target, so the player couldn't aim it). New generic hooks, no-ops
+  elsewhere: `Ability.pace` (hold/scale the kind's pattern; complements
+  the pond's `steer`), `update(delta, alien)`, `BossLook.under`. d range
+  0.45 → 0.6, not 0.5 → 0.65: pilots cleared 1/20 at the planned range.
+- **2026-10-18 — Level 6, THE VOLCANO; traits can move their alien.**
+  Ability `update` now also gets its alien and the host (like onHit), and
+  Alien says when a glide/hold runs (`scripted`): lava drips and the spark
+  move only in hops, in field time, and the Dragon breathes (a new sum)
+  after a telegraphed inhale. `SpeciesDef.SPEED` added for the owner's rule
+  (tortoise answers twice: ×0.45, it caused 90% of hits at ×1; flashing
+  fireflies ×0.8). Bots: rookie 0/20, pilot 14/20, ace 20/20.
+- **2026-10-18 — Story map (L5): islands show progress, every run starts at
+  island 1; one leaderboard table with a `level` column.** Owner's picks:
+  reached islands show their best score, the rest a "?"; no practice mode
+  (arcade rules hold: a run always starts at stage 1, so an island opens
+  its stage's world board, not the level). Boards: `scores.level` (0
+  Endless, 1–10 stages, 99 runs) over a second table (two of every
+  function). Tickets are per board; a story run submits all its boards once,
+  after one name entry. Migration in `supabase/story-boards.sql`, not
+  applied yet.
+
+- **2026-10-18 — Creatures with personality; one file per level.** Owner's
+  ask: each level's monsters behave differently, not just look different.
+  A creature = a monster kind + a ball layout (beetle eyes, worm chain,
+  butterfly wings: a rule, since it sets the readability box) + a trait
+  (an Ability) + an optional march. Marches skip the unsolved cap (else
+  they never form in level 1, whose cap is 1) but obey the threat budget;
+  bots: lines on every beetle dropped rookies from 18/20 to 8/20, so lines
+  come on 35% of beetle spawns (16/20). Levels moved to one file each
+  (rules + looks) with small registries, so several chats can build levels
+  at once with only one-line merges.
+
+- **2026-10-18 — Story slice L1–L4: a SpawnDirector, level 1 and the Giant
+  Mole.** Story pacing goes behind a `SpawnDirector` interface (strategy
+  pattern) instead of `if (story)` in Swarm or a copied `StorySwarm` (owner's
+  first pick; a copy would duplicate ~550 lines, against the owner's own
+  "no duplicated code"). Endless/battles unchanged (golden master). Bosses
+  ride on the ability hooks; BLAST can't hit them; reaching the ship costs a
+  life and the boss retreats instead of leaving. Level 1 range set by bots:
+  d 0 → 0.4 let rookies clear 2/20, d 0 → 0.25 clears 18/20 (losing ~1.5
+  lives: lives carry over). Each level has a fixed seed (learnable).
+
+- **2026-10-18 — Story mode decided (docs/SOLO_MODES_DESIGN.md).** 10
+  levels, a kid's imagined nature worlds (dirt, pond, treetops, swamp,
+  cave, volcano, sky, snow, night sky, bedroom), each a scrolling page that
+  ends at a boss (path = timer, 3–4 min: fairer than a kill quota, which can
+  stall slow players). Arcade rules (owner): lives carry over, game over =
+  back to level 1. Power picked before each level; ships stay looks. Sums
+  only in levels 1–2, then more operations and 4+ ball sums. Scores per
+  level and per run. Today's PLAY becomes ENDLESS. Open: practice mode,
+  story panels between levels.
+
+- **2026-10-18 — Art direction: pencil doodles on notebook paper (owner's
+  pick of two prototypes).** Built both side by side: A = the 3D models
+  through a pencil post-process shader, B = a new 2D view with doodle
+  recipes. Owner picked B: it reads as "playing on a sheet of paper", fits
+  the handwriting input, and is lighter (+15 kB, ~0.2 ms/frame). B is the
+  default; the 3D view stays behind `?art=3d` (both fill `FieldView`).
+  Prototype A stays on its local branch, unmerged.
+  Same day: the three ships got their own doodles (all three drew FALCON),
+  and the ship got hit / dazed / destroyed animations (owner's ask).
 - **2026-10-18 — Launch hardening, free tiers only (owner: an experiment,
   cap instead of scaling).** Hello compares a rules-file hash
   (`__RULES_ID__`), so Pages and Render builds match; up to MAX_ROOMS (3)

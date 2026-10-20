@@ -1,4 +1,12 @@
-import { ENEMY, GAME, MODEL_BOXES, MONSTERS, type AlienKind } from "../config/constants";
+import {
+  BALL_LAYOUTS,
+  ENEMY,
+  GAME,
+  MODEL_BOXES,
+  MONSTERS,
+  type AlienKind,
+  type BallLayout,
+} from "../config/constants";
 import { sin } from "../math/detmath";
 import type { Rng } from "../sim/rng";
 import type { Ability } from "./abilities";
@@ -45,6 +53,15 @@ export interface AlienConfig {
   ability?: Ability;
   /** Battle: the seat that sent this alien (an attack), else unset. */
   sentBy?: number;
+  /** Where the balls sit (default "row"); see BALL_LAYOUTS. */
+  layout?: BallLayout;
+  /** Readability box instead of the kind's or model's (a boss). */
+  box?: { HALF_W: number; BALLS_Y: number; BOTTOM: number };
+  /** Story: the creature this alien is on its level's page ("beetle"…). */
+  species?: string;
+  /** Sideways start direction instead of a random one (a marching line
+   * keeps in step with its leader). */
+  dir?: 1 | -1;
 }
 
 /** A scripted move (knockback, splitting apart) that overrides the pattern. */
@@ -93,6 +110,10 @@ export default class Alien {
   public readonly ability: Ability | null;
   /** Battle: the seat that sent this alien, or null for the field's own. */
   public readonly sentBy: number | null;
+  /** Where its balls sit (the readability box follows it). */
+  public readonly layout: BallLayout;
+  /** Story: the creature it is on its level's page, else null. */
+  public readonly species: string | null;
 
   // Readability box around the ball row and body, relative to (x, y).
   public readonly halfW: number;
@@ -131,17 +152,20 @@ export default class Alien {
     this.model = config.model ?? null;
     this.ability = config.ability ?? null;
     this.sentBy = config.sentBy ?? null;
+    this.species = config.species ?? null;
     this.fallSpeed = config.fallSpeed;
     this.homeSpeed = config.homeSpeed;
     this.laneX = config.laneX ?? config.x;
     this.bandY = config.bandY ?? 0;
     this.modeLeftMs = config.patrolMs ?? 0;
 
-    const box = (this.model && MODEL_BOXES[this.model]) || MONSTERS[config.kind];
-    const ballRowHalf = ((this.ballCount - 1) * ENEMY.BALL_SPACING) / 2 + ENEMY.BALL_RADIUS;
-    this.halfW = Math.max(box.HALF_W, ballRowHalf);
-    this.top = box.BALLS_Y + ENEMY.BALL_RADIUS;
-    this.bottom = box.BOTTOM;
+    // Eyes and wings hold exactly two balls; any other count rides in a row.
+    const layout = config.layout ?? "row";
+    this.layout = (layout === "eyes" || layout === "wings") && this.ballCount !== 2 ? "row" : layout;
+    const box = this.boxFor(config.box ?? ((this.model && MODEL_BOXES[this.model]) || MONSTERS[config.kind]));
+    this.halfW = box.halfW;
+    this.top = box.top;
+    this.bottom = box.bottom;
     const lateral =
       config.kind === "darter"
         ? MONSTERS.darter.ZIG_AMPLITUDE
@@ -153,8 +177,58 @@ export default class Alien {
     this.mode = config.kind === "strafer" || config.kind === "swooper" ? "enter" : "move";
     if (config.kind === "drifter") this.dir = config.x < GAME.WIDTH / 2 ? 1 : -1;
     else if (config.kind === "swooper") this.dir = this.laneX >= config.x ? 1 : -1;
-    else this.dir = config.rng.chance(0.5) ? 1 : -1;
+    else {
+      const rolled = config.rng.chance(0.5) ? 1 : -1;
+      this.dir = config.dir ?? rolled;
+    }
     this.gait = config.rng.next() * TAU;
+  }
+
+  /** Readability box for this alien's layout: the kind's (or model's) box
+   * with a ball row above it, or the creature's own box. */
+  private boxFor(kindBox: { HALF_W: number; BALLS_Y: number; BOTTOM: number }) {
+    const r = ENEMY.BALL_RADIUS;
+    switch (this.layout) {
+      case "eyes":
+      case "wings": {
+        const L = BALL_LAYOUTS[this.layout];
+        return { halfW: L.HALF_W, top: L.TOP, bottom: L.BOTTOM };
+      }
+      case "chain": {
+        const L = BALL_LAYOUTS.chain;
+        const topBall = L.FIRST_Y - (this.ballCount - 1) * L.GAP;
+        return { halfW: r + L.WIGGLE_PX, top: -topBall + r, bottom: L.BOTTOM };
+      }
+      case "cluster": {
+        const L = BALL_LAYOUTS.cluster;
+        const topRow = L.FIRST_Y - (Math.ceil(this.ballCount / 2) - 1) * L.GAP_Y;
+        return { halfW: L.GAP_X / 2 + r + L.SIDE, top: -topRow + r + L.TOP, bottom: L.BOTTOM };
+      }
+      case "row": {
+        const ballRowHalf = ((this.ballCount - 1) * ENEMY.BALL_SPACING) / 2 + r;
+        return { halfW: Math.max(kindBox.HALF_W, ballRowHalf), top: kindBox.BALLS_Y + r, bottom: kindBox.BOTTOM };
+      }
+    }
+  }
+
+  /** Where ball `i` sits, relative to the body center (+y toward the player). */
+  public ballOffset(i: number): readonly [number, number] {
+    switch (this.layout) {
+      case "eyes":
+        return [(i === 0 ? -1 : 1) * BALL_LAYOUTS.eyes.EYE_DX, BALL_LAYOUTS.eyes.EYE_Y];
+      case "wings":
+        return [(i === 0 ? -1 : 1) * BALL_LAYOUTS.wings.WING_DX, BALL_LAYOUTS.wings.WING_Y];
+      case "chain":
+        return [0, BALL_LAYOUTS.chain.FIRST_Y - i * BALL_LAYOUTS.chain.GAP];
+      case "cluster": {
+        const L = BALL_LAYOUTS.cluster;
+        const row = Math.floor(i / 2);
+        const alone = i === this.ballCount - 1 && i % 2 === 0; // odd ball out
+        return [alone ? 0 : (i % 2 === 0 ? -1 : 1) * (L.GAP_X / 2), L.FIRST_Y - row * L.GAP_Y];
+      }
+      case "row":
+        return [(i - (this.ballCount - 1) / 2) * ENEMY.BALL_SPACING, -(this.top - ENEMY.BALL_RADIUS)];
+    }
   }
 
   /** Remember where the alien was before this sim step moves it. */
@@ -190,6 +264,11 @@ export default class Alien {
     return lateral
       ? [this.laneX - this.sweepHalf, this.laneX + this.sweepHalf]
       : [this.x - this.halfW, this.x + this.halfW];
+  }
+
+  /** Its sideways direction right now (+1 right, -1 left). */
+  public get heading(): 1 | -1 {
+    return this.dir;
   }
 
   /** Whether this alien's box, placed at (x, y), comes within READ_GAP of other's. */
@@ -236,6 +315,21 @@ export default class Alien {
     this.holdMs = ms;
   }
 
+  /** A glide or hold is running, so the movement pattern waits (both count
+   * down in field time: freezes and SLOW stretch them). */
+  public get scripted(): boolean {
+    return this.glide !== null || this.holdMs > 0;
+  }
+
+  public get gliding(): boolean {
+    return this.glide !== null;
+  }
+
+  /** Ms of the current hold still to go (0 when not holding). */
+  public get holdLeftMs(): number {
+    return Math.max(0, this.holdMs);
+  }
+
   /** Move one frame according to the alien's kind (or a scripted glide/hold). */
   public advance(delta: number): void {
     if (this.glide) {
@@ -258,6 +352,7 @@ export default class Alien {
       this.holdMs -= delta;
       return;
     }
+    if (this.ability) delta = this.ability.pace(this, delta);
 
     const dt = delta / 1000;
     switch (this.kind) {

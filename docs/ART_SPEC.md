@@ -1,5 +1,11 @@
 # Metic — 3D Art Spec
 
+> **2026-10-18: the default art is now pencil doodles on notebook paper**
+> (`src/renderDoodle/`: one stroke recipe per ship/monster in `recipes.ts`,
+> tuning in `config/tuning/doodle.ts`). This spec still governs the 3D view
+> (`?art=3d`); its rules on readable balls and reserved ball colors apply to
+> the doodles too.
+>
 > **Status:** Adopted (2026-09-24): kit, build script and `ship_player` exist. Owner: whoever touches `art/`. Update this file
 > and the AGENTS.md Decision Log when a rule here changes.
 

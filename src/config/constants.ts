@@ -19,3 +19,5 @@ export * from "./tuning/bots";
 export * from "./tuning/storage";
 export * from "./tuning/render3d";
 export * from "./tuning/net";
+export * from "./tuning/doodle";
+export * from "./tuning/story";

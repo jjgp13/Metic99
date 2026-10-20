@@ -59,4 +59,10 @@ export const BULLET = {
 export const RECOVERY = {
   FREEZE_MS: 3000, // field is completely frozen for this long after a hit
   POST_HIT_FACTOR: 0.8, // field speed multiplier once movement resumes
+  // During the freeze every monster is pushed back up the field this far
+  // (over PUSHBACK_MS), so the player has room to recover.
+  PUSHBACK_PX: 70,
+  PUSHBACK_MS: 500,
+  // Presentation only: the ship's destruction plays before GAME OVER shows.
+  GAME_OVER_DELAY_MS: 1600,
 } as const;

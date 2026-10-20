@@ -1,10 +1,12 @@
 import type Phaser from "phaser";
+import { artMode } from "../config/artMode";
+import { DOODLE } from "../config/constants";
 import { PALETTE, css } from "../config/palette";
 
 type TextStyle = Phaser.Types.GameObjects.Text.TextStyle;
 
-/** The one font the game uses. */
-export const FONT_FAMILY = "monospace";
+/** The one font the game uses: handwriting in the doodle art. */
+export const FONT_FAMILY = artMode() === "doodle" ? `"${DOODLE.FONT}", cursive` : "monospace";
 
 /**
  * The game's text style: monospace at `sizePx` in `color` (a PALETTE color or
@@ -21,7 +23,7 @@ export function textStyle(sizePx: number, color: number | string = PALETTE.TEXT,
   };
 }
 
-/** A dark outline that keeps text readable over the 3D field. */
+/** An outline in the background color that keeps text readable over the field. */
 export function outline(thicknessPx = 4): TextStyle {
   return { stroke: css(PALETTE.BACKGROUND), strokeThickness: thicknessPx };
 }

@@ -15,6 +15,8 @@ export class PauseOverlay {
   constructor(
     private readonly scene: Phaser.Scene,
     private readonly onResume: () => void,
+    /** Story: leave for the map (the run is saved at the level's start). */
+    private readonly onQuit: (() => void) | null = null,
   ) {}
 
   show(): void {
@@ -29,6 +31,20 @@ export class PauseOverlay {
       .setOrigin(0.5)
       .setDepth(DEPTH.PAUSE + 1);
     this.parts = [cover, label];
+    if (this.onQuit) {
+      const quit = this.scene.add
+        .text(center.x, center.y + 120, "SAVE & QUIT TO MAP", textStyle(20, PALETTE.GOLD))
+        .setOrigin(0.5)
+        .setPadding(12)
+        .setDepth(DEPTH.PAUSE + 1)
+        .setInteractive({ useHandCursor: true });
+      const onQuit = this.onQuit;
+      quit.on("pointerdown", (_p: unknown, _x: number, _y: number, e: Phaser.Types.Input.EventData) => {
+        e.stopPropagation(); // don't also resume
+        onQuit();
+      });
+      this.parts.push(quit);
+    }
   }
 
   hide(): void {

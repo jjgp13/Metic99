@@ -13,8 +13,10 @@ import { DEPTH, GUTTER, METER } from "./layout";
  * when its fade ends. Pops over the field duck under aliens (see Ducker).
  */
 export class Popups {
-  /** Abilities already introduced this run (each gets one banner). */
-  private readonly introduced = new Set<AbilityKind>();
+  /** Abilities and creatures already introduced this run (one banner each). */
+  private readonly introduced = new Set<string>();
+  /** Banners on screen right now (each new one goes below them). */
+  private banners = 0;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -82,19 +84,33 @@ export class Popups {
 
   /** First sighting of an ability this run: a banner names it and its rule. */
   introduceAbility(kind: AbilityKind): void {
-    if (this.introduced.has(kind)) return;
-    this.introduced.add(kind);
+    this.introduce(kind, ABILITY.INTRO[kind]);
+  }
+
+  /** A one-line intro banner, once per run per `key`. */
+  introduce(key: string, text: string): void {
+    if (this.introduced.has(key)) return;
+    this.introduced.add(key);
+    this.banner(text, 15, ABILITY.INTRO_MS);
+  }
+
+  /** A line of text at the top of the field that fades after `ms`; banners
+   * shown together stack downward instead of overlapping. */
+  banner(text: string, size: number, ms: number): void {
+    const y = ABILITY.INTRO_Y + this.banners * (size + 10);
+    this.banners++;
     const banner = this.ducker.add(
-      this.scene.add
-        .text(GAME.WIDTH / 2, ABILITY.INTRO_Y, ABILITY.INTRO[kind], textStyle(15, PALETTE.GOLD, outline(4)))
-        .setOrigin(0.5),
+      this.scene.add.text(GAME.WIDTH / 2, y, text, textStyle(size, PALETTE.GOLD, outline(4))).setOrigin(0.5),
     );
     this.scene.tweens.add({
       targets: banner,
       alpha: 0,
-      delay: ABILITY.INTRO_MS,
+      delay: ms,
       duration: 400,
-      onComplete: () => banner.destroy(),
+      onComplete: () => {
+        banner.destroy();
+        this.banners--;
+      },
     });
   }
 

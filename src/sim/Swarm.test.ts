@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { GAME, MONSTERS, SIM, SPLITTER } from "../config/constants";
 import type Alien from "../objects/Alien";
-import { ABILITY_KINDS, type AbilityKind } from "../objects/abilities";
+import { ABILITY_KINDS } from "../objects/abilities";
 import { Swarm } from "./Swarm";
 
 const STEP = SIM.STEP_MS;
@@ -13,7 +13,7 @@ interface PlayStats {
   /** Steps on which two live aliens' boxes (plus READ_GAP) overlapped. */
   overlapSteps: number;
   kinds: Set<string>;
-  abilities: Set<AbilityKind>;
+  abilities: Set<string>;
 }
 
 /**

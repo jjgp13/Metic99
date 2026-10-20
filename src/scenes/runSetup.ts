@@ -1,4 +1,4 @@
-import { MATCH } from "../config/constants";
+import { LEVELS, MATCH } from "../config/constants";
 import { selectedPower } from "../config/powers";
 import { ABILITY_KINDS, type AbilityKind } from "../objects/abilities";
 import { Bot } from "../sim/Bot";
@@ -6,6 +6,22 @@ import { Field } from "../sim/Field";
 import { LocalBattle, type BattleSource } from "../sim/BattleSource";
 import { Match } from "../sim/Match";
 import { randomSeed } from "../sim/rng";
+
+/** Story: the arcade run so far, carried from one level to the next. */
+export interface StoryRun {
+  /** Index into LEVELS. */
+  level: number;
+  lives: number;
+  score: number;
+  /** Points scored in each level already finished (for the stage boards). */
+  levelScores: number[];
+}
+
+/** Which mode GameScene was started in. */
+export interface RunMode {
+  battle: boolean;
+  story: StoryRun | null;
+}
 
 /** Everything a run starts from (GameScene builds its screen around it). */
 export interface RunSetup {
@@ -29,21 +45,28 @@ export interface RunSetup {
  * - `?ability=blinker,shielded` makes every allowed spawn one of these;
  * - `?bot=ace` puts a bot on autopilot (also online: handy for testing).
  */
-export function setUpRun(battle: boolean, online?: BattleSource): RunSetup {
+export function setUpRun(mode: RunMode, online?: BattleSource): RunSetup {
   const params = import.meta.env.DEV ? new URLSearchParams(window.location.search) : null;
   if (online) {
     // Online: the server picked the seed and built the field's twin.
-    const level = params?.get("bot") ?? "";
-    const autopilot = Bot.isLevel(level) ? Bot.forSeat(level, online.field.seed, online.you) : null;
+    const botLevel = params?.get("bot") ?? "";
+    const autopilot = Bot.isLevel(botLevel) ? Bot.forSeat(botLevel, online.field.seed, online.you) : null;
     return { seed: online.field.seed, field: online.field, battle: online, forcedAbilities: null, autopilot };
   }
-  const seed = seedFrom(params);
+  // A story level has its own seed (the same aliens every attempt).
+  const level = mode.story ? LEVELS[mode.story.level] : null;
+  const seed = level && !params?.has("seed") ? level.SEED : seedFrom(params);
   if (params) console.info(`[metic] run seed ${seed} (replay with ?seed=${seed})`);
 
-  const level = params?.get("bot") ?? "";
-  const autopilot = Bot.isLevel(level) ? Bot.forSeat(level, seed) : null;
+  const botLevel = params?.get("bot") ?? "";
+  const autopilot = Bot.isLevel(botLevel) ? Bot.forSeat(botLevel, seed) : null;
 
-  if (battle) {
+  if (level && mode.story) {
+    const { lives, score } = mode.story;
+    const field = new Field({ seed, level, lives, score, power: selectedPower() });
+    return { seed, field, battle: null, forcedAbilities: null, autopilot };
+  }
+  if (mode.battle) {
     // You (seat 0) and the bots share the seed, one life each.
     const match = new Match({ seed, seats: ["human", ...MATCH.OPPONENTS], humanPower: selectedPower() });
     const battle = new LocalBattle(match);

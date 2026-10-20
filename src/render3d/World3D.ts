@@ -24,8 +24,16 @@ export interface WorldSnapshot {
   aliensHidden: boolean;
   /** The SHIELD power is armed: draw a bubble around the ship. */
   shipShield: boolean;
+  /** How much of the post-hit freeze is left (1 right after a hit, 0 = fine). */
+  shipHurt: number;
+  /** The last life is gone: the ship is destroyed. */
+  shipDown: boolean;
+  /** Story: the level's page and how far it has scrolled (null in Endless). */
+  page: { id: string; scrolledPx: number; lengthPx: number } | null;
   /** The answer the background stars spell out, or null. */
   answer: AnswerView | null;
+  /** The alien the typed answer points at (lock-on), or null. */
+  target: Alien | null;
 }
 
 /** A model's `anim_*` part, with its rest rotation and mirror side. */
@@ -81,6 +89,8 @@ const isShieldUp = (a: Alien) => a.ability instanceof Shielded && a.ability.shie
  * contexts are scarce on mobile — and is shown/hidden per run.
  */
 export default class World3D {
+  /** The HUD's gold brackets mark the target over this view. */
+  public readonly drawsTarget = false;
   private readonly renderer: THREE.WebGLRenderer;
   private readonly scene = new THREE.Scene();
   private readonly camera: THREE.PerspectiveCamera;

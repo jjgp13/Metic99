@@ -20,8 +20,10 @@
     "net:bots": "vite-node scripts/net-bots.ts"
   },
   "dependencies": {
+    "@fontsource/patrick-hand": "^5.3.0",
     "@supabase/supabase-js": "^2.106.2",
     "phaser": "^3.80.1",
+    "roughjs": "^4.6.6",
     "three": "^0.180.0",
     "ws": "^8.22.0"
   },

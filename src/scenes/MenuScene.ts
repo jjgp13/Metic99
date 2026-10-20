@@ -1,17 +1,21 @@
 import Phaser from "phaser";
-import { GAME, POWERS, POWER_KINDS, RENDER3D } from "../config/constants";
+import { DOODLE, GAME, POWERS, POWER_KINDS, RENDER3D } from "../config/constants";
+import { artMode } from "../config/artMode";
 import { selectPower, selectedPower } from "../config/powers";
 import { selectShip, selectedShip } from "../config/ships";
 import { storedHighScore } from "../services/masteryStats";
 import { onKeyDown } from "../ui/keyboard";
 import { PALETTE, css } from "../config/palette";
 import { textStyle } from "../ui/theme";
+import { shipIconFrames } from "../renderDoodle/shipIcons";
 
 /**
  * Title / main menu. The first scene the player sees: a ship picker (a look
- * only), a power picker (the one power used in play), then PLAY or BATTLE
- * (you + 7 bots), ONLINE (friends on the game server), HOW TO PLAY and SCORES. Buttons are large pointer targets
- * (mobile-friendly); ←/→ change ship, ↑/↓ change power and Enter plays.
+ * only), a power picker (the one power used in play), then STORY (the story
+ * map), ENDLESS or BATTLE (you + 7 bots), ONLINE (people on the game server),
+ * HOW TO PLAY and SCORES. Buttons are large pointer targets
+ * (mobile-friendly); ←/→ change ship, ↑/↓ change power and Enter plays
+ * ENDLESS.
  */
 export default class MenuScene extends Phaser.Scene {
   constructor() {
@@ -48,16 +52,20 @@ export default class MenuScene extends Phaser.Scene {
     this.makeShipPicker(cx, 296);
     this.makePowerPicker(cx, 432);
 
-    this.makeButton(cx - 68, 522, "PLAY", () => this.scene.start("GameScene"), 124);
+    // Story: 10 levels with bosses, lives carried over (docs/SOLO_MODES_DESIGN.md);
+    // the map shows how far you got and starts a run.
+    this.makeButton(cx - 154, 522, "STORY", () => this.scene.start("StoryMapScene"), 144);
+    // Endless: play until your lives run out (the world leaderboard).
+    this.makeButton(cx, 522, "ENDLESS", () => this.scene.start("GameScene"), 144);
     // Battle royale vs bots (docs/MULTIPLAYER_DESIGN.md): you + 7 bots, one life.
-    this.makeButton(cx + 68, 522, "BATTLE", () => this.scene.start("GameScene", { battle: true }), 124);
-    // Online battle with friends (docs/NETCODE.md): needs the game server.
+    this.makeButton(cx + 154, 522, "BATTLE", () => this.scene.start("GameScene", { battle: true }), 144);
+    // Online battle with people (docs/NETCODE.md): needs the game server.
     this.makeButton(cx, 582, "ONLINE", () => this.scene.start("LobbyScene"));
     this.makeButton(cx - 55, 642, "HOW TO PLAY", () => this.scene.start("HowToPlayScene"), 150, 18);
     this.makeButton(cx + 80, 642, "SCORES", () => this.scene.start("LeaderboardScene", { browse: true }), 100, 18);
 
     this.add
-      .text(cx, GAME.HEIGHT - 26, "a Phaser math-shooter", textStyle(12, PALETTE.TEXT_MUTED))
+      .text(cx, GAME.HEIGHT - 26, "runs are saved anonymously (no names) to tune the game", textStyle(12, PALETTE.TEXT_MUTED))
       .setOrigin(0.5);
 
     onKeyDown(this, (e) => {
@@ -69,15 +77,37 @@ export default class MenuScene extends Phaser.Scene {
   private makeShipPicker(x: number, y: number): void {
     const ships = RENDER3D.SHIPS;
     let index = ships.indexOf(selectedShip());
-    const icon = this.add.image(x, y, `icon:${ships[index].model}`).setDisplaySize(96, 96);
+    const icon = this.add.image(x, y, `icon:${ships[index].model}`);
     const name = this.add
       .text(x, y + 58, ships[index].name, textStyle(18, PALETTE.GOLD))
       .setOrigin(0.5);
 
+    // Doodle art: the ship's own doodle, drawn at 2× for a sharp picture and
+    // flipping through its boil frames like in play. 3D art: the model's icon.
+    const doodle = artMode() === "doodle";
+    let frame = 0;
+    const show = () => {
+      const model = ships[index].model;
+      if (!doodle) return icon.setTexture(`icon:${model}`).setDisplaySize(96, 96);
+      const keys = shipIconFrames(this.textures, model, 192);
+      icon.setTexture(keys[frame % keys.length]).setScale(0.5);
+    };
+    show();
+    if (doodle) {
+      this.time.addEvent({
+        delay: 1000 / DOODLE.BOIL_FPS,
+        loop: true,
+        callback: () => {
+          frame++;
+          show();
+        },
+      });
+    }
+
     const step = (dir: number) => {
       index = (index + dir + ships.length) % ships.length;
       selectShip(ships[index]);
-      icon.setTexture(`icon:${ships[index].model}`).setDisplaySize(96, 96);
+      show();
       name.setText(ships[index].name);
       this.sound.play("blip", { volume: 0.4 });
     };

@@ -1,4 +1,4 @@
-import { ABILITY, BLINKER, GAME, SHIELD, SPLITTER } from "../config/constants";
+import { ABILITY, BLINKER, GAME, SHIELD, SPLITTER, type BossDef } from "../config/constants";
 import { sin } from "../math/detmath";
 import type Alien from "./Alien";
 
@@ -8,8 +8,10 @@ import type Alien from "./Alien";
  * (Hider, Orbiter, Worm, …) reuse them instead of adding one-off code to the
  * scene:
  *
- *   update(delta)        per-frame state the renderer reads (e.g. how hidden
- *                        the balls are right now)
+ *   update(delta, alien, host)  per-frame state the renderer reads (e.g. how
+ *                        hidden the balls are right now); traits that move
+ *                        their alien (glide/hold) or change its sum use the
+ *                        alien and host
  *   onHit(alien, host)   a bullet hit it; return true to absorb the shot
  *   onKilled(alien, host) the player destroyed it
  *
@@ -30,14 +32,46 @@ export interface AbilityHost {
    * false (and spawns nothing) if its box there would break the readability
    * rule (another alien within READ_GAP). */
   spawnSplitling(parent: Alien, x: number, y: number): boolean;
+  /** Story: place a part of a boss that splits (`def`, e.g. half of the Mud
+   * Monster) at (x, y) with a new sum. Returns it, or null (nothing placed)
+   * if its box there would break the readability rule. */
+  spawnBossPart(def: BossDef, x: number, y: number): Alien | null;
 }
 
 export abstract class Ability {
-  abstract readonly kind: AbilityKind;
+  /** An AbilityKind for the spawnable abilities; story traits and bosses
+   * name themselves ("wings", "boss"). */
+  abstract readonly kind: string;
   /** How hidden the number balls are: 0 = readable, 1 = fully covered. */
   cover = 0;
 
-  update(_delta: number): void {}
+  /** Kill score multiplier (on top of the normal formula). */
+  get scoreMult(): number {
+    return (ABILITY.SCORE_MULT as Record<string, number>)[this.kind] ?? 1;
+  }
+
+  /** Per sim step on real time; `alien` is the one wearing it (for rules
+   * that depend on where it is, like a boss read only in a beam of light),
+   * `host` the field (for rules that act on it, like a dragon's breath). */
+  update(_delta: number, _alien?: Alien, _host?: AbilityHost): void {}
+
+  /**
+   * How many ms of its kind's movement pattern the alien runs this step
+   * (field time). The default runs it as is; an ability can hold the alien
+   * (0), slow or speed it, or nudge it and switch its `mode` itself (a bat
+   * hanging from the ceiling, then dropping).
+   */
+  pace(_alien: Alien, delta: number): number {
+    return delta;
+  }
+
+  /**
+   * Called each step on FIELD time (freezes and SLOW hold it), just before
+   * the alien moves, so a creature can script its own moves with
+   * `alien.glideTo` / `alien.hold` (a dragonfly's darts, a frog's leaps).
+   * Not called while the alien is the held target.
+   */
+  steer(_alien: Alien, _delta: number): void {}
 
   /** A bullet hit the alien. Return true to absorb it (the alien survives). */
   onHit(_alien: Alien, _host: AbilityHost): boolean {
@@ -60,27 +94,35 @@ export class Blinker extends Ability {
   private t = 0;
 
   update(delta: number): void {
-    const B = BLINKER;
     this.t += delta;
-    // Shift time so the first open phase lasts FIRST_OPEN_MS.
-    let t = this.t - (B.FIRST_OPEN_MS - B.OPEN_MS);
-    if (t < 0) {
-      this.cover = 0;
-      return;
-    }
-    t %= B.OPEN_MS + B.WARN_MS + B.LID_MS * 2 + B.CLOSED_MS;
-    if (t < B.OPEN_MS) {
-      this.cover = 0;
-    } else if ((t -= B.OPEN_MS) < B.WARN_MS) {
-      this.cover = B.WARN_COVER * Math.abs(sin((Math.PI * B.WARN_FLUTTERS * t) / B.WARN_MS));
-    } else if ((t -= B.WARN_MS) < B.LID_MS) {
-      this.cover = t / B.LID_MS;
-    } else if ((t -= B.LID_MS) < B.CLOSED_MS) {
-      this.cover = 1;
-    } else {
-      this.cover = 1 - (t - B.CLOSED_MS) / B.LID_MS;
-    }
+    this.cover = blinkCover(this.t, BLINKER);
   }
+}
+
+/** A blink rhythm: how long each phase lasts (BLINKER, WINGS). */
+export type BlinkTiming = {
+  FIRST_OPEN_MS: number;
+  OPEN_MS: number;
+  WARN_MS: number;
+  WARN_FLUTTERS: number;
+  WARN_COVER: number;
+  LID_MS: number;
+  CLOSED_MS: number;
+};
+
+/** How covered the balls are `t` ms into a blink rhythm (0 open … 1 shut). */
+export function blinkCover(time: number, B: BlinkTiming): number {
+  // Shift time so the first open phase lasts FIRST_OPEN_MS.
+  let t = time - (B.FIRST_OPEN_MS - B.OPEN_MS);
+  if (t < 0) return 0;
+  t %= B.OPEN_MS + B.WARN_MS + B.LID_MS * 2 + B.CLOSED_MS;
+  if (t < B.OPEN_MS) return 0;
+  if ((t -= B.OPEN_MS) < B.WARN_MS) {
+    return B.WARN_COVER * Math.abs(sin((Math.PI * B.WARN_FLUTTERS * t) / B.WARN_MS));
+  }
+  if ((t -= B.WARN_MS) < B.LID_MS) return t / B.LID_MS;
+  if ((t -= B.LID_MS) < B.CLOSED_MS) return 1;
+  return 1 - (t - B.CLOSED_MS) / B.LID_MS;
 }
 
 /**
@@ -104,18 +146,83 @@ export class Shielded extends Ability {
 /**
  * Splitter: when destroyed it pops into two 2-ball splitlings that glide out to
  * lanes on either side. A splitling whose landing spot isn't clear is simply
- * not spawned, so splitting never causes overlap.
+ * not spawned, so splitting never causes overlap. `maxChildY`: the splitlings
+ * never land closer to the player than this (a story creature may keep them
+ * higher up, for more time to read them).
  */
 export class Splitter extends Ability {
   readonly kind = "splitter";
+
+  constructor(private readonly maxChildY: number = SPLITTER.MAX_CHILD_Y) {
+    super();
+  }
 
   onKilled(alien: Alien, host: AbilityHost): void {
     // Keep the pair inside the field as a unit so they stay a full lane apart.
     const min = SPLITTER.EDGE_PX + SPLITTER.SPREAD_PX;
     const center = Math.min(Math.max(alien.x, min), GAME.WIDTH - min);
-    const y = Math.min(alien.y, SPLITTER.MAX_CHILD_Y);
+    const y = Math.min(alien.y, this.maxChildY);
     host.spawnSplitling(alien, center - SPLITTER.SPREAD_PX, y);
     host.spawnSplitling(alien, center + SPLITTER.SPREAD_PX, y - SPLITTER.STAGGER_PX);
+  }
+}
+
+/**
+ * A story boss (config/tuning/story.ts): takes HP answers. Each answer but
+ * the last rolls a new sum and burrows: it moves to the other side of the
+ * field and up, hidden while it digs, then holds still while the new sum is
+ * read. Reaching the ship costs a life and sends it back up; only the last
+ * answer kills it. Not spawned by difficulty: a level's director brings it in.
+ */
+export class Boss extends Ability {
+  readonly kind = "boss";
+  hp: number;
+  private burrowLeftMs = 0;
+
+  constructor(readonly def: BossDef) {
+    super();
+    this.hp = def.HP;
+  }
+
+  get scoreMult(): number {
+    return this.def.SCORE_MULT;
+  }
+
+  /** It is underground (moving, numbers hidden, can't reach the ship). */
+  get burrowing(): boolean {
+    return this.burrowLeftMs > 0;
+  }
+
+  update(delta: number): void {
+    this.burrowLeftMs = Math.max(0, this.burrowLeftMs - delta);
+    this.cover = this.burrowing ? 1 : 0;
+  }
+
+  onHit(alien: Alien, host: AbilityHost): boolean {
+    this.hp -= 1;
+    if (this.hp <= 0) return false;
+    host.rerollSum(alien); // if no free sum is found it keeps the old one
+    const [x, y] = this.surfaceAt(alien);
+    this.burrow(alien, x, y);
+    return true;
+  }
+
+  /** Where it pops up after an answer: the other side of the field and up. */
+  protected surfaceAt(alien: Alien): readonly [number, number] {
+    const x = Math.min(Math.max(GAME.WIDTH - alien.x, alien.halfW), GAME.WIDTH - alien.halfW);
+    return [x, Math.max(this.def.MIN_Y, alien.y - this.def.BURROW_UP_PX)];
+  }
+
+  /** It reached the ship: dig back up the field (the life is already lost). */
+  retreat(alien: Alien): void {
+    this.burrow(alien, alien.x, this.def.RETREAT_Y);
+  }
+
+  private burrow(alien: Alien, x: number, y: number): void {
+    this.burrowLeftMs = this.def.BURROW_MS;
+    this.cover = 1;
+    alien.glideTo(x, y, this.def.BURROW_MS);
+    alien.hold(this.def.REVEAL_MS);
   }
 }
 

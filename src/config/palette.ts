@@ -1,3 +1,5 @@
+import { artMode } from "./artMode";
+
 /**
  * The UI's named colors. Use these instead of hex literals, so a color has one
  * meaning and one place to change it (docs/ENGINEERING.md §1).
@@ -10,7 +12,7 @@
  * 3D model colors (debris, shields, ball tints) stay in RENDER3D: they belong
  * to the models, not to the UI.
  */
-export const PALETTE = {
+const NIGHT = {
   /** The page behind everything; also text outlines. */
   BACKGROUND: 0x05060f,
   /** Buttons, bars and other surfaces. */
@@ -34,7 +36,26 @@ export const PALETTE = {
   TEXT: 0xffffff,
   /** Hints, labels and anything secondary. */
   TEXT_MUTED: 0x8893b5,
-} as const;
+};
+
+/** The same meanings in ink on notebook paper (the doodle art, the default). */
+const PAPER: typeof NIGHT = {
+  BACKGROUND: 0xf8f4e8,
+  PANEL: 0xefe8d4,
+  PANEL_LIGHT: 0xc9bc98,
+  ACCENT: 0x2563d9,
+  GOLD: 0xc98a00,
+  DANGER: 0xd93636,
+  ENERGY: 0x0e8fa3,
+  ATTACK: 0xe0701e,
+  INCOMING: 0xd6336c,
+  BONUS: 0xb5179e,
+  TEXT: 0x33312e,
+  TEXT_MUTED: 0x7d776c,
+};
+
+/** Picked once, when the page loads, from the art mode (config/artMode.ts). */
+export const PALETTE: Readonly<typeof NIGHT> = artMode() === "doodle" ? PAPER : NIGHT;
 
 /** A palette color as a CSS string ("#ffd166"), for Phaser text and the DOM. */
 export function css(color: number): string {

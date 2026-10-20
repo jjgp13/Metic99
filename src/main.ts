@@ -6,9 +6,13 @@ import HowToPlayScene from "./scenes/HowToPlayScene";
 import GameScene from "./scenes/GameScene";
 import NameEntryScene from "./scenes/NameEntryScene";
 import LeaderboardScene from "./scenes/LeaderboardScene";
+import StoryMapScene from "./scenes/StoryMapScene";
 import HandwritingLabScene from "./scenes/HandwritingLabScene";
 import LobbyScene from "./scenes/LobbyScene";
+import { artMode } from "./config/artMode";
+import { DOODLE } from "./config/constants";
 import { getWorld3D } from "./render3d/World3D";
+import { loadDoodleFont } from "./renderDoodle/font";
 
 /**
  * Phaser entry point.
@@ -41,6 +45,7 @@ const config: Phaser.Types.Core.GameConfig = {
   scene: [
     BootScene,
     MenuScene,
+    StoryMapScene,
     HowToPlayScene,
     GameScene,
     NameEntryScene,
@@ -50,12 +55,21 @@ const config: Phaser.Types.Core.GameConfig = {
   ],
 };
 
+function startGame(): void {
+  const game = new Phaser.Game(config);
+  // Dev-only console handle for inspecting the running game (stripped from builds).
+  if (import.meta.env.DEV) Object.assign(window, { __metic: { game, world: getWorld3D } });
+}
+
 // `?lab=determinism` is a plain page instead of the game (netcode S0); it is
 // loaded only when asked for, so the game's bundle doesn't carry it.
 if (new URLSearchParams(window.location.search).get("lab") === "determinism") {
   void import("./lab/determinismLab").then((lab) => lab.runDeterminismLab());
+} else if (artMode() === "doodle") {
+  // The doodle art (the default) needs its handwriting font before any text
+  // is drawn, and puts the menus on paper too.
+  document.body.style.background = DOODLE.PAPER;
+  void loadDoodleFont().then(startGame);
 } else {
-  const game = new Phaser.Game(config);
-  // Dev-only console handle for inspecting the running game (stripped from builds).
-  if (import.meta.env.DEV) Object.assign(window, { __metic: { game, world: getWorld3D } });
+  startGame();
 }

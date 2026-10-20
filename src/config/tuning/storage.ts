@@ -13,6 +13,8 @@ export const STORAGE = {
   POWER: "metic-power", // power picked on the menu (POWER_KINDS)
   INPUT_MODE: "metic-input", // "keys" (keypad) or "draw" (handwriting pad)
   HW_LAB: "metic-hw-lab", // handwriting lab samples in progress (?lab=draw)
+  STORY: "metic-story", // story map: furthest stage reached, best scores (JSON)
+  STORY_SAVE: "metic-story-save", // the story run in progress: level, lives, score (JSON)
   NET_NAME: "metic-net-name", // the player's name for online play
 } as const;
 
@@ -26,4 +28,8 @@ export const LEADERBOARD = {
   CHARSET: "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789".split(""),
   TOP_N: 20, // rows fetched/shown on the leaderboard screen
   MAX_SCORE: 1000000, // must match the Supabase score_range CHECK constraint
+  // Which board a score goes on (the `level` column, supabase/story-boards.sql):
+  // 0 = Endless, 1–10 = a story stage (its number), 99 = a whole story run.
+  ENDLESS_BOARD: 0,
+  STORY_RUN_BOARD: 99,
 } as const;

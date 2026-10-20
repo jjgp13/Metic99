@@ -10,15 +10,17 @@ import {
   SCORE,
   SEND,
   type AlienKind,
+  type LevelDef,
   type PowerKind,
   type TargetStrategy,
 } from "../config/constants";
-import { difficultyAt, matchPressure, suddenDeathSpeed, type DifficultyParams } from "../config/difficulty";
+import { matchPressure, suddenDeathSpeed, type DifficultyParams } from "../config/difficulty";
 import type Alien from "../objects/Alien";
-import { ABILITY_KINDS, type AbilityKind } from "../objects/abilities";
+import { ABILITY_KINDS, Boss, type AbilityKind } from "../objects/abilities";
 import type { Bullet } from "../objects/Bullet";
 import { EnergyMeter, Power, energyForKill, type PowerUse } from "./energy";
 import { Rng } from "./rng";
+import { LevelDirector } from "./director";
 import { STREAM, Swarm, type SentAlien } from "./Swarm";
 
 const PLAYER_START_X = GAME.WIDTH / 2;
@@ -151,7 +153,9 @@ export type FieldEvent =
   | { type: "blasted"; aliens: Alien[] }
   /** An armed SHIELD destroyed this alien at the ship instead of a life. */
   | { type: "shielded"; alien: Alien }
-  | { type: "knockedOut" };
+  | { type: "knockedOut" }
+  /** Story: the boss is beaten; the level is over and the field stops. */
+  | { type: "levelCleared" };
 
 /** One kill: how many balls its sum had and how long it took (spawn → hit). */
 export interface Solve {
@@ -169,6 +173,10 @@ export interface FieldOptions {
   forcedKinds?: AlienKind[] | null;
   /** The power picked before the run (default: the first of POWER_KINDS). */
   power?: PowerKind;
+  /** Story: play this level (its path, roster and boss) instead of Endless. */
+  level?: LevelDef;
+  /** Story: the run's score so far (it carries over between levels). */
+  score?: number;
 }
 
 /**
@@ -203,6 +211,10 @@ export class Field {
   score = 0;
   lives: number;
   knockedOut = false;
+  /** Story: the boss is beaten (the field stops like a knockout). */
+  cleared = false;
+  /** Score when this field started (story: carried in from earlier levels). */
+  readonly startScore: number;
   /** The alien that ended the run (M7: its sender gets the KO credit). */
   knockedOutBy: Alien | null = null;
   /** Kill streak without a hit (scores and charges more). */
@@ -222,6 +234,9 @@ export class Field {
    * scene can't eat it), then runs at POST_HIT_FACTOR for the rest of the run. */
   freezeLeftMs = 0;
   private postHitSlow = false;
+  /** Hit recovery: ms left of pushing the monsters back up the field. */
+  private pushbackLeftMs = 0;
+  private pushedLastStep = false;
   /** Players still in the battle, from the match (null in solo play). */
   standing: { alive: number; total: number } | null = null;
   /** Battle: where this player's attacks go (the match reads it). */
@@ -248,11 +263,14 @@ export class Field {
   constructor(options: FieldOptions) {
     this.seed = options.seed;
     this.lives = options.lives ?? PLAYER.LIVES;
+    this.score = options.score ?? 0;
+    this.startScore = this.score;
     this.power = new Power(options.power ?? POWER_KINDS[0]);
     this.swarm = new Swarm({
       seed: options.seed,
       forcedAbilities: options.forcedAbilities,
       forcedKinds: options.forcedKinds,
+      director: options.level ? new LevelDirector(options.level) : undefined,
     });
     this.sendRng = Rng.derive(options.seed, STREAM.SEND);
   }
@@ -275,13 +293,28 @@ export class Field {
     return this.swarm.aliens;
   }
 
+  /** Hit recovery pushed the monsters back up the field in the last step. */
+  get recovering(): boolean {
+    return this.pushedLastStep;
+  }
+
+  /** Story: how far along the level's path (0..1); null in Endless. */
+  get levelProgress(): number | null {
+    return this.swarm.director.progress(this.swarm.fieldMs);
+  }
+
+  /** Story: the level's boss once it has come in (null before). */
+  get boss(): Alien | null {
+    return this.swarm.boss;
+  }
+
   /** The game clock (ms of play). */
   get elapsedMs(): number {
     return this.swarm.elapsedMs;
   }
 
   get difficulty(): DifficultyParams {
-    return difficultyAt(this.swarm.elapsedMs, this.score, this.dMatch);
+    return this.swarm.difficultyFor(this.score, this.dMatch);
   }
 
   /** Battle pressure on this field (0 in solo play). */
@@ -309,7 +342,7 @@ export class Field {
    * as the start of step N+1. Returns whether it changed anything.
    */
   apply(input: FieldInput): boolean {
-    if (this.knockedOut) return false;
+    if (this.knockedOut || this.cleared) return false;
     this.inputLog.push({ step: this.steps, input });
     let changed = true;
     switch (input.type) {
@@ -391,7 +424,7 @@ export class Field {
 
   /** Advance the rules by `dt` ms (always SIM.STEP_MS in play). */
   step(dt: number): void {
-    if (this.knockedOut) return;
+    if (this.knockedOut || this.cleared) return;
     this.steps++;
 
     // After a hit the field FREEZES for a few seconds (factor 0), then resumes at
@@ -430,6 +463,7 @@ export class Field {
       else this.loseLife(e.alien);
     }
     if (this.knockedOut) return;
+    this.pushBack(dt);
 
     // Slide the ship toward the target and fire when lined up. Don't fire again
     // while a bullet is already in flight toward this locked target — only
@@ -602,7 +636,7 @@ export class Field {
       this.solves.push({ balls: digits.length, ms: solveMs });
     }
 
-    const abilityMult = !absorbed && alien.ability ? ABILITY.SCORE_MULT[alien.ability.kind] : 1;
+    const abilityMult = absorbed || !alien.ability ? 1 : alien.ability.scoreMult;
     const points = Math.round(this.computeScore(digits.length, solveMs) * abilityMult);
     this.score += points;
     // The bonus drifter adds its burst on top of the normal kill energy.
@@ -628,6 +662,12 @@ export class Field {
     }
     const cancelled = this.standing ? kill - left : 0;
     this.events.push({ type: "solved", alien, digits, points, energy, burst, absorbed, cancelled, attack });
+    // A boss that split (the Mud Monster) is beaten once its last part is.
+    const bossLeft = this.aliens.some((a) => a.active && a.ability instanceof Boss);
+    if (!absorbed && alien.ability instanceof Boss && !bossLeft) {
+      this.cleared = true;
+      this.events.push({ type: "levelCleared" });
+    }
   }
 
   /**
@@ -636,13 +676,30 @@ export class Field {
    * skipped). A shot in flight at one of them just flies off.
    */
   private blast(): void {
-    const aliens = this.aliens.filter((a) => a.active);
+    // A boss shrugs it off: it must be beaten with answers.
+    const aliens = this.aliens.filter((a) => a.active && !(a.ability instanceof Boss));
     for (const a of aliens) this.swarm.remove(a);
     this.lockedTarget = null;
     this.lockedBullet = null;
     this.target = null;
     this.typed = "";
     this.events.push({ type: "blasted", aliens });
+  }
+
+  /**
+   * Hit recovery: while the field is frozen after a hit, every monster
+   * slides back up the field, all by the same amount, so their readability
+   * boxes keep their gaps. It runs on game time (the
+   * freeze stops field time) and after the swarm's step, so the view still
+   * draws the slide smoothly between steps.
+   */
+  private pushBack(dt: number): void {
+    this.pushedLastStep = this.pushbackLeftMs > 0;
+    if (!this.pushedLastStep) return;
+    const step = Math.min(dt, this.pushbackLeftMs);
+    this.pushbackLeftMs -= step;
+    const dy = (RECOVERY.PUSHBACK_PX * step) / RECOVERY.PUSHBACK_MS;
+    for (const a of this.aliens) if (a.active) a.y -= dy;
   }
 
   /** points = BASE * ballCountBonus * speedBonus * difficultyMult * comboMult. */
@@ -672,9 +729,11 @@ export class Field {
       this.events.push({ type: "knockedOut" });
       return;
     }
-    // Freeze the whole field for a few seconds so the player can recover, then
-    // run at a reduced speed for the rest of the run (difficulty keeps ramping).
+    // Freeze the whole field for a few seconds so the player can recover, push
+    // the monsters back up a little, then run at a reduced speed for the rest
+    // of the run (difficulty keeps ramping).
     this.freezeLeftMs = RECOVERY.FREEZE_MS;
+    this.pushbackLeftMs = RECOVERY.PUSHBACK_MS;
     this.postHitSlow = true;
   }
 }

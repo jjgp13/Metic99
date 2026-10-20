@@ -114,6 +114,33 @@ export const MONSTERS = {
 export type AlienKind = keyof typeof MONSTERS;
 
 /**
+ * Where a monster carries its number balls. "row" (every monster so far): a
+ * row above the body. The story's creatures carry them as part of the body,
+ * which gives them their own readability box (relative to the body center,
+ * +y toward the player):
+ * - "eyes" (beetle): the two balls are its eyes, side by side at its front;
+ * - "chain" (worm): its body is the balls, in a column above its head;
+ * - "wings" (butterfly): one ball on each wing;
+ * - "cluster" (frog): spots on its back, in rows of 2 going up from the body
+ *   center (any count; an odd last ball sits in the middle), so 3–4+ ball
+ *   sums stay compact.
+ * "eyes" and "wings" need exactly 2 balls; with any other count the alien
+ * falls back to "row".
+ */
+export type BallLayout = "row" | "eyes" | "chain" | "wings" | "cluster";
+
+export const BALL_LAYOUTS = {
+  eyes: { HALF_W: 20, TOP: 20, BOTTOM: 22, EYE_DX: 10, EYE_Y: 8 },
+  // Ball i sits at y = FIRST_Y - i × GAP (0 = next to the head); the box
+  // adds WIGGLE_PX each side, the view's wriggle.
+  chain: { FIRST_Y: -8, GAP: 18, BOTTOM: 16, WIGGLE_PX: 3 },
+  wings: { HALF_W: 30, TOP: 24, BOTTOM: 25, WING_DX: 16, WING_Y: -4 },
+  // Row j of balls sits at y = FIRST_Y - j × GAP_Y, its two balls GAP_X
+  // apart; the body around them adds SIDE px each side and TOP px above.
+  cluster: { FIRST_Y: -2, GAP_X: 22, GAP_Y: 20, SIDE: 8, TOP: 6, BOTTOM: 26 },
+} as const;
+
+/**
  * Readability boxes for models that ability aliens wear (same fields as
  * MONSTERS; the box follows the model, the movement follows the kind).
  * Shielded's box includes its shield ring (RENDER3D.SHIELD_RADIUS).
@@ -176,6 +203,18 @@ export const BLINKER = {
   WARN_COVER: 0.4, // how far the lids dip while fluttering (1 = shut)
   LID_MS: 150, // close / open animation
   CLOSED_MS: 1100,
+} as const;
+
+/** The story's butterfly folds its wings over its numbers on a rhythm (same
+ * shape as BLINKER: open, flutter, fold, shut, unfold). */
+export const WINGS = {
+  FIRST_OPEN_MS: 3600, // time to fly in and be read
+  OPEN_MS: 2800,
+  WARN_MS: 600, // the wings flutter before they fold (the telegraph)
+  WARN_FLUTTERS: 2,
+  WARN_COVER: 0.35,
+  LID_MS: 220, // folding / unfolding
+  CLOSED_MS: 1300,
 } as const;
 
 /** Shielded: the first correct answer breaks the shield and rolls a new sum. */

@@ -1,13 +1,13 @@
 import Phaser from "phaser";
-import { MATCH, NET, TARGET_STRATEGIES, type TargetStrategy } from "../config/constants";
+import { DOODLE, LEADERBOARD, LEVELS, MATCH, NET, RECOVERY, STORY, TARGET_STRATEGIES, type TargetStrategy } from "../config/constants";
 import { inputMode } from "../config/inputMode";
-import { selectedShip } from "../config/ships";
 import type { InkEvent } from "../handwriting/inkReader";
 import type Alien from "../objects/Alien";
-import World3D, { getWorld3D } from "../render3d/World3D";
-import { isLeaderboardEnabled, startMatch } from "../services/leaderboard";
+import { ABILITY_KINDS, Boss, type AbilityKind } from "../objects/abilities";
+import { isLeaderboardEnabled, stageBoard, startMatch } from "../services/leaderboard";
 import { rankFor, recordRun } from "../services/masteryStats";
 import { hitRecord, initPlaytestLog, logRun, type InputSource, type RunExtras } from "../services/playtestLog";
+import { clearSavedRun, recordLevel, recordStoryRun, saveRun as saveStoryRun } from "../services/storyProgress";
 import type { Bot } from "../sim/Bot";
 import { ANSWER_MAX_DIGITS, type Field, type FieldEvent, type FieldInput } from "../sim/Field";
 import type { BattleSource } from "../sim/BattleSource";
@@ -21,13 +21,17 @@ import { Ducker } from "../ui/hud/Ducker";
 import { EnergyHud } from "../ui/hud/EnergyHud";
 import { GameOverScreen } from "../ui/hud/GameOverScreen";
 import { InputPanel, type PadKey } from "../ui/hud/InputPanel";
+import { LevelClearCard } from "../ui/hud/LevelClearCard";
+import { LevelMusic } from "./levelMusic";
 import { PauseOverlay } from "../ui/hud/PauseOverlay";
 import { Popups } from "../ui/hud/Popups";
 import { Reticle } from "../ui/hud/Reticle";
 import { SendButton } from "../ui/hud/SendButton";
 import { TopHud } from "../ui/hud/TopHud";
 import { onKeyDown } from "../ui/keyboard";
-import { setUpRun } from "./runSetup";
+import { createFieldView, type FieldView } from "./fieldView";
+import type { BoardScore } from "./NameEntryScene";
+import { setUpRun, type StoryRun } from "./runSetup";
 import { NetBattle } from "../net/NetBattle";
 
 /** Online: longest wait for the server's placement after your KO (ms). */
@@ -42,10 +46,11 @@ const RESULTS_WAIT_MS = 3_000;
  * - the rules live in `Field` (sim/, no Phaser) and change only through
  *   `field.apply(input)` and `field.step()`;
  * - the HUD is made of components in ui/hud/, each owning its own objects;
- * - the playfield is drawn in 3D by World3D from a snapshot each frame.
+ * - the playfield is drawn from a snapshot each frame by a FieldView: in 3D
+ *   in pencil by DoodleWorld, or in 3D by World3D (`?art=3d`).
  *
  * Each frame: run the rules in fixed steps (SimClock), turn what happened
- * (field events) into sound and pops, let the HUD read the field, draw 3D.
+ * (field events) into sound and pops, let the HUD read the field, draw the field.
  */
 export default class GameScene extends Phaser.Scene {
   // --- The run (rebuilt in create(): Phaser reuses the scene object) ---
@@ -54,6 +59,10 @@ export default class GameScene extends Phaser.Scene {
   private battle: BattleSource | null = null;
   /** Dev (`?bot=ace`): a bot plays this field through the same inputs. */
   private autopilot: Bot | null = null;
+  /** Story mode: the run so far (this scene plays its current level). */
+  private story: StoryRun | null = null;
+  /** Story mode: the level's music. */
+  private music: LevelMusic | null = null;
   private clock!: SimClock;
   /** What the playtest log records beyond the field (services/playtestLog.ts). */
   private runExtras!: RunExtras;
@@ -64,11 +73,13 @@ export default class GameScene extends Phaser.Scene {
   /** Online: knocked out, waiting (briefly) for the server's placement before
    * showing the results; the time we started waiting. */
   private resultsPendingSince: number | null = null;
+  /** Scene time before which a tap can't leave (the level-clear card). */
+  private leaveAllowedAt = 0;
   /** Whether this run set a new personal best (name entry says so). */
   private newHighScore = false;
 
   // --- The screen ---
-  private world!: World3D;
+  private world!: FieldView;
   private topHud!: TopHud;
   private popups!: Popups;
   private ducker!: Ducker;
@@ -86,8 +97,9 @@ export default class GameScene extends Phaser.Scene {
     super("GameScene");
   }
 
-  create(data?: { battle?: boolean; online?: BattleSource }): void {
-    const run = setUpRun(data?.battle ?? false, data?.online);
+  create(data?: { battle?: boolean; story?: StoryRun; online?: BattleSource }): void {
+    this.story = data?.story ?? null;
+    const run = setUpRun({ battle: data?.battle ?? false, story: this.story }, data?.online);
     this.field = run.field;
     this.battle = run.battle;
     this.autopilot = run.autopilot;
@@ -96,6 +108,7 @@ export default class GameScene extends Phaser.Scene {
     this.gameOver = false;
     this.leaving = false;
     this.resultsPendingSince = null;
+    this.leaveAllowedAt = 0;
     this.newHighScore = false;
     this.runExtras = {
       lives: this.field.lives,
@@ -103,6 +116,7 @@ export default class GameScene extends Phaser.Scene {
       battle: this.battle
         ? { players: this.battle.seatCount, opponents: [...MATCH.OPPONENTS], placement: null }
         : null,
+      story: this.story ? { level: this.story.level, startScore: this.story.score } : null,
       inputMode: inputMode(),
       sources: { keypad: 0, keyboard: 0, pad: 0 },
       ink: { reads: 0, unknown: 0, scratch: 0 },
@@ -115,16 +129,28 @@ export default class GameScene extends Phaser.Scene {
 
     // Open a server-gated match so this run's score can be submitted later.
     // Fire-and-forget: if it fails the player just gets an unsaved score.
-    // Battles don't go on the (solo) leaderboard.
-    if (!this.battle) void startMatch();
+    // A story run opens one per stage it plays, plus one for the whole run.
+    // Battles don't go on a leaderboard yet.
+    if (this.story) {
+      if (this.story.level === 0) void startMatch(LEADERBOARD.STORY_RUN_BOARD);
+      void startMatch(stageBoard(this.story.level));
+    } else if (!this.battle) {
+      void startMatch();
+    }
     initPlaytestLog();
+    this.music = this.story ? new LevelMusic(this, this.story.level) : null;
+    // Story: a run left in the middle continues from the start of this level.
+    if (this.story) saveStoryRun(this.story);
+    if (this.story) {
+      const level = LEVELS[this.story.level];
+      this.popups.banner(`LEVEL ${this.story.level + 1} · ${level.NAME}`, 22, STORY.BANNER_MS);
+    }
   }
 
   /** Build every part of the screen, back to front. */
   private buildScreen(): void {
-    // The 3D playfield renders on its own canvas under Phaser's.
-    this.world = getWorld3D();
-    this.world.begin(this.textures, this.game.canvas, selectedShip().model);
+    // The playfield renders on its own canvas under Phaser's.
+    this.world = createFieldView(this);
 
     this.ducker = new Ducker(this);
     this.topHud = new TopHud(this, this.ducker, {
@@ -141,7 +167,11 @@ export default class GameScene extends Phaser.Scene {
     this.sendButton = this.battle ? new SendButton(this, this.field, (cost) => this.sendAttack(cost)) : null;
     this.energyHud = new EnergyHud(this, this.field, { battle: this.battle !== null, onPower: () => this.usePower() });
     this.popups = new Popups(this, this.ducker);
-    this.pauseOverlay = new PauseOverlay(this, () => this.togglePause());
+    this.pauseOverlay = new PauseOverlay(
+      this,
+      () => this.togglePause(),
+      this.story ? () => this.scene.start("StoryMapScene") : null,
+    );
 
     this.unseenMatchEvents = [];
     this.battleViews = this.battle
@@ -155,7 +185,7 @@ export default class GameScene extends Phaser.Scene {
   }
 
   update(time: number, delta: number): void {
-    // Pause and game over freeze the rules, but the 3D view keeps rendering
+    // Pause and game over freeze the rules, but the field view keeps rendering
     // (stars drift, the last explosion finishes, pause hides the aliens).
     if (!this.paused && !this.gameOver) {
       this.clock.advance(delta, () => this.step());
@@ -200,9 +230,11 @@ export default class GameScene extends Phaser.Scene {
   /** Once per frame: the HUD reads the field (it never changes it). */
   private updateHud(delta: number): void {
     const f = this.field;
-    this.topHud.setDifficulty(f.difficulty.d);
+    // Story: the bar shows how far along the level's path; Endless: difficulty.
+    this.topHud.setDifficulty(f.levelProgress ?? f.difficulty.d);
     this.answer.refresh(f);
-    this.reticle.update(f.target?.active ? f.target : null, this.clock.alpha, delta);
+    const target = f.target?.active && !this.world.drawsTarget ? f.target : null;
+    this.reticle.update(target, this.clock.alpha, delta);
     this.ducker.update(f.aliens, this.clock.alpha, delta);
     this.energyHud.update(f);
     this.sendButton?.update();
@@ -222,7 +254,7 @@ export default class GameScene extends Phaser.Scene {
     for (const view of this.battleViews) view.update(frame);
   }
 
-  /** Draw the 3D field `alpha` of the way between the last two steps. */
+  /** Draw the field `alpha` of the way between the last two steps. */
   private renderWorld(time: number, delta: number): void {
     const f = this.field;
     const alpha = this.clock.alpha;
@@ -236,7 +268,11 @@ export default class GameScene extends Phaser.Scene {
         alpha,
         aliensHidden: this.paused,
         shipShield: f.power.shieldArmed,
+        shipHurt: Math.min(1, f.freezeLeftMs / RECOVERY.FREEZE_MS),
+        shipDown: f.knockedOut,
         answer: hidden ? null : this.answer.view,
+        target: !hidden && f.target?.active ? f.target : null,
+        page: this.pageView(),
       },
       time,
       delta,
@@ -250,7 +286,16 @@ export default class GameScene extends Phaser.Scene {
   private showFieldEvent(e: FieldEvent): void {
     switch (e.type) {
       case "spawned":
-        if (e.alien.ability) this.popups.introduceAbility(e.alien.ability.kind);
+        if (e.alien.ability instanceof Boss) {
+          this.music?.boss();
+          this.popups.banner(`BOSS · ${e.alien.ability.def.NAME}!`, 26, STORY.BANNER_MS);
+          this.shake(300, 0.008);
+        } else if (e.alien.species && this.story) {
+          const species = LEVELS[this.story.level].SPECIES[e.alien.kind];
+          if (species) this.popups.introduce(species.NAME, species.INTRO);
+        } else if (e.alien.ability && (ABILITY_KINDS as string[]).includes(e.alien.ability.kind)) {
+          this.popups.introduceAbility(e.alien.ability.kind as AbilityKind);
+        }
         break;
       case "fired":
         this.sound.play("shoot", { volume: 0.4 });
@@ -296,7 +341,11 @@ export default class GameScene extends Phaser.Scene {
         this.shake(150, 0.01);
         break;
       case "knockedOut":
-        this.endGame();
+        // Let the ship's destruction play before GAME OVER covers the field.
+        this.time.delayedCall(RECOVERY.GAME_OVER_DELAY_MS, () => this.endGame());
+        break;
+      case "levelCleared":
+        this.clearLevel();
         break;
     }
   }
@@ -306,7 +355,7 @@ export default class GameScene extends Phaser.Scene {
     this.world.explode(alien.x, alien.y, alien);
   }
 
-  /** Shake the HUD camera and the 3D view together. */
+  /** Shake the HUD camera and the field view together. */
   private shake(durationMs: number, intensity: number): void {
     this.cameras.main.shake(durationMs, intensity);
     this.world.shake(durationMs, intensity);
@@ -430,6 +479,7 @@ export default class GameScene extends Phaser.Scene {
     // Online the others keep playing: a paused field would dodge attacks.
     if (this.gameOver || this.battle?.online) return;
     this.paused = !this.paused;
+    this.music?.pause(this.paused);
     this.reticle.setVisible(!this.paused);
     this.answer.setVisible(!this.paused);
     this.inputPanel.setEnabled(!this.paused);
@@ -444,6 +494,7 @@ export default class GameScene extends Phaser.Scene {
   private endGame(): void {
     if (this.gameOver) return;
     this.gameOver = true;
+    this.music?.stop();
     this.reticle.clear();
     this.inputPanel.setEnabled(false);
     if (import.meta.env.DEV) this.logPaceToConsole();
@@ -470,6 +521,11 @@ export default class GameScene extends Phaser.Scene {
     const f = this.field;
     const { mastery, newHighScore } = recordRun(f);
     this.newHighScore = newHighScore;
+    if (this.story) {
+      clearSavedRun(); // arcade rules: a game over sends the next run to island 1
+      recordLevel(this.story.level, f.score - f.startScore, false);
+      this.newHighScore = recordStoryRun(f.score);
+    }
     const placement = this.battle ? this.battle.placementOf(this.battle.you) : null;
     if (this.runExtras.battle) this.runExtras.battle.placement = placement;
 
@@ -485,18 +541,25 @@ export default class GameScene extends Phaser.Scene {
           ? "tap / Enter for the lobby"
           : this.battle
             ? "tap / Enter for the menu"
-            : isLeaderboardEnabled()
-              ? "tap / Enter to enter initials"
-              : "tap / Enter to play again",
+            : this.story && !isLeaderboardEnabled()
+              ? "tap / Enter for the map"
+              : isLeaderboardEnabled()
+                ? "tap / Enter to enter initials"
+                : "tap / Enter to play again",
     });
 
-    // Playtest build (a claude.ai Artifact): save the run for analysis.
-    this.runExtras.inputMode = inputMode();
-    void logRun(f, this.runExtras).then((status) => {
-      if (status !== "off" && this.scene.isActive()) screen.showSaveStatus(status === "saved");
-    });
+    this.saveRun((saved) => screen.showSaveStatus(saved));
 
     this.input.once("pointerdown", () => this.leaveGameOver());
+  }
+
+  /** Playtest build (a claude.ai Artifact): save the run (or the story level
+   * attempt) for analysis; `onStatus` hears whether it was saved. */
+  private saveRun(onStatus: (saved: boolean) => void): void {
+    this.runExtras.inputMode = inputMode();
+    void logRun(this.field, this.runExtras).then((status) => {
+      if (status !== "off" && this.scene.isActive()) onStatus(status === "saved");
+    });
   }
 
   /** Dev: compare your pace (or the autopilot's) with `npm run bots`. */
@@ -510,17 +573,98 @@ export default class GameScene extends Phaser.Scene {
     console.table(summarizeSolves(f.solves));
   }
 
-  /** The single way out of game over: name entry (solo, leaderboard on) or the menu. */
+  /** Story: the boss is beaten. The field has stopped; show the card. */
+  private clearLevel(): void {
+    if (this.gameOver || !this.story) return;
+    this.gameOver = true;
+    this.music?.stop();
+    this.reticle.clear();
+    this.inputPanel.setEnabled(false);
+    this.sound.play("explode", { volume: 0.6, rate: 0.6 });
+    const f = this.field;
+    const hasNext = this.story.level + 1 < LEVELS.length;
+    recordLevel(this.story.level, f.score - f.startScore, true);
+    // The last level built: the run ends here (the next stage isn't built yet).
+    if (!hasNext) this.newHighScore = recordStoryRun(f.score);
+    if (hasNext) saveStoryRun(this.nextRun());
+    else clearSavedRun();
+    new LevelClearCard(this, {
+      number: this.story.level + 1,
+      name: LEVELS[this.story.level].NAME,
+      levelScore: f.score - f.startScore,
+      totalScore: f.score,
+      livesLeft: f.lives,
+      hasNext,
+    });
+    this.saveRun(() => {});
+    this.leaveAllowedAt = this.time.now + STORY.CLEAR_MIN_MS;
+    this.input.on("pointerdown", () => this.leaveGameOver());
+  }
+
+  /** Story: the run as it goes into the next level (after a clear). */
+  private nextRun(): StoryRun {
+    const f = this.field;
+    const story = this.story!;
+    return {
+      level: story.level + 1,
+      lives: f.lives,
+      score: f.score,
+      levelScores: [...story.levelScores, f.score - f.startScore],
+    };
+  }
+
+  /** Story: the level's page and how far it has scrolled, for the field view. */
+  private pageView(): { id: string; scrolledPx: number; lengthPx: number } | null {
+    if (!this.story) return null;
+    const level = LEVELS[this.story.level];
+    const pxPerMs = DOODLE.PAGE_SCROLL_PX_PER_S / 1000;
+    return {
+      id: level.PAGE,
+      scrolledPx: (this.field.levelProgress ?? 0) * level.PATH_MS * pxPerMs,
+      lengthPx: level.PATH_MS * pxPerMs,
+    };
+  }
+
+  /**
+   * The single way out of game over (and of a cleared level): the next
+   * level, name entry (leaderboard on), the story map or the menu.
+   */
   private leaveGameOver(): void {
-    if (this.leaving || this.resultsPendingSince !== null) return;
+    if (this.leaving || this.resultsPendingSince !== null || this.time.now < this.leaveAllowedAt) return;
     this.leaving = true;
     if (this.battle instanceof NetBattle) {
       this.battle.dispose();
       this.scene.start("LobbyScene");
+    } else if (this.story) {
+      const f = this.field;
+      const next = this.story.level + 1;
+      const levelScores = [...this.story.levelScores, f.score - f.startScore];
+      if (f.cleared && next < LEVELS.length) {
+        // Back to the map: the ship flies to the next island, then a tap starts it.
+        this.scene.start("StoryMapScene", { travelTo: next });
+      } else if (isLeaderboardEnabled()) {
+        this.scene.start("NameEntryScene", {
+          score: f.score,
+          personalBest: this.newHighScore,
+          headline: f.cleared ? "STORY COMPLETE!" : "GAME OVER",
+          boards: storyBoards(f.score, levelScores),
+          title: "STORY RUNS",
+          back: "StoryMapScene",
+        });
+      } else {
+        this.scene.start("StoryMapScene");
+      }
     } else if (isLeaderboardEnabled() && !this.battle) {
       this.scene.start("NameEntryScene", { score: this.field.score, personalBest: this.newHighScore });
     } else {
       this.scene.start("MenuScene");
     }
   }
+}
+
+/** A finished story run's scores, by board: the run's total first (shown
+ * after name entry), then each stage played (stages without points skipped). */
+function storyBoards(total: number, levelScores: number[]): BoardScore[] {
+  const stages = levelScores.map((score, i) => ({ board: stageBoard(i), score, label: `stage ${i + 1}` }));
+  return [{ board: LEADERBOARD.STORY_RUN_BOARD, score: total, label: "run" }, ...stages.filter((s) => s.score > 0)];
 }
