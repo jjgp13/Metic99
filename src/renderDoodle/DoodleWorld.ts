@@ -6,6 +6,7 @@ import type Alien from "../objects/Alien";
 import { Boss, Shielded } from "../objects/abilities";
 import type { AnswerView, InkPoint } from "../render3d/AnswerStars";
 import type { WorldSnapshot } from "../render3d/World3D";
+import { DriftLayer } from "./drifts";
 import { PAGES, drawPageTile, layOutProps, type BossLook, type CreatureLook, type PlacedProp } from "./pages";
 import { drawPaper } from "./paper";
 import { drawFrames, type DoodleRecipe, type Point } from "./pencil";
@@ -98,6 +99,7 @@ export default class DoodleWorld {
   private pageId: string | null = null;
   private pageTile: HTMLCanvasElement | null = null;
   private props: PlacedProp[] = [];
+  private drifts: DriftLayer | null = null;
   private readonly sprites = new Map<string, HTMLCanvasElement[]>();
 
   private readonly looks = new Map<Alien, AlienLook>();
@@ -139,6 +141,7 @@ export default class DoodleWorld {
     this.pageId = null;
     this.pageTile = null;
     this.props = [];
+    this.drifts = null;
     this.looks.clear();
     this.bursts = [];
     this.solved = null;
@@ -157,7 +160,7 @@ export default class DoodleWorld {
     this.syncCanvasRect();
     const ctx = this.ctx;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    if (s.page) this.drawPage(s.page);
+    if (s.page) this.drawPage(s.page, time, delta);
     else if (this.paper) ctx.drawImage(this.paper, 0, 0);
 
     let dx = 0;
@@ -186,10 +189,10 @@ export default class DoodleWorld {
   }
 
   /**
-   * Story: the level's page, scrolled `scrolledPx` down, with its props. The
-   * tile repeats every screen height, so two copies cover the view.
+   * Story: the level's page, scrolled `scrolledPx` down, with its props and
+   * drifts. The tile repeats every screen height, so two copies cover the view.
    */
-  private drawPage(page: { id: string; scrolledPx: number; lengthPx: number }): void {
+  private drawPage(page: { id: string; scrolledPx: number; lengthPx: number }, time: number, delta: number): void {
     const def = PAGES[page.id];
     if (!def) {
       if (this.paper) this.ctx.drawImage(this.paper, 0, 0);
@@ -199,6 +202,7 @@ export default class DoodleWorld {
       this.pageId = page.id;
       this.pageTile = null;
       this.props = layOutProps(page.id, def, page.lengthPx);
+      this.drifts = new DriftLayer(def.drifts ?? []);
     }
     this.pageTile ??= drawPageTile(def, this.scale);
     const ctx = this.ctx;
@@ -216,10 +220,26 @@ export default class DoodleWorld {
       ctx.save();
       ctx.translate(prop.x, y);
       ctx.rotate(prop.angle);
-      this.drawSprite(prop.key, () => prop.recipe, 0);
+      this.drawSprite(prop.key, () => prop.recipe, loopFrame(time, prop.fps, prop.phase));
       ctx.restore();
     }
+    this.drawDrifts(page.id, time, delta);
     ctx.restore();
+  }
+
+  /** The page's drifting seeds, snow or leaves (faint, under every alien). */
+  private drawDrifts(pageId: string, time: number, delta: number): void {
+    if (!this.drifts) return;
+    this.drifts.step(delta / 1000);
+    const ctx = this.ctx;
+    ctx.globalAlpha = DOODLE.PAGE_DRIFT_ALPHA;
+    for (const d of this.drifts.drifts) {
+      ctx.save();
+      ctx.translate(d.x + DriftLayer.swayX(d), d.y);
+      ctx.rotate(d.angle);
+      this.drawSprite(`drift:${pageId}:${d.index}`, () => d.def.recipe, loopFrame(time, d.def.fps ?? 0, d.phase));
+      ctx.restore();
+    }
   }
 
   /** A boss's answers left, as pips under its body (hollow = answered). */
@@ -710,6 +730,11 @@ export default class DoodleWorld {
       this.sprites.clear();
     }
   }
+}
+
+/** Which frame of a looping doodle shows at `time` (ms), `fps` frames a second. */
+function loopFrame(time: number, fps: number, phase: number): number {
+  return Math.floor((time / 1000) * fps + phase * DOODLE.BOIL_FRAMES);
 }
 
 const pick = (words: readonly string[]) => words[Math.floor(Math.random() * words.length)];

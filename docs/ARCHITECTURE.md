@@ -284,6 +284,23 @@ fits here, and **what we didn't do**.
 - **Instead of:** a `runFurthest` field in the stored progress, reset on a
   game over: it works, but it is the same fact twice, with two writers.
 
+### 2.18 Pre-rendering + recycling (cheap animation)
+
+- **What:** draw an expensive picture once, in a few frames, and only
+  *copy* the right frame each frame (pre-rendering); keep a fixed set of
+  moving things and send each one back in when it leaves, instead of
+  creating and deleting them (recycling, a small object pool).
+- **Where:** `drawFrames()` in `renderDoodle/pencil.ts` pre-draws every
+  doodle; a story page's props loop those frames at their `fps`, and
+  `DriftLayer.reenter()` in `renderDoodle/drifts.ts` recycles the page's
+  seeds, leaves and snowflakes.
+- **Why:** Rough.js takes milliseconds per shape, far too slow to redraw 60
+  times a second on a phone; copying a small picture takes microseconds.
+  A fixed count of drifts also means a fixed cost per frame.
+- **Caution:** copying costs grow with the *pixels covered*, not with the
+  number of things: one big picture over the field costs more than many
+  small ones.
+
 ---
 
 ## 3. Where to start when you want to…

@@ -59,6 +59,15 @@ loop. See the Decision Log.
   and World3D both fill from the same snapshot; `?art=3d` picks the 3D view.
   Each ship has its own doodle (`SHIPS` in `recipes.ts`), also shown in the
   menu picker (`renderDoodle/shipIcons.ts`).
+  **Story pages are alive** (owner's playtest note): props with an `fps`
+  loop their pre-drawn frames (grass sways, ripples spread, stars twinkle,
+  lava cracks glow), and each page has `drifts` (`renderDoodle/drifts.ts`:
+  seeds, falling leaves, mist, dust, ash, snow, stardust) that float across
+  in screen space, recycled when they leave. Looks only (Math.random), drawn
+  over the props and under every alien at `DOODLE.PAGE_DRIFT_ALPHA` (0.4,
+  fainter than props), small and slow so the numbers win; nothing drifts
+  that could pass for a monster. Cost: drifts 0.01–0.07 ms/frame on the dev
+  PC (snow, 15 flakes, is the most), looping props ~0.
 - **Three.js** — the older 3D view of the playfield (`src/render3d/`, `?art=3d`). Chosen
   over Babylon.js / Unity WebGL for desktop + phone browsers: small bundle
   (~150 kB gz), fast mobile load, and plain TS that a future Node game server can
@@ -196,7 +205,8 @@ src/
                       (one short stroke recipe per ship/monster/boss),
                       pencil.ts (Rough.js + pre-drawn boil frames), paper.ts,
                       pages.ts (story pages: tinted paper + faint props that
-                      scroll), shipIcons.ts, storyMap.ts (map islands +
+                      scroll and loop), drifts.ts (things floating across a
+                      page), shipIcons.ts, storyMap.ts (map islands +
                       trail), font.ts
   render3d/
     World3D.ts        Three.js view: camera, lights, starfield, ship/alien/bullet
@@ -1034,6 +1044,15 @@ Newest first. Format: `YYYY-MM-DD — decision — rationale`.
   erasing the trail around them (chosen over a paper backing, which hides the
   ruled lines).
 
+- **2026-10-19 — Animated story pages: looping props + drifts (owner's
+  playtest note 1).** Owner picked both kinds of motion, backyard first.
+  Props loop the 6 frames every doodle already has (a prop's recipe draws
+  frame `t`), so moving props cost nothing extra; drifts are a fixed set
+  per page that re-enter where they came from (no creating/destroying).
+  Chosen over redrawing Rough.js shapes per frame (ms each, too slow on
+  phones) and over a full-screen animated layer (fill-rate). Drifts live in
+  screen space and ignore FREEZE and the sky's wind (the view gets neither);
+  they are faint and small so the numbers stay the most readable thing.
 - **2026-10-19 — Level 7, THE WINDY SKY: one wind, a storm that rains
   minions.** The page's wind is a rhythm on the game clock shared by every
   creature (like the volcano's fireflies), and each species reacts to a gust

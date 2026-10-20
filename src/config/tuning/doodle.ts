@@ -101,6 +101,7 @@ export const DOODLE = {
   // Story pages (renderDoodle/pages.ts): the page scrolls as the path goes by.
   PAGE_SCROLL_PX_PER_S: 22,
   PAGE_PROP_ALPHA: 0.5, // props stay faint: the numbers must win
+  PAGE_DRIFT_ALPHA: 0.4, // drifts move, which draws the eye, so they are fainter still
   // A boss's answers left, as pips under it.
   BOSS_PIP_R: 4,
   BOSS_PIP_GAP: 12,

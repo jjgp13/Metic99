@@ -93,20 +93,22 @@ const parseWind = (key: string): [WindPhase, 1 | -1] =>
 
 // --- Props --------------------------------------------------------------------
 
+/** Billows: the bumps of its outline swell and settle. */
 const CLOUD: DoodleRecipe = {
   w: 70,
-  h: 36,
-  draw(p) {
+  h: 38,
+  draw(p, t) {
+    const puff = (i: number) => Math.sin((t + i / 4) * TAU) * 1.2;
     p.curve(
       [
         [-30, 10],
-        [-30, 0],
-        [-20, -6],
-        [-12, -14],
-        [2, -14],
-        [10, -6],
-        [22, -8],
-        [30, 2],
+        [-30, 0 - puff(0)],
+        [-20, -6 - puff(1)],
+        [-12, -14 - puff(2)],
+        [2, -14 - puff(3)],
+        [10, -6 - puff(0)],
+        [22, -8 - puff(1)],
+        [30, 2 - puff(2)],
         [26, 10],
       ],
       { stroke: C.cloud, strokeWidth: 1.3 },
@@ -142,18 +144,20 @@ const SWIRL: DoodleRecipe = {
   },
 };
 
+/** Far-off birds flapping (the wing tips go up and down). */
 const FAR_BIRDS: DoodleRecipe = {
   w: 46,
-  h: 24,
-  draw(p) {
-    for (const [x, y, s] of [
-      [-12, 2, 1],
-      [2, -6, 0.8],
-      [14, 4, 0.7],
+  h: 26,
+  draw(p, t) {
+    for (const [x, y, s, offset] of [
+      [-12, 2, 1, 0],
+      [2, -6, 0.8, 0.3],
+      [14, 4, 0.7, 0.6],
     ]) {
+      const tipY = y + (-2 + 2.5 * Math.sin((t + offset) * TAU)) * s;
       p.curve(
         [
-          [x - 6 * s, y - 2 * s],
+          [x - 6 * s, tipY],
           [x - 2 * s, y - 3 * s],
           [x, y],
         ],
@@ -163,7 +167,7 @@ const FAR_BIRDS: DoodleRecipe = {
         [
           [x, y],
           [x + 2 * s, y - 3 * s],
-          [x + 6 * s, y - 2 * s],
+          [x + 6 * s, tipY],
         ],
         { strokeWidth: 1 },
       );
@@ -206,27 +210,54 @@ const FAR_KITE: DoodleRecipe = {
   },
 };
 
+/** Its rays turn slowly (one ray's gap per loop, so the loop is seamless). */
 const SUN: DoodleRecipe = {
   w: 40,
   h: 40,
-  draw(p) {
+  draw(p, t) {
     p.circle(0, 0, 18, undefined, { stroke: C.sun, strokeWidth: 1.2 });
     for (let i = 0; i < 8; i++) {
-      const a = (i / 8) * TAU;
+      const a = ((i + t) / 8) * TAU;
       p.line(Math.cos(a) * 12, Math.sin(a) * 12, Math.cos(a) * 17, Math.sin(a) * 17, { stroke: C.sun, strokeWidth: 1 });
     }
   },
 };
 
+/** Rocks on its stalk in the breeze. */
 const DANDELION_SEED: DoodleRecipe = {
-  w: 24,
+  w: 28,
   h: 30,
-  draw(p) {
-    p.line(0, 10, 0, -4, { strokeWidth: 0.8 });
+  draw(p, t) {
+    const rock = Math.sin(t * TAU) * 0.25;
+    const topX = Math.sin(rock) * 14;
+    p.line(0, 10, topX, -4, { strokeWidth: 0.8 });
     for (let i = 0; i < 6; i++) {
-      const a = -Math.PI / 2 + ((i - 2.5) / 5) * 1.6;
-      p.line(0, -4, Math.cos(a) * 8, -4 + Math.sin(a) * 8, { strokeWidth: 0.6 });
+      const a = -Math.PI / 2 + ((i - 2.5) / 5) * 1.6 + rock;
+      p.line(topX, -4, topX + Math.cos(a) * 8, -4 + Math.sin(a) * 8, { strokeWidth: 0.6 });
     }
+  },
+};
+
+// --- Drifts (renderDoodle/drifts.ts) ------------------------------------------
+
+/** A small cloud drifting by, far behind everything. */
+const PASSING_CLOUD: DoodleRecipe = {
+  w: 56,
+  h: 26,
+  draw(p) {
+    p.curve(
+      [
+        [-24, 8],
+        [-22, -1],
+        [-12, -8],
+        [2, -9],
+        [12, -3],
+        [22, 0],
+        [22, 8],
+      ],
+      { stroke: C.cloud, strokeWidth: 1.1 },
+    );
+    p.line(-24, 8, 22, 8, { stroke: C.cloud, strokeWidth: 0.9 });
   },
 };
 
@@ -694,14 +725,15 @@ export const SKY_PAGE: PageDef = {
   rule: "rgba(120, 150, 190, 0.26)",
   margin: "rgba(214, 84, 84, 0.3)",
   props: [
-    { recipe: CLOUD, weight: 4 },
+    { recipe: CLOUD, weight: 4, fps: 1.5 },
     { recipe: SWIRL, weight: 3 },
-    { recipe: FAR_BIRDS, weight: 2 },
+    { recipe: FAR_BIRDS, weight: 2, fps: 4 },
     { recipe: FAR_KITE, weight: 1 },
-    { recipe: DANDELION_SEED, weight: 1.5 },
-    { recipe: SUN, weight: 0.4 },
+    { recipe: DANDELION_SEED, weight: 1.5, fps: 2.5 },
+    { recipe: SUN, weight: 0.4, fps: 1 },
   ],
   propGap: 48,
+  drifts: [{ recipe: PASSING_CLOUD, count: 2, vx: 6, vy: 3 }],
   creatures: { kite: KITE_LOOK, swallow: SWALLOW, "paper plane": PAPER_PLANE, balloon: BALLOON_LOOK },
   bosses: { boss_storm: STORM_LOOK, boss_raindrop: { up: RAINDROP, hidden: VAPOR } },
 };
