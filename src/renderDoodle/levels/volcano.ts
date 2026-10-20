@@ -29,10 +29,12 @@ const C = {
 
 // --- Props --------------------------------------------------------------------
 
+/** The lava in the crack glows brighter and dimmer. */
 const LAVA_CRACK: DoodleRecipe = {
   w: 64,
   h: 26,
-  draw(p) {
+  draw(p, t) {
+    const glowPx = 3.5 + 2 * Math.sin(t * TAU);
     const crack: Point[] = [
       [-28, 2],
       [-16, -4],
@@ -44,6 +46,7 @@ const LAVA_CRACK: DoodleRecipe = {
     for (let i = 1; i < crack.length; i++) {
       const [x1, y1] = crack[i - 1];
       const [x2, y2] = crack[i];
+      p.line(x1, y1, x2, y2, { stroke: C.glow, strokeWidth: glowPx, roughness: 0.6 });
       p.line(x1, y1, x2, y2, { stroke: C.lava, strokeWidth: 2.2 });
     }
     p.line(-8, 4, -12, 11, { stroke: C.lava, strokeWidth: 1.4 }); // a side crack
@@ -70,13 +73,15 @@ const ROCK: DoodleRecipe = {
   },
 };
 
+/** Billows: its puffs swell and shrink out of step. */
 const SMOKE_PUFF: DoodleRecipe = {
-  w: 40,
-  h: 34,
-  draw(p) {
-    p.circle(-7, 4, 14, undefined, { stroke: C.smoke });
-    p.circle(4, 0, 17, undefined, { stroke: C.smoke });
-    p.circle(0, -10, 11, undefined, { stroke: C.smoke });
+  w: 42,
+  h: 36,
+  draw(p, t) {
+    const billow = (offset: number) => 1 + 0.12 * Math.sin((t + offset) * TAU);
+    p.circle(-7, 4, 14 * billow(0), undefined, { stroke: C.smoke });
+    p.circle(4, 0, 17 * billow(0.33), undefined, { stroke: C.smoke });
+    p.circle(0, -10, 11 * billow(0.66), undefined, { stroke: C.smoke });
     p.curve(
       [
         [9, -10],
@@ -88,25 +93,27 @@ const SMOKE_PUFF: DoodleRecipe = {
   },
 };
 
+/** Embers flicker, each on its own beat. */
 const EMBERS: DoodleRecipe = {
   w: 34,
   h: 30,
-  draw(p) {
-    for (const [x, y, r] of [
-      [-10, 6, 1.8],
-      [-3, -4, 1.4],
-      [6, 3, 2],
-      [11, -8, 1.3],
-      [1, 10, 1.2],
+  draw(p, t) {
+    for (const [x, y, r, offset] of [
+      [-10, 6, 1.8, 0],
+      [-3, -4, 1.4, 0.4],
+      [6, 3, 2, 0.7],
+      [11, -8, 1.3, 0.2],
+      [1, 10, 1.2, 0.55],
     ])
-      p.dot(x, y, r, C.lava);
+      p.dot(x, y, r * (0.65 + 0.35 * Math.sin((t + offset) * TAU)), C.lava);
   },
 };
 
+/** Puffs a smoke ring that rises and grows. */
 const LITTLE_VOLCANO: DoodleRecipe = {
   w: 50,
-  h: 40,
-  draw(p) {
+  h: 48,
+  draw(p, t) {
     p.shape(
       [
         [-22, 14],
@@ -125,7 +132,7 @@ const LITTLE_VOLCANO: DoodleRecipe = {
       ],
       { stroke: C.lava, strokeWidth: 1.8 },
     ); // a lava run down the side
-    p.circle(2, -14, 8, undefined, { stroke: C.smoke });
+    p.circle(2, -12 - t * 8, 6 + t * 6, undefined, { stroke: C.smoke });
   },
 };
 
@@ -143,6 +150,35 @@ const OBSIDIAN: DoodleRecipe = {
       C.plum,
       { hachureGap: 2 },
     );
+  },
+};
+
+// --- Drifts (renderDoodle/drifts.ts) ------------------------------------------
+
+/** A flake of ash rising in the heat. */
+const ASH: DoodleRecipe = {
+  w: 8,
+  h: 8,
+  draw(p) {
+    p.shape(
+      [
+        [-2.5, -1],
+        [1, -2.5],
+        [2.5, 1],
+        [-1, 2],
+      ],
+      C.ash,
+      { fillStyle: "solid", strokeWidth: 0.6 },
+    );
+  },
+};
+
+/** A spark floating up, flickering. */
+const RISING_EMBER: DoodleRecipe = {
+  w: 6,
+  h: 6,
+  draw(p, t) {
+    p.dot(0, 0, 0.8 + 0.5 * Math.abs(Math.sin(t * TAU)), C.lava);
   },
 };
 
@@ -491,14 +527,18 @@ export const VOLCANO_PAGE: PageDef = {
   rule: "rgba(150, 110, 90, 0.26)",
   margin: "rgba(214, 84, 84, 0.35)",
   props: [
-    { recipe: LAVA_CRACK, weight: 3 },
+    { recipe: LAVA_CRACK, weight: 3, fps: 2 },
     { recipe: ROCK, weight: 3 },
-    { recipe: SMOKE_PUFF, weight: 2 },
-    { recipe: EMBERS, weight: 2.5 },
-    { recipe: LITTLE_VOLCANO, weight: 1 },
+    { recipe: SMOKE_PUFF, weight: 2, fps: 1.5 },
+    { recipe: EMBERS, weight: 2.5, fps: 3 },
+    { recipe: LITTLE_VOLCANO, weight: 1, fps: 2 },
     { recipe: OBSIDIAN, weight: 1.5 },
   ],
   propGap: 46,
+  drifts: [
+    { recipe: ASH, count: 5, vx: 4, vy: -10, swayPx: 10, swayHz: 0.15, spinPerS: 0.8 },
+    { recipe: RISING_EMBER, count: 3, vx: 2, vy: -16, swayPx: 6, swayHz: 0.3, fps: 4 },
+  ],
   creatures: { "lava drip": DRIP, firefly: FIREFLY, tortoise: TORTOISE, spark: SPARK },
   bosses: { boss_dragon: { up: DRAGON, hidden: DRAGON_FIRE } },
 };

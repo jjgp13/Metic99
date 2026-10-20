@@ -52,20 +52,23 @@ function starPoints(x: number, y: number, r: number, spin = 0): Point[] {
 
 // --- Props --------------------------------------------------------------------
 
+/** Twinkles: it swells and shrinks a little. */
 const STAR: DoodleRecipe = {
   w: 26,
   h: 26,
-  draw(p) {
-    p.shape(starPoints(0, 0, 10), C.star, { fillStyle: "solid", strokeWidth: 1 });
+  draw(p, t) {
+    p.shape(starPoints(0, 0, 10 * (0.85 + 0.15 * Math.sin(t * TAU))), C.star, { fillStyle: "solid", strokeWidth: 1 });
   },
 };
 
+/** Twinkles: its long arms flash out and back. */
 const TWINKLE: DoodleRecipe = {
   w: 22,
   h: 22,
-  draw(p) {
-    p.line(-8, 0, 8, 0, { stroke: C.star, strokeWidth: 1.6 });
-    p.line(0, -8, 0, 8, { stroke: C.star, strokeWidth: 1.6 });
+  draw(p, t) {
+    const arm = 8 * (0.55 + 0.45 * Math.abs(Math.sin(t * TAU)));
+    p.line(-arm, 0, arm, 0, { stroke: C.star, strokeWidth: 1.6 });
+    p.line(0, -arm, 0, arm, { stroke: C.star, strokeWidth: 1.6 });
     p.line(-4, -4, 4, 4, { stroke: C.star, strokeWidth: 1 });
     p.line(-4, 4, 4, -4, { stroke: C.star, strokeWidth: 1 });
   },
@@ -75,7 +78,7 @@ const TWINKLE: DoodleRecipe = {
 const CONSTELLATION: DoodleRecipe = {
   w: 80,
   h: 50,
-  draw(p) {
+  draw(p, t) {
     const pts: Point[] = [
       [-34, -10],
       [-20, -16],
@@ -93,7 +96,9 @@ const CONSTELLATION: DoodleRecipe = {
       });
     }
     p.line(32, 0, 6, -2, { stroke: C.star, strokeWidth: 0.9, strokeLineDash: [3, 4] });
-    for (const [x, y] of pts) p.dot(x, y, 2.2, C.star);
+    // One star at a time shines brighter, walking along the figure.
+    const bright = Math.floor(t * pts.length);
+    pts.forEach(([x, y], i) => p.dot(x, y, i === bright ? 3.2 : 2.2, C.star));
   },
 };
 
@@ -164,6 +169,37 @@ const ROCKET: DoodleRecipe = {
       ],
       { stroke: C.starInk, strokeWidth: 1.2 },
     ); // flame
+  },
+};
+
+// --- Drifts (renderDoodle/drifts.ts) ------------------------------------------
+
+/** A speck of stardust, twinkling as it drifts. */
+const STARDUST: DoodleRecipe = {
+  w: 10,
+  h: 10,
+  draw(p, t) {
+    const arm = 1.5 + 2 * Math.abs(Math.sin(t * TAU));
+    p.line(-arm, 0, arm, 0, { stroke: C.star, strokeWidth: 1 });
+    p.line(0, -arm, 0, arm, { stroke: C.star, strokeWidth: 1 });
+  },
+};
+
+/** A thin night cloud sliding across. */
+const NIGHT_CLOUD: DoodleRecipe = {
+  w: 80,
+  h: 18,
+  draw(p) {
+    p.curve(
+      [
+        [-36, 4],
+        [-18, -3],
+        [0, 1],
+        [18, -4],
+        [36, 3],
+      ],
+      { stroke: C.cloud, strokeWidth: 1.2, roughness: 1.4 },
+    );
   },
 };
 
@@ -517,14 +553,18 @@ export const NIGHT_PAGE: PageDef = {
   rule: "rgba(236, 240, 255, 0.32)",
   margin: "rgba(214, 110, 160, 0.4)",
   props: [
-    { recipe: STAR, weight: 3 },
-    { recipe: TWINKLE, weight: 3 },
-    { recipe: CONSTELLATION, weight: 1.5 },
+    { recipe: STAR, weight: 3, fps: 2 },
+    { recipe: TWINKLE, weight: 3, fps: 3 },
+    { recipe: CONSTELLATION, weight: 1.5, fps: 2 },
     { recipe: CRESCENT, weight: 1 },
     { recipe: PLANET, weight: 1 },
     { recipe: ROCKET, weight: 0.6 },
   ],
   propGap: 44,
+  drifts: [
+    { recipe: STARDUST, count: 6, vx: 0, vy: 6, swayPx: 3, swayHz: 0.1, fps: 3 },
+    { recipe: NIGHT_CLOUD, count: 1, vx: 5, vy: 2 },
+  ],
   creatures: {
     invader: INVADER,
     "big invader": BIG_INVADER,

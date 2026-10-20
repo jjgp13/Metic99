@@ -36,11 +36,12 @@ const C = {
 
 // --- Props --------------------------------------------------------------------
 
-/** A round pad with its notch, the vein lines meeting at the notch. */
-function padShape(r: number): Point[] {
+/** A round pad with its notch, the vein lines meeting at the notch, turned
+ * `turn` radians (pads bob round a little on the water). */
+function padShape(r: number, turn = 0): Point[] {
   const pts: Point[] = [[0, 0]];
   for (let i = 0; i <= 10; i++) {
-    const a = 0.35 + (i / 10) * (TAU - 0.7);
+    const a = turn + 0.35 + (i / 10) * (TAU - 0.7);
     pts.push([Math.cos(a) * r, Math.sin(a) * r]);
   }
   return pts;
@@ -49,9 +50,10 @@ function padShape(r: number): Point[] {
 const LILY_PAD: DoodleRecipe = {
   w: 40,
   h: 40,
-  draw(p) {
-    p.shape(padShape(15), C.pad, { hachureGap: 3 });
-    for (const a of [2, 3.2, 4.4]) p.line(0, 0, Math.cos(a) * 11, Math.sin(a) * 11, { strokeWidth: 0.8 });
+  draw(p, t) {
+    const turn = Math.sin(t * TAU) * 0.12;
+    p.shape(padShape(15, turn), C.pad, { hachureGap: 3 });
+    for (const a of [2, 3.2, 4.4]) p.line(0, 0, Math.cos(a + turn) * 11, Math.sin(a + turn) * 11, { strokeWidth: 0.8 });
   },
 };
 
@@ -69,15 +71,17 @@ const LILY_FLOWER: DoodleRecipe = {
 };
 
 const REEDS: DoodleRecipe = {
-  w: 36,
+  w: 40,
   h: 50,
-  draw(p) {
-    for (const [x, lean, tall] of [
+  draw(p, t) {
+    const breeze = Math.sin(t * TAU) * 2;
+    for (const [x, reedLean, tall] of [
       [-8, -4, 1],
       [-2, -1, 0],
       [4, 2, 1],
       [9, 5, 0],
     ]) {
+      const lean = reedLean + breeze;
       p.curve(
         [
           [x, 22],
@@ -91,16 +95,14 @@ const REEDS: DoodleRecipe = {
   },
 };
 
+/** Rings spreading out: each frame they grow, and the loop ends one ring further. */
 const RIPPLES: DoodleRecipe = {
-  w: 50,
-  h: 28,
-  draw(p) {
-    for (const [w, h] of [
-      [14, 6],
-      [28, 12],
-      [42, 19],
-    ]) {
-      p.ellipse(0, 0, w, h, undefined, { stroke: C.ripple, strokeWidth: 1 });
+  w: 62,
+  h: 32,
+  draw(p, t) {
+    for (let ring = 1; ring <= 3; ring++) {
+      const size = ring + t;
+      p.ellipse(0, 0, 14 * size, 6.4 * size, undefined, { stroke: C.ripple, strokeWidth: 1 });
     }
   },
 };
@@ -115,21 +117,34 @@ const PEBBLES: DoodleRecipe = {
   },
 };
 
+/** Waves in the current. */
 const WEED: DoodleRecipe = {
-  w: 30,
+  w: 34,
   h: 40,
-  draw(p) {
+  draw(p, t) {
+    const wave = Math.sin(t * TAU) * 2.5;
     for (const side of [-1, 1]) {
       p.curve(
         [
           [side * 2, 16],
-          [side * 7, 4],
-          [side * 2, -6],
-          [side * 7, -16],
+          [side * 7 + wave * 0.5, 4],
+          [side * 2 - wave * 0.5, -6],
+          [side * 7 + wave, -16],
         ],
         { stroke: C.pad, strokeWidth: 1.2 },
       );
     }
+  },
+};
+
+// --- Drifts (renderDoodle/drifts.ts) ------------------------------------------
+
+/** A lily petal floating on the water, turning slowly. */
+const FLOATING_PETAL: DoodleRecipe = {
+  w: 14,
+  h: 10,
+  draw(p) {
+    p.ellipse(0, 0, 11, 6, C.petal, { strokeWidth: 0.9, hachureGap: 2 });
   },
 };
 
@@ -442,14 +457,15 @@ export const POND_PAGE: PageDef = {
   rule: "rgba(92, 145, 205, 0.32)",
   margin: "rgba(214, 84, 84, 0.32)",
   props: [
-    { recipe: LILY_PAD, weight: 4 },
+    { recipe: LILY_PAD, weight: 4, fps: 1.5 },
     { recipe: LILY_FLOWER, weight: 1.2 },
-    { recipe: REEDS, weight: 2 },
-    { recipe: RIPPLES, weight: 2.5 },
+    { recipe: REEDS, weight: 2, fps: 3 },
+    { recipe: RIPPLES, weight: 2.5, fps: 3 },
     { recipe: PEBBLES, weight: 1.2 },
-    { recipe: WEED, weight: 1.5 },
+    { recipe: WEED, weight: 1.5, fps: 2 },
   ],
   propGap: 44,
+  drifts: [{ recipe: FLOATING_PETAL, count: 3, vx: 9, vy: 5, swayPx: 6, swayHz: 0.2, spinPerS: 0.3 }],
   creatures: { fish: FISH, dragonfly: DRAGONFLY, frog: FROG, duck: DUCK },
   bosses: { boss_frog: { up: BIG_FROG, hidden: BIG_FROG_LEAP } },
 };

@@ -86,10 +86,15 @@ const ROCKS: DoodleRecipe = {
   },
 };
 
+/** Now and then the middle crystal's tip glints. */
 const CRYSTALS: DoodleRecipe = {
   w: 34,
   h: 36,
-  draw(p) {
+  draw(p, t) {
+    if (t >= 0.5 && t < 0.67) {
+      p.line(-4, -14, 6, -14, { strokeWidth: 0.9 });
+      p.line(1, -19, 1, -9, { strokeWidth: 0.9 });
+    }
     for (const [x, lean, h, ink] of [
       [-7, -0.35, 22, C.crystal],
       [1, 0, 28, C.crystalTeal],
@@ -112,21 +117,24 @@ const CRYSTALS: DoodleRecipe = {
   },
 };
 
+/** A drop falls into its puddle and its splash ring spreads. */
 const DRIP: DoodleRecipe = {
-  w: 26,
-  h: 34,
-  draw(p) {
+  w: 30,
+  h: 36,
+  draw(p, t) {
+    const fall = t * 14;
     p.curve(
       [
-        [0, -12],
-        [-4, -2],
-        [0, 2],
-        [4, -2],
-        [0, -12],
+        [0, -14 + fall],
+        [-4, -4 + fall],
+        [0, fall],
+        [4, -4 + fall],
+        [0, -14 + fall],
       ],
       { stroke: C.drip, strokeWidth: 1.2 },
     );
-    p.ellipse(0, 12, 18, 5, undefined, { stroke: C.drip, strokeWidth: 1 }); // the splash ring
+    const ring = 0.5 + t * 0.6;
+    p.ellipse(0, 12, 22 * ring, 6 * ring, undefined, { stroke: C.drip, strokeWidth: 1 }); // the splash ring
   },
 };
 
@@ -144,15 +152,28 @@ const MUSHROOMS: DoodleRecipe = {
   },
 };
 
+/** Sways in a draft. */
 const WEB: DoodleRecipe = {
   w: 34,
   h: 34,
-  draw(p) {
+  draw(p, t) {
+    const sway = Math.sin(t * TAU) * 0.08;
     for (let i = 0; i < 5; i++) {
-      const a = (i / 5) * TAU;
+      const a = (i / 5) * TAU + sway;
       p.line(0, 0, Math.cos(a) * 14, Math.sin(a) * 14, { strokeWidth: 0.8 });
     }
     for (const r of [5, 10]) p.circle(0, 0, r * 2, undefined, { strokeWidth: 0.7, roughness: 1.8 });
+  },
+};
+
+// --- Drifts (renderDoodle/drifts.ts) ------------------------------------------
+
+/** A speck of dust floating in the dark. */
+const DUST: DoodleRecipe = {
+  w: 6,
+  h: 6,
+  draw(p) {
+    p.dot(0, 0, 1, C.stone);
   },
 };
 
@@ -454,12 +475,13 @@ export const CAVE_PAGE: PageDef = {
   props: [
     { recipe: STALACTITES, weight: 3 },
     { recipe: ROCKS, weight: 3 },
-    { recipe: CRYSTALS, weight: 2 },
-    { recipe: DRIP, weight: 2 },
+    { recipe: CRYSTALS, weight: 2, fps: 2 },
+    { recipe: DRIP, weight: 2, fps: 3 },
     { recipe: MUSHROOMS, weight: 1.2 },
-    { recipe: WEB, weight: 1 },
+    { recipe: WEB, weight: 1, fps: 1.5 },
   ],
   propGap: 50,
+  drifts: [{ recipe: DUST, count: 7, vx: 3, vy: 4, swayPx: 10, swayHz: 0.1 }],
   creatures: { bat: BAT, glowworm: GLOWWORM, minecart: MINECART_LOOK },
   bosses: { boss_troll: TROLL_LOOK },
 };

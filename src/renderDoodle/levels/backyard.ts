@@ -14,6 +14,7 @@ const TAU = Math.PI * 2;
 const C = {
   dirt: "#8a6a4a",
   grass: "#7a9a3a",
+  leaf: "#c98a3a",
   daisy: "#d9b44a",
   beetle: "#6a4c93",
   beetleHead: "#4d4258",
@@ -37,10 +38,12 @@ const PEBBLES: DoodleRecipe = {
   },
 };
 
+/** Sways in the breeze: the blade tips swing a few px as the frames go round. */
 const GRASS_TUFT: DoodleRecipe = {
-  w: 30,
+  w: 34,
   h: 26,
-  draw(p) {
+  draw(p, t) {
+    const breeze = Math.sin(t * TAU) * 2.5;
     for (const [x, lean] of [
       [-6, -5],
       [-2, -2],
@@ -50,8 +53,8 @@ const GRASS_TUFT: DoodleRecipe = {
       p.curve(
         [
           [x, 10],
-          [x + lean * 0.4, 0],
-          [x + lean, -10],
+          [x + lean * 0.4 + breeze * 0.4, 0],
+          [x + lean + breeze, -10],
         ],
         { stroke: C.grass, strokeWidth: 1.3 },
       );
@@ -59,12 +62,14 @@ const GRASS_TUFT: DoodleRecipe = {
   },
 };
 
+/** Nods: the flower head turns a little back and forth. */
 const DAISY: DoodleRecipe = {
   w: 26,
   h: 26,
-  draw(p) {
+  draw(p, t) {
+    const nod = Math.sin(t * TAU) * 0.25;
     for (let i = 0; i < 6; i++) {
-      const a = (i / 6) * TAU;
+      const a = (i / 6) * TAU + nod;
       p.ellipse(Math.cos(a) * 6, Math.sin(a) * 6, 6, 6, undefined, { strokeWidth: 1 });
     }
     p.circle(0, 0, 5, C.daisy, { fillStyle: "solid", strokeWidth: 0.8 });
@@ -86,13 +91,15 @@ const CLOD: DoodleRecipe = {
   },
 };
 
+/** Marches: each frame the ants step along, and the loop ends one ant further. */
 const ANT_TRAIL: DoodleRecipe = {
-  w: 60,
+  w: 64,
   h: 20,
-  draw(p) {
+  draw(p, t) {
     for (let i = 0; i < 5; i++) {
-      const x = -24 + i * 12;
-      const y = Math.sin(i * 1.3) * 4;
+      const step = i + t;
+      const x = -26 + step * 12;
+      const y = Math.sin(step * 1.3) * 4;
       p.dot(x, y, 1.6);
       p.dot(x + 3, y, 1.2);
     }
@@ -112,6 +119,45 @@ const TWIG: DoodleRecipe = {
       { stroke: C.dirt, strokeWidth: 1.8 },
     );
     p.line(2, -1, 9, -8, { stroke: C.dirt, strokeWidth: 1.2 });
+  },
+};
+
+// --- Drifts (renderDoodle/drifts.ts) ------------------------------------------
+
+/** A dandelion seed: a stalk under a little fluffy parachute. */
+const DANDELION_SEED: DoodleRecipe = {
+  w: 16,
+  h: 20,
+  draw(p) {
+    p.line(0, 8, 0, -3, { strokeWidth: 0.9 });
+    p.dot(0, 8, 1.2);
+    for (let i = 0; i < 7; i++) {
+      const a = Math.PI + (i / 6) * Math.PI;
+      p.line(0, -3, Math.cos(a) * 6, -3 + Math.sin(a) * 6, { strokeWidth: 0.6, roughness: 0.6 });
+    }
+  },
+};
+
+/** A leaf that flutters down, flipping (it looks thinner mid-flip). */
+const FALLING_LEAF: DoodleRecipe = {
+  w: 22,
+  h: 14,
+  draw(p, t) {
+    const flip = 0.45 + 0.55 * Math.abs(Math.cos(t * Math.PI));
+    const h = 8 * flip;
+    p.shape(
+      [
+        [-9, 0],
+        [-3, -h / 2],
+        [6, -h / 3],
+        [9, 0],
+        [6, h / 3],
+        [-3, h / 2],
+      ],
+      C.leaf,
+      { hachureGap: 2.6, strokeWidth: 1 },
+    );
+    p.line(-9, 0, 8, 0, { strokeWidth: 0.7 });
   },
 };
 
@@ -306,13 +352,17 @@ export const BACKYARD_PAGE: PageDef = {
   margin: "rgba(214, 84, 84, 0.35)",
   props: [
     { recipe: PEBBLES, weight: 3 },
-    { recipe: GRASS_TUFT, weight: 4 },
-    { recipe: DAISY, weight: 1.5 },
+    { recipe: GRASS_TUFT, weight: 4, fps: 3 },
+    { recipe: DAISY, weight: 1.5, fps: 2 },
     { recipe: CLOD, weight: 2 },
-    { recipe: ANT_TRAIL, weight: 1 },
+    { recipe: ANT_TRAIL, weight: 1, fps: 4 },
     { recipe: TWIG, weight: 1.5 },
   ],
   propGap: 46,
+  drifts: [
+    { recipe: DANDELION_SEED, count: 3, vx: 14, vy: -5, swayPx: 8, swayHz: 0.25 },
+    { recipe: FALLING_LEAF, count: 1, vx: 10, vy: 16, swayPx: 18, swayHz: 0.2, spinPerS: 0.5, fps: 3 },
+  ],
   creatures: { beetle: BEETLE, worm: WORM, butterfly: BUTTERFLY },
   bosses: { boss_mole: { up: MOLE, hidden: DIRT_MOUND } },
 };

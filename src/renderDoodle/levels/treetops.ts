@@ -35,14 +35,16 @@ const C = {
 const LEAF: DoodleRecipe = {
   w: 34,
   h: 22,
-  draw(p) {
+  draw(p, t) {
+    // It rustles: the leaf tips a little toward and away from us.
+    const tip = 7 * (0.85 + 0.15 * Math.cos(t * TAU));
     const outline: Point[] = [
       [-14, 0],
-      [-6, -7],
-      [6, -7],
+      [-6, -tip],
+      [6, -tip],
       [14, 0],
-      [6, 7],
-      [-6, 7],
+      [6, tip],
+      [-6, tip],
     ];
     p.shape(outline, C.leaf, { hachureGap: 3 });
     p.line(-14, 0, 14, 0, { strokeWidth: 1 });
@@ -56,8 +58,9 @@ const LEAF: DoodleRecipe = {
 /** A branch with a fork and a leaf at its tip. */
 const BRANCH: DoodleRecipe = {
   w: 80,
-  h: 34,
-  draw(p) {
+  h: 38,
+  draw(p, t) {
+    const flutter = Math.sin(t * TAU) * 1.5;
     p.curve(
       [
         [-36, 10],
@@ -68,8 +71,8 @@ const BRANCH: DoodleRecipe = {
       { stroke: C.bark, strokeWidth: 2.4 },
     );
     p.line(2, 1, 14, -12, { stroke: C.bark, strokeWidth: 1.6 });
-    p.ellipse(18, -14, 12, 7, C.leaf, { hachureGap: 2.6 });
-    p.ellipse(36, -10, 10, 6, C.leaf, { hachureGap: 2.6 });
+    p.ellipse(18, -14 + flutter, 12, 7, C.leaf, { hachureGap: 2.6 });
+    p.ellipse(36, -10 - flutter, 10, 6, C.leaf, { hachureGap: 2.6 });
   },
 };
 
@@ -124,6 +127,30 @@ const FEATHER: DoodleRecipe = {
     p.ellipse(0, -2, 8, 26, undefined, { strokeWidth: 1 });
     p.line(0, 14, 0, -14, { strokeWidth: 1 });
     for (const y of [-8, -2, 4]) p.line(0, y, 3, y - 3, { strokeWidth: 0.7 });
+  },
+};
+
+// --- Drifts (renderDoodle/drifts.ts) ------------------------------------------
+
+/** A leaf spinning down from the canopy, flipping (thinner mid-flip). */
+const FALLING_LEAF: DoodleRecipe = {
+  w: 22,
+  h: 14,
+  draw(p, t) {
+    const half = 4.5 * (0.45 + 0.55 * Math.abs(Math.cos(t * Math.PI)));
+    p.shape(
+      [
+        [-9, 0],
+        [-3, -half],
+        [4, -half],
+        [9, 0],
+        [4, half],
+        [-3, half],
+      ],
+      C.leaf,
+      { hachureGap: 2.6, strokeWidth: 1 },
+    );
+    p.line(-9, 0, 9, 0, { strokeWidth: 0.7 });
   },
 };
 
@@ -473,14 +500,18 @@ export const TREETOPS_PAGE: PageDef = {
   rule: "rgba(110, 140, 120, 0.3)",
   margin: "rgba(214, 84, 84, 0.32)",
   props: [
-    { recipe: LEAF, weight: 4 },
+    { recipe: LEAF, weight: 4, fps: 2 },
     { recipe: OAK_LEAF, weight: 2 },
-    { recipe: BRANCH, weight: 2.5 },
+    { recipe: BRANCH, weight: 2.5, fps: 3 },
     { recipe: ACORN, weight: 2 },
     { recipe: NEST, weight: 0.8 },
     { recipe: FEATHER, weight: 1 },
   ],
   propGap: 44,
+  drifts: [
+    { recipe: FALLING_LEAF, count: 3, vx: 6, vy: 18, swayPx: 20, swayHz: 0.2, spinPerS: 0.6, fps: 3 },
+    { recipe: FEATHER, count: 1, vx: 4, vy: 8, swayPx: 24, swayHz: 0.15, spinPerS: 0.4 },
+  ],
   creatures: { squirrel: SQUIRREL, owl: OWL, bird: BIRD, hummingbird: HUMMINGBIRD },
   bosses: { boss_owl: { up: GREAT_OWL, hidden: GREAT_OWL_FLYING } },
 };

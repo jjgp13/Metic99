@@ -172,12 +172,13 @@ const RUG: DoodleRecipe = {
 
 /** The night light: a moon plugged into the wall, glowing. */
 const NIGHT_LIGHT: DoodleRecipe = {
-  w: 46,
-  h: 46,
-  draw(p) {
+  w: 50,
+  h: 50,
+  draw(p, t) {
+    const rayEnd = 19 + 2.5 * Math.sin(t * TAU); // the glow breathes
     for (let i = 0; i < 8; i++) {
       const a = (i / 8) * TAU;
-      p.line(Math.cos(a) * 14, Math.sin(a) * 14, Math.cos(a) * 19, Math.sin(a) * 19, {
+      p.line(Math.cos(a) * 14, Math.sin(a) * 14, Math.cos(a) * rayEnd, Math.sin(a) * rayEnd, {
         stroke: C.glow,
         strokeWidth: 1.2,
       });
@@ -213,6 +214,29 @@ const STAR_STICKER: DoodleRecipe = {
 };
 
 // --- Toys ------------------------------------------------------------------------
+
+// --- Drifts (renderDoodle/drifts.ts) ------------------------------------------
+
+/** A speck of dust floating in the dark room. */
+const DUST_MOTE: DoodleRecipe = {
+  w: 6,
+  h: 6,
+  draw(p) {
+    p.dot(0, 0, 1.3, C.lavender);
+  },
+};
+
+/** A feather from the pillow, see-sawing down. */
+const PILLOW_FEATHER: DoodleRecipe = {
+  w: 12,
+  h: 24,
+  draw(p) {
+    p.ellipse(0, -1, 6, 18, undefined, { strokeWidth: 0.9 });
+    p.line(0, 10, 0, -10, { strokeWidth: 0.8 });
+  },
+};
+
+// --- Creatures ------------------------------------------------------------------
 
 /** A wind-up key with its two loops, turned `turn` radians, at (x, y). */
 function windKey(p: Parameters<DoodleRecipe["draw"]>[0], x: number, y: number, turn: number): void {
@@ -817,10 +841,14 @@ export const BEDROOM_PAGE: PageDef = {
     { recipe: CRAYON, weight: 2.5 },
     { recipe: SOCK, weight: 2 },
     { recipe: RUG, weight: 1 },
-    { recipe: NIGHT_LIGHT, weight: 0.8 },
+    { recipe: NIGHT_LIGHT, weight: 0.8, fps: 2 },
     { recipe: STAR_STICKER, weight: 2.5 },
   ],
   propGap: 48,
+  drifts: [
+    { recipe: DUST_MOTE, count: 6, vx: 3, vy: -3, swayPx: 12, swayHz: 0.12 },
+    { recipe: PILLOW_FEATHER, count: 1, vx: 3, vy: 10, swayPx: 22, swayHz: 0.18, spinPerS: 0.4 },
+  ],
   creatures: {
     "toy soldier": SOLDIER,
     "jack-in-the-box": JACK,
