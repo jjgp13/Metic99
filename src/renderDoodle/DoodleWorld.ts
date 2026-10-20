@@ -1,11 +1,11 @@
 import rough from "roughjs";
 import type { RoughCanvas } from "roughjs/bin/canvas";
 import type { Drawable } from "roughjs/bin/core";
-import { DOODLE, ENEMY, GAME, MODEL_BOXES, PLAYER, RECOVERY } from "../config/constants";
+import { DOODLE, ENEMY, GAME, LEVEL_CLEAR, MODEL_BOXES, PLAYER, RECOVERY } from "../config/constants";
 import type Alien from "../objects/Alien";
 import { Boss, Shielded } from "../objects/abilities";
 import type { AnswerView, InkPoint } from "../render3d/AnswerStars";
-import type { WorldSnapshot } from "../render3d/World3D";
+import type { ShipLaunchPose, WorldSnapshot } from "../render3d/World3D";
 import { DriftLayer } from "./drifts";
 import { PAGES, drawPageTile, layOutProps, type BossLook, type CreatureLook, type PlacedProp } from "./pages";
 import { drawPaper } from "./paper";
@@ -115,6 +115,8 @@ export default class DoodleWorld {
   private shipWords: ShipWord[] = [];
   /** Set once the ship is destroyed: its halves, and how long ago. */
   private wreck: { pieces: ShipPiece[]; age: number } | null = null;
+  /** The launch's "zoom!" was written (once per launch). */
+  private launchWordShown = false;
   private shakeLeft = 0;
   private shakeIntensity = 0;
 
@@ -138,6 +140,7 @@ export default class DoodleWorld {
     this.kickLeft = 0;
     this.shipWords = [];
     this.wreck = null;
+    this.launchWordShown = false;
     this.pageId = null;
     this.pageTile = null;
     this.props = [];
@@ -448,10 +451,11 @@ export default class DoodleWorld {
   /**
    * The ship: leaning toward its target; knocked down, blinking and dazed
    * (stars circling) while the field is frozen after a hit; snapped in two
-   * once the last life is gone.
+   * once the last life is gone; blasting off the top after a level clear.
    */
   private drawShip(s: WorldSnapshot, time: number, boil: number, delta: number): void {
     if (s.shipDown) return this.drawWreck(s.shipX, delta);
+    if (s.shipLaunch) return this.drawLaunch(s.shipX, s.shipLaunch, boil);
     if (s.shipHurt > this.lastHurt + 0.01) this.onShipHit(s.shipX);
     this.lastHurt = s.shipHurt;
 
@@ -535,6 +539,64 @@ export default class DoodleWorld {
       this.drawSprite(this.shipKey(), () => recipe, 0);
       ctx.restore();
     }
+  }
+
+  /**
+   * The ship squashing onto the ground, then stretched and flying off the
+   * top on its flame and speed lines. It squashes from its bottom edge, so
+   * it looks pressed against the ground rather than shrunk.
+   */
+  private drawLaunch(x: number, pose: ShipLaunchPose, boil: number): void {
+    const recipe = this.shipRecipe();
+    const y = PLAYER.Y - pose.liftPx;
+    const bottom = y + (recipe.h / 2) * pose.scaleY;
+    if (pose.trail > 0 && !this.launchWordShown) {
+      this.launchWordShown = true;
+      this.shipWords.push({ text: pick(DOODLE.LAUNCH_WORDS), x: x + DOODLE.LAUNCH_WORD_DX, age: 0 });
+    }
+    // The lines start where the ship took off, never below it.
+    if (pose.trail > 0) this.drawSpeedLines(x, bottom, PLAYER.Y + recipe.h / 2, pose.trail);
+
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.translate(x + (Math.random() * 2 - 1) * pose.shiverPx, bottom);
+    ctx.scale(pose.scaleX, pose.scaleY);
+    ctx.translate(0, -recipe.h / 2);
+    this.drawSprite(this.shipKey(), () => recipe, boil);
+    ctx.restore();
+  }
+
+  /** A flickering flame and pencil speed lines streaming down from `top`
+   * (cut off at `floor`). */
+  private drawSpeedLines(x: number, top: number, floor: number, trail: number): void {
+    const ctx = this.ctx;
+    ctx.save();
+    // Re-jittered every frame: the lines scribble like the rest of the page.
+    const flamePx = DOODLE.LAUNCH_FLAME_PX * trail * (0.8 + Math.random() * 0.4);
+    ctx.beginPath();
+    ctx.moveTo(x - 7, top - 2);
+    ctx.lineTo(x, top + flamePx);
+    ctx.lineTo(x + 7, top - 2);
+    ctx.closePath();
+    ctx.fillStyle = DOODLE.INK.flame;
+    ctx.fill();
+    ctx.strokeStyle = DOODLE.GRAPHITE;
+    ctx.lineWidth = 1.3;
+    ctx.stroke();
+
+    ctx.globalAlpha = DOODLE.SPEED_LINE_ALPHA;
+    ctx.lineCap = "round";
+    for (const [dx, share, width] of DOODLE.SPEED_LINES) {
+      const start = top + 6 + Math.random() * 8;
+      const end = Math.min(floor, start + LEVEL_CLEAR.TRAIL_PX * share * trail);
+      if (end <= start) continue;
+      ctx.lineWidth = width;
+      ctx.beginPath();
+      ctx.moveTo(x + dx + Math.random() - 0.5, start);
+      ctx.lineTo(x + dx + Math.random() * 2 - 1, end);
+      ctx.stroke();
+    }
+    ctx.restore();
   }
 
   /** "ouch!" next to the ship, floating up and fading. */

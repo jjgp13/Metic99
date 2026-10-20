@@ -301,6 +301,20 @@ fits here, and **what we didn't do**.
   number of things: one big picture over the field costs more than many
   small ones.
 
+### 2.19 Optional asset with a fallback (graceful degradation)
+
+- **What:** load a file that may not exist yet; when it's missing, do
+  something simpler instead of failing, and remember the miss so it isn't
+  asked for again.
+- **Where:** `loadOptionalMusic()` in `scenes/extraMusic.ts`: the menu
+  theme is silent without `menu.mp3`, and the level-clear jingle falls back
+  to a fanfare made of the blip sound played at rising pitches.
+- **Why:** the music is made one file at a time, and the game must ship
+  (and never crash) in between. The caller doesn't care whether the file
+  was there: it asks for "the jingle" and always gets one.
+- **Caution:** a missing file still costs one request and a console error
+  per visit (dev servers answer with an HTML page, which fails to decode).
+
 ---
 
 ## 3. Where to start when you want to…

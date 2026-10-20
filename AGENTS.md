@@ -121,6 +121,12 @@ src/
                       World3D a snapshot every frame.
     runSetup.ts       A run's seed + Field or Match, or a story level
                       (`StoryRun`: level, lives, score, energy) (+ dev URL params)
+    shipLaunch.ts     The ship blasting off the top after a level clear:
+                      `ShipLaunch` keeps the time, `shipLaunchPose` the
+                      squash/stretch/climb; views draw `snapshot.shipLaunch`
+    levelMusic.ts     A story level's path + boss tracks
+    extraMusic.ts     Optional music: the menu/map theme, the level-clear
+                      jingle (a blip fanfare until its file exists)
     NameEntryScene.ts Arcade 5-char initials entry shown at game over
     LeaderboardScene.ts Global top-N board; dual-mode (post-run / menu browse)
     HandwritingLabScene.ts `?lab=draw`: records real handwriting, exports JSON
@@ -681,8 +687,8 @@ Green=multiplication, Yellow=division.
   new sum and burrows to the other side and up (numbers hidden while it
   digs), then holds still to be read; reaching the ship costs a life and
   sends it back up; BLAST doesn't touch it. The last answer clears the
-  level (`levelCleared`, a card, then the next level with the same lives,
-  score and energy). Game over = back to the story map (every run starts at
+  level (`levelCleared`, the clear sequence below, then the next level
+  with the same lives, score and energy). Game over = back to the story map (every run starts at
   level 1). The top bar shows the path's progress; the page scrolls
   (`DOODLE.PAGE_*`).
   **Story map** (`StoryMapScene`, `STORY_MAP`, owner's design): 10 islands
@@ -707,13 +713,26 @@ Green=multiplication, Yellow=division.
   (rules) + `renderDoodle/levels/<page>.ts` (looks), each listed in its
   folder's index (docs/SOLO_MODES_DESIGN.md "Adding a level").
   **Flow:** STORY opens the map (CONTINUE a saved run, or a new run from
-  island 1). After a clear the game returns to the map, the ship flies to
-  the next island, and a tap starts it. The run is saved when each level
+  island 1). **After a boss** (`GameScene.clearLevel`, timings in
+  `LEVEL_CLEAR`, owner's order): the minions left pop one by one, the ship
+  squashes, then blasts off the top on a flame and pencil speed lines
+  ("zoom!", `scenes/shipLaunch.ts`) while the boss track fades and the
+  victory jingle plays; once it is gone the results card
+  (`ui/hud/LevelClearCard`) counts the level score up (the total with it)
+  and shows lives, kills, best combo, the level's time and a NEW BEST
+  stamp (beat an earlier best on that stage); a tap mid-count skips to the
+  end, the next tap returns to the map, the ship flies to the next island,
+  and a tap starts it. The run is saved when each level
   starts (`STORAGE.STORY_SAVE`: level, lives, score, energy), so it can be left
   (pause → SAVE & QUIT TO MAP) and continued from that level's start; a
   game over deletes it. **Music:** each level loads its own path + boss
   track (`public/assets/music/levelNN-{path,boss}.mp3`, `scenes/levelMusic.ts`)
-  and crossfades to the boss track when the boss comes in.
+  and crossfades to the boss track when the boss comes in. The main theme
+  (`menu.mp3`, a loop) plays on the menu and the map and keeps playing
+  between them (the sound manager is the game's, not a scene's); a run
+  fades it out. Optional files (`scenes/extraMusic.ts`): menu theme,
+  level-clear jingle; a missing one is silence (or, for the jingle, a
+  rising blip fanfare) and is not asked for again that visit.
   Built: level 1, THE BACKYARD (now 100 s, d 0.1 → 0.35; beetles whose eyes are
   the numbers and sometimes march in pairs, worms made of numbers, a
   butterfly that folds its wings over its numbers; boss GIANT MOLE, 5
@@ -1028,6 +1047,17 @@ dMatch)`; it is 0 in solo play.
 ## Decision Log
 
 Newest first. Format: `YYYY-MM-DD — decision — rationale`.
+
+- **2026-10-20 — Level clear sequence: pop, launch, jingle, results, map
+  (owner's ask).** Owner's picks: one beat after another (minions pop →
+  squash → blast off → results count up → map), and the card shows kills,
+  best combo, the level's time and a NEW BEST stamp. The launch is a look,
+  so it lives in the snapshot (`shipLaunch`) timed on the scene clock, not
+  in `Field` (owner's first pick: the rules have ended by then, and bots,
+  replays and the server would carry an animation nobody sees). `ShipLaunch`
+  is its own component so the story ending can fly the ship off too. Music
+  files made one at a time are optional: `menu.mp3` and `level-clear.mp3`
+  play when present, else silence / a blip fanfare.
 
 - **2026-10-19 — Powers rebalanced after the energy cut: the weak three
   got cheaper (owner picked C).** With scarce energy SLOW's cheap drain made

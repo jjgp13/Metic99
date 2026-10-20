@@ -18,6 +18,7 @@ import {
 } from "../services/storyProgress";
 import { onKeyDown } from "../ui/keyboard";
 import { textStyle } from "../ui/theme";
+import { playMenuTheme } from "./extraMusic";
 
 /** Doodles are drawn at 2× and shown at half size, for a sharp picture. */
 const SHARP = 2;
@@ -58,6 +59,7 @@ export default class StoryMapScene extends Phaser.Scene {
     this.boiling = [];
     this.frame = 0;
     this.travelling = false;
+    playMenuTheme(this);
     const progress = loadStoryProgress();
     this.saved = loadSavedRun();
 

@@ -8,6 +8,7 @@ import { onKeyDown } from "../ui/keyboard";
 import { PALETTE, css } from "../config/palette";
 import { textStyle } from "../ui/theme";
 import { shipIconFrames } from "../renderDoodle/shipIcons";
+import { playMenuTheme } from "./extraMusic";
 
 /**
  * Title / main menu. The first scene the player sees: a ship picker (a look
@@ -24,6 +25,7 @@ export default class MenuScene extends Phaser.Scene {
 
   create(): void {
     const cx = GAME.WIDTH / 2;
+    playMenuTheme(this);
 
     // A few drifting stars to match the in-game backdrop.
     for (let i = 0; i < 40; i++) {
