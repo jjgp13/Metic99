@@ -29,6 +29,7 @@ import { SendButton } from "../ui/hud/SendButton";
 import { TopHud } from "../ui/hud/TopHud";
 import { onKeyDown } from "../ui/keyboard";
 import { createFieldView, type FieldView } from "./fieldView";
+import type { EndingData, EndingNext } from "./EndingScene";
 import type { BoardScore } from "./NameEntryScene";
 import { setUpRun, type StoryRun } from "./runSetup";
 
@@ -594,17 +595,24 @@ export default class GameScene extends Phaser.Scene {
       if (f.cleared && next < LEVELS.length) {
         // Back to the map: the ship flies to the next island, then a tap starts it.
         this.scene.start("StoryMapScene", { travelTo: next });
-      } else if (isLeaderboardEnabled()) {
-        this.scene.start("NameEntryScene", {
-          score: f.score,
-          personalBest: this.newHighScore,
-          headline: f.cleared ? "STORY COMPLETE!" : "GAME OVER",
-          boards: storyBoards(f.score, levelScores),
-          title: "STORY RUNS",
-          back: "StoryMapScene",
-        });
       } else {
-        this.scene.start("StoryMapScene");
+        // The run is over: name entry when the leaderboard is on, else the
+        // map. Beating the last level shows the ending first.
+        const after: EndingNext = isLeaderboardEnabled()
+          ? {
+              scene: "NameEntryScene",
+              data: {
+                score: f.score,
+                personalBest: this.newHighScore,
+                headline: f.cleared ? "STORY COMPLETE!" : "GAME OVER",
+                boards: storyBoards(f.score, levelScores),
+                title: "STORY RUNS",
+                back: "StoryMapScene",
+              },
+            }
+          : { scene: "StoryMapScene", data: {} };
+        if (f.cleared) this.scene.start("EndingScene", { score: f.score, next: after } satisfies EndingData);
+        else this.scene.start(after.scene, after.data);
       }
     } else if (isLeaderboardEnabled() && !this.match) {
       this.scene.start("NameEntryScene", { score: this.field.score, personalBest: this.newHighScore });

@@ -123,6 +123,37 @@ export const STORY = {
 } as const;
 
 /**
+ * The ending (scenes/EndingScene.ts), after the last level's boss: seen from
+ * above, a kid's hands color the game's bosses on a small sheet of paper.
+ */
+export const ENDING = {
+  /** The sheet on the desk: center, size, a slight tilt (radians). */
+  SHEET: { X: 240, Y: 318, W: 404, H: 488, TILT: -0.03 },
+  /** The doodles on the sheet: rows of cells (sheet px from its center). */
+  CELL_W: 126,
+  CELL_H: 96,
+  ROWS_Y: [-118, -22, 74, 170],
+  /** How many doodles at the end are still gray pencil, colored in one by
+   * one while the scene plays. */
+  STILL_GRAY: 2,
+  /** A gray doodle is this much lighter than graphite. */
+  GRAY_LIGHTEN: 0.45,
+  /** Before the first stroke, per doodle, and moving between doodles. */
+  START_MS: 1400,
+  COLOR_MS: 3200,
+  MOVE_MS: 800,
+  /** The crayon's scribble up and down while coloring. */
+  SCRIBBLE_HZ: 4,
+  /** A tap leaves only after this long (it may still be the clear card's tap). */
+  TAP_AFTER_MS: 2000,
+  FADE_IN_MS: 900,
+  /** Crayons the hand picks up, one per doodle colored in. */
+  CRAYONS: ["#f08a2c", "#8e4fd8", "#e0679f", "#1f9e8f"],
+  /** Music: a jingle, played once if the file exists (docs/MUSIC_PROMPTS.md). */
+  MUSIC_FILE: "ending.mp3",
+} as const;
+
+/**
  * The story map (scenes/StoryMapScene.ts): one island per stage on a
  * notebook page, joined by a dotted trail from the bottom (stage 1) up.
  */

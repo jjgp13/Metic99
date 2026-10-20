@@ -21,6 +21,9 @@ export class Pencil {
   constructor(
     private readonly rc: RoughCanvas,
     private readonly seed: number,
+    /** "crayon": colored areas are scribbled in with a waxy zigzag (the
+     * ending's drawings); outlines and solid dots stay as they are. */
+    private readonly look: "pencil" | "crayon" = "pencil",
   ) {}
 
   /** A closed shape (outline, plus hatching in `ink`). */
@@ -57,7 +60,7 @@ export class Pencil {
 
   private style(ink: string | undefined, extra: Options): Options {
     this.shapes++;
-    return {
+    const style: Options = {
       seed: this.seed * 101 + this.shapes, // Rough.js needs a seed > 0
       roughness: 1.1,
       bowing: 1.2,
@@ -66,6 +69,10 @@ export class Pencil {
       ...(ink ? { fill: ink, fillStyle: "hachure", hachureGap: 2.4, hachureAngle: -41, fillWeight: 0.9 } : {}),
       ...extra,
     };
+    if (this.look === "crayon" && style.fillStyle === "hachure") {
+      return { ...style, fillStyle: "zigzag", fillWeight: 1.7, hachureGap: 3.2 };
+    }
+    return style;
   }
 }
 

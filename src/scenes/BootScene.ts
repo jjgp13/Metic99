@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import { PALETTE } from "../config/palette";
 import { GAME, RENDER3D } from "../config/constants";
 import { getWorld3D } from "../render3d/World3D";
+import type { EndingData } from "./EndingScene";
 
 /** Models packed as `{ glb: base64 }` JSON (the playtest Artifact build). */
 const MODELS_AS_JSON = import.meta.env.VITE_MODEL_PACK === "json";
@@ -113,11 +114,18 @@ export default class BootScene extends Phaser.Scene {
     );
     void getWorld3D()
       .loadModels(files)
-      .finally(() => this.scene.start(labRequested() ? "HandwritingLabScene" : "MenuScene"));
+      .finally(() => this.startFirstScene());
+  }
+
+  /** The menu, or a dev page asked for in the URL (not linked in game):
+   * `?lab=draw` the handwriting lab, `?ending=1` the story's ending. */
+  private startFirstScene(): void {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("lab") === "draw") this.scene.start("HandwritingLabScene");
+    else if (params.get("ending") === "1") this.scene.start("EndingScene", DEV_ENDING);
+    else this.scene.start("MenuScene");
   }
 }
 
-/** `?lab=draw` opens the handwriting lab instead of the menu (not linked in game). */
-function labRequested(): boolean {
-  return new URLSearchParams(window.location.search).get("lab") === "draw";
-}
+/** `?ending=1`: the ending with a made-up score, then the story map. */
+const DEV_ENDING: EndingData = { score: 123456, next: { scene: "StoryMapScene", data: {} } };

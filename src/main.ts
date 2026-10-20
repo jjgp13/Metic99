@@ -8,6 +8,7 @@ import NameEntryScene from "./scenes/NameEntryScene";
 import LeaderboardScene from "./scenes/LeaderboardScene";
 import StoryMapScene from "./scenes/StoryMapScene";
 import HandwritingLabScene from "./scenes/HandwritingLabScene";
+import EndingScene from "./scenes/EndingScene";
 import { artMode } from "./config/artMode";
 import { DOODLE } from "./config/constants";
 import { getWorld3D } from "./render3d/World3D";
@@ -49,6 +50,7 @@ const config: Phaser.Types.Core.GameConfig = {
     GameScene,
     NameEntryScene,
     LeaderboardScene,
+    EndingScene,
     HandwritingLabScene,
   ],
 };
