@@ -9,7 +9,8 @@ services:
     name: metic99
     runtime: docker
     plan: free
-    branch: claude/netcode-s0-determinism
+    # The same branch GitHub Pages deploys, so page and server match.
+    branch: master
     healthCheckPath: /health
     autoDeploy: true
     envVars:

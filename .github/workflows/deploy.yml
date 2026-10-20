@@ -35,6 +35,11 @@ jobs:
           # Supabase anon key is public by design; both come from repo secrets.
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          # The online battle server (Render), e.g. wss://metic99.onrender.com/ws:
+          # a repo *variable* (Settings → Secrets and variables → Actions →
+          # Variables). Empty = ONLINE says it can't reach the server; story,
+          # endless and offline battle work without it.
+          VITE_NET_URL: ${{ vars.VITE_NET_URL }}
 
       - uses: actions/configure-pages@v5
 
