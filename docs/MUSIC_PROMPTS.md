@@ -5,10 +5,10 @@ Paste the **shared style** first, then the level's prompt. Each level is a
 kid's imagined world doodled in a notebook (docs/SOLO_MODES_DESIGN.md §3),
 so the music is playful 8-bit, never dark or epic.
 
-**Files:** export each as `.ogg` (or `.mp3`) and name it
-`level01-path.ogg`, `level01-boss.ogg`, … `level10-boss.ogg`. Put them in
-`public/assets/music/` and the game can play them per level (not wired up
-yet: tell Claude when the first files exist).
+**Files:** the game plays `public/assets/music/level01-path.mp3`,
+`level01-boss.mp3`, … `level10-boss.mp3` (96 kbps MP3, loaded per level by
+`scenes/levelMusic.ts`). The menu, map and jingle files are listed in their
+own section below.
 
 ## Shared style (paste before every prompt)
 
@@ -81,3 +81,40 @@ Then add one line for the boss:
 9. **The Moon:** a spooky-silly theremin-like square-wave wobble.
 10. **Under-the-Bed Monster:** a creeping bass line that bursts into the
     loudest, happiest chase of the game.
+
+## Menu, map and jingles
+
+Same shared style, except where a prompt says it is not a loop.
+
+**Files:** `menu.mp3` (the loop), `level-clear.mp3` and `ending.mp3`
+(jingles), in `public/assets/music/`, exported at 96 kbps like the rest.
+Not wired up yet: tell Claude when the files exist.
+
+### Menu and story map (a loop)
+
+> The game's main theme, played on the title screen and the story map:
+> warm, hopeful and a little dreamy, 108 BPM, G major. A simple
+> whistleable square-wave melody that sounds like a kid humming while
+> doodling, answered by a softer second voice; a bouncy triangle bass and
+> a light noise-channel brush beat. It should feel like opening a notebook
+> full of adventures: inviting, not busy. Hint at the bedroom finale's
+> toy-box march so the game starts and ends on the same idea. Seamless
+> loop, about 60–90 seconds.
+
+### Level clear (a jingle, not a loop)
+
+> A short victory fanfare, about 6–8 seconds, then silence (no loop, a
+> clean final note). 140 BPM, C major: a quick rising square-wave run,
+> three bright triumphant chords, a little trill on top and a final held
+> chord with a noise-channel cymbal hit. It plays while the ship
+> accelerates off the top of the screen and the level's score counts
+> up: joyful, proud, a bit cheeky, like "did it!".
+
+### Ending (a jingle, not a loop)
+
+> A gentle "thank you for playing" piece, about 30–40 seconds, then a soft
+> final chord (no loop). 92 BPM, F major. The main theme's melody played
+> slowly and tenderly on a single square-wave voice with a light triangle
+> bass, then joined by the second voice for the last phrase. It plays over
+> a drawing of a kid coloring the game's monsters with crayons: cozy,
+> grateful, a little nostalgic, like the end of a long happy day.
