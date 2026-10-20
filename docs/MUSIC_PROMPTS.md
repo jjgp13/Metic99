@@ -89,9 +89,10 @@ Same shared style, except where a prompt says it is not a loop.
 **Files:** `menu.mp3` (the loop), `level-clear.mp3` and `ending.mp3`
 (jingles), in `public/assets/music/`, exported at 96 kbps like the rest.
 `menu.mp3` and `level-clear.mp3` are wired up (`scenes/extraMusic.ts`),
-and `ending.mp3` too (`scenes/EndingScene.ts`, played once): drop the
-files in and they play. Until then the menu and the ending are silent and
-the clear plays a blip fanfare.
+and `ending.mp3` too (`scenes/EndingScene.ts`, played once, faded in):
+drop the files in and they play. Until then the menu is silent, the clear
+plays a blip fanfare, and the ending plays the bedroom's path track
+(`level10-path.mp3`) looping slower and softer.
 
 ### Menu and story map (a loop)
 
@@ -115,9 +116,13 @@ the clear plays a blip fanfare.
 
 ### Ending (a jingle, not a loop)
 
-> A gentle "thank you for playing" piece, about 30–40 seconds, then a soft
-> final chord (no loop). 92 BPM, F major. The main theme's melody played
-> slowly and tenderly on a single square-wave voice with a light triangle
-> bass, then joined by the second voice for the last phrase. It plays over
-> a drawing of a kid coloring the game's monsters with crayons: cozy,
-> grateful, a little nostalgic, like the end of a long happy day.
+> A gentle "thank you for playing" piece, about 50–60 seconds, then a soft
+> final chord that rings out (no loop). 92 BPM, F major. Two parts:
+> (1) about 15 seconds: the main theme's melody played slowly and tenderly
+> on a single square-wave voice with a light triangle bass, over a drawing
+> of a kid coloring the game's monsters with crayons; (2) a soft lift (a
+> page turns to the credits), then the second voice joins and the theme
+> plays once more, warmer and fuller, with a gentle brush beat, while the
+> credits are written line by line: "a game by J², thank you so much for
+> playing". Cozy, grateful, a little nostalgic, like the end of a long
+> happy day. Slow down in the last bars and end on a held chord.

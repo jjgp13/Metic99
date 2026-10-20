@@ -125,6 +125,9 @@ export interface SavedRun {
   /** Energy carried into this level (missing = an empty bar: a new run, or
    * one saved before energy carried over). */
   energy?: number;
+  /** Game-clock time of the levels already finished, for the ending's
+   * credits (missing = 0: a new run, or one saved before it was kept). */
+  playedMs?: number;
 }
 
 export function saveRun(run: SavedRun): void {
@@ -163,7 +166,8 @@ export function parseSavedRun(value: unknown): SavedRun | null {
   if (level < 0 || level >= STORY.STAGES || lives < 1 || lives > STORY.LIVES || score < 0) return null;
   const levelScores = Array.isArray(v.levelScores) ? v.levelScores.map(whole).map((n) => Math.max(0, n)) : [];
   const energy = Math.min(ENERGY.MAX, Math.max(0, whole(v.energy)));
-  return { level, lives, score, levelScores: levelScores.slice(0, level), energy };
+  const playedMs = Math.max(0, whole(v.playedMs));
+  return { level, lives, score, levelScores: levelScores.slice(0, level), energy, playedMs };
 }
 
 function save(progress: StoryProgress): void {

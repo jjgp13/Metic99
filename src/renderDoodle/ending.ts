@@ -213,6 +213,22 @@ export const STICKY_NOTE: DoodleRecipe = {
   },
 };
 
+/** A little crayon heart, drawn after the credits' signature. */
+export const HEART: DoodleRecipe = {
+  w: 44,
+  h: 40,
+  draw(p) {
+    const points: Point[] = [];
+    for (let i = 0; i < 24; i++) {
+      const t = (i / 24) * Math.PI * 2;
+      const x = 16 * Math.sin(t) ** 3;
+      const y = -(13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t));
+      points.push([x * 1.1, y * 1.1 + 2]);
+    }
+    p.shape(points, "#e0679f", { fillStyle: "solid", stroke: "#b8406f", roughness: 0.7 });
+  },
+};
+
 /** Loose crayons lying on the desk: color, x, y, turn (radians). */
 const LOOSE_CRAYONS: [string, number, number, number][] = [
   ["#c93d9a", 456, 604, 0.3],
