@@ -37,17 +37,19 @@ export const GUTTER = {
 } as const;
 
 /**
- * The energy meter in the top HUD, under the progress bar (y 44), where the
- * eyes already are: under the keypad it went unseen in playtests. The power's
- * name sits left of it, the value right of it.
+ * The energy meter: a short vertical bar in the top-right corner, under the
+ * first life icon and the progress bar (y 44), where the eyes already are
+ * (under the keypad it went unseen in playtests). Vertical so it can't be
+ * mistaken for the progress bar (owner's pick). It fills from the bottom;
+ * the value and the power's name sit left of it. X is the bar's center.
  */
 export const METER = {
-  LABEL_X: 12,
-  X: 62,
-  W: GAME.WIDTH - 62 - 44,
-  Y: 57,
-  H: 10,
-  VALUE_X: GAME.WIDTH - 12,
+  X: GAME.WIDTH - 18,
+  TOP: 54,
+  W: 10,
+  H: 44,
+  /** Right edge of the value and name, left of the bar. */
+  TEXT_X: GAME.WIDTH - 18 - 12,
 } as const;
 
 /** Solo: the key hint in the strip under the keypad (a battle puts its dock there). */

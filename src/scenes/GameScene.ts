@@ -286,7 +286,7 @@ export default class GameScene extends Phaser.Scene {
         this.topHud.setCombo(this.field.combo);
         this.topHud.setScore(this.field.score);
         this.popups.points(e.points, e.alien.x, e.alien.y);
-        this.popups.energyGain(e.energy, this.field.energy.fraction);
+        this.popups.energyGain(e.energy);
         this.popups.equation(e.digits, e.alien);
         this.world.answerSolved(String(e.digits.reduce((sum, d) => sum + d, 0)));
         if (e.burst > 0) this.popups.energyBurst(e.burst, e.alien.x, e.alien.y);

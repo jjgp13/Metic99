@@ -62,12 +62,13 @@ export class Popups {
     this.scene.tweens.add({ targets: pop, y: y - 30, alpha: 0, duration: 1100, onComplete: () => pop.destroy() });
   }
 
-  /** Energy a kill stored, popped under the meter's current end (it ducks: it's over the field). */
-  energyGain(stored: number, meterFraction: number): void {
+  /** Energy a kill stored, popped under the vertical meter (it ducks: it's over the field). */
+  energyGain(stored: number): void {
     if (stored < 0.5) return;
-    const x = METER.X + METER.W * meterFraction;
     const pop = this.ducker.add(
-      this.scene.add.text(x, METER.Y + 22, `+${Math.round(stored)}`, textStyle(14, PALETTE.ENERGY)).setOrigin(0.5, 1),
+      this.scene.add
+        .text(METER.X, METER.TOP + METER.H + 18, `+${Math.round(stored)}`, textStyle(14, PALETTE.ENERGY))
+        .setOrigin(0.5, 1),
     );
     this.riseAndFade(pop, 12, 700);
   }

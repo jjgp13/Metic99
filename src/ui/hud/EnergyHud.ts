@@ -20,8 +20,8 @@ export interface EnergyHudOptions {
 
 /**
  * The player's power and its fuel: the POWER button in the gutters beside
- * the keypad (one per thumb), the energy meter in the top HUD with a mark at
- * the power's cost, and a tint over the field while a time power runs.
+ * the keypad (one per thumb), a small vertical energy meter in the top-right
+ * corner with a mark at the power's cost, and a tint over the field while a time power runs.
  * The buttons sit beside the keypad, so they never cover the field or keys;
  * the meter is over the field, so it ducks under aliens like the rest of the
  * top HUD (the numbers win).
@@ -45,20 +45,26 @@ export class EnergyHud {
     if (!options.battle) this.buttons.push(this.powerButton(scene, GUTTER.LEFT_X, field, options.onPower));
     this.buttons.push(this.powerButton(scene, GUTTER.RIGHT_X, field, options.onPower));
 
-    // The meter: the power's name, the bar with a gold mark at its cost, the value.
-    ducker.add(scene.add.text(METER.LABEL_X, METER.Y, power.NAME, textStyle(12)).setOrigin(0, 0.5));
+    // The meter: a vertical bar that fills from the bottom, a gold mark at
+    // the power's cost, and the value over the power's name to its left.
+    const bottom = METER.TOP + METER.H;
     ducker.add(
       scene.add
-        .rectangle(METER.X, METER.Y, METER.W, METER.H, PALETTE.PANEL)
-        .setOrigin(0, 0.5)
+        .rectangle(METER.X, METER.TOP, METER.W, METER.H, PALETTE.PANEL)
+        .setOrigin(0.5, 0)
         .setStrokeStyle(1, PALETTE.PANEL_LIGHT),
     );
     this.meterFill = ducker.add(
-      scene.add.rectangle(METER.X, METER.Y, 0, METER.H - 4, PALETTE.ENERGY).setOrigin(0, 0.5),
+      scene.add.rectangle(METER.X, bottom - 2, METER.W - 4, 0, PALETTE.ENERGY).setOrigin(0.5, 1),
     );
-    const costX = METER.X + METER.W * (field.power.cost / field.energy.max);
-    ducker.add(scene.add.rectangle(costX, METER.Y, 2, METER.H + 6, PALETTE.GOLD));
-    this.meterValue = ducker.add(scene.add.text(METER.VALUE_X, METER.Y, "0", textStyle(12)).setOrigin(1, 0.5));
+    const costY = bottom - METER.H * (field.power.cost / field.energy.max);
+    ducker.add(scene.add.rectangle(METER.X, costY, METER.W + 6, 2, PALETTE.GOLD));
+    this.meterValue = ducker.add(
+      scene.add.text(METER.TEXT_X, METER.TOP + 10, "0", textStyle(14)).setOrigin(1, 0.5),
+    );
+    ducker.add(
+      scene.add.text(METER.TEXT_X, METER.TOP + 28, power.NAME, textStyle(10, PALETTE.TEXT_MUTED)).setOrigin(1, 0.5),
+    );
 
     if (!options.battle) {
       scene.add
@@ -72,7 +78,7 @@ export class EnergyHud {
 
   update(field: Field): void {
     const { energy, power } = field;
-    this.meterFill.setSize(METER.W * energy.fraction, METER.H - 4);
+    this.meterFill.setSize(METER.W - 4, (METER.H - 4) * energy.fraction);
     this.meterValue.setText(String(Math.floor(energy.value)));
 
     // Lit while running (time) or armed (shield); dim when it can't be used.

@@ -546,10 +546,12 @@ Green=multiplication, Yellow=division.
 - **Energy HUD**: the POWER button (named after the picked power) sits in
   both gutters beside the keypad, one per thumb (in a battle the left one is
   SEND); it lights while running/armed and dims when unaffordable.
-  The meter is in the **top HUD** (`METER` in `ui/hud/layout.ts`), under the
-  progress bar: the power's name, a bar with a gold mark at the power's
-  cost, the value. Like the rest of the top HUD it ducks under aliens; a
-  kill's "+N" pops under the bar's end. Under the keypad it went unseen.
+  The meter is a **small vertical bar in the top-right corner** (`METER` in
+  `ui/hud/layout.ts`), under the lives and the progress bar: it fills from
+  the bottom, a gold mark shows the power's cost, and the value sits over
+  the power's name to its left. Like the rest of the top HUD it ducks under
+  aliens; a kill's "+N" pops under the bar. Under the keypad it went
+  unseen; as a long horizontal bar it read like a second progress bar.
 - HUD (score, lives, difficulty bar, typed display) draws above gameplay
   (`depth 5`), so entering aliens never obscure it. **The numbers win over
   the HUD:** every top-HUD piece, ability banner and score/equation/energy
@@ -1028,6 +1030,12 @@ dMatch)`; it is 0 in solo play.
 ## Decision Log
 
 Newest first. Format: `YYYY-MM-DD — decision — rationale`.
+
+- **2026-10-20 — The energy meter is a small vertical bar, top right
+  (owner's phone playtest).** The long horizontal meter under the progress
+  bar was easy to confuse with it. Owner's pick of three: a 10 × 44 px
+  bar under the lives (over the POWER buttons filling up like SEND, or
+  both), so it stays where the eyes are and looks nothing like the path.
 
 - **2026-10-19 — Powers rebalanced after the energy cut: the weak three
   got cheaper (owner picked C).** With scarce energy SLOW's cheap drain made
