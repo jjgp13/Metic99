@@ -27,7 +27,7 @@ const GIANT_MOLE: BossDef = {
   MECHANIC: "molehills",
   BOX: { HALF_W: 42, BALLS_Y: 50, BOTTOM: 36 },
   KIND: "lumberer",
-  HP: 5,
+  HP: 4, // 5 before the molehills: hiding between peeks made the fight ~5 s longer
   BALLS: 3,
   SPEED: 0.45,
   SCORE_MULT: 5,
