@@ -275,12 +275,15 @@ export default class GameScene extends Phaser.Scene {
     switch (e.type) {
       case "spawned":
         if (e.alien.ability instanceof Boss) {
-          // Only the boss itself: its parts (raindrops, halves) are bosses
-          // too, but they come in quietly.
-          if (e.alien !== this.field.boss) break;
-          this.music?.boss();
-          this.popups.banner(`BOSS · ${e.alien.ability.def.NAME}!`, 26, STORY.BANNER_MS);
-          this.shake(300, 0.008);
+          const boss = e.alien.ability.def;
+          // Only the boss itself gets the big banner: its parts (raindrops,
+          // halves) are bosses too, but they come in with their line alone.
+          if (e.alien === this.field.boss) {
+            this.music?.boss();
+            this.popups.banner(`BOSS · ${boss.NAME}!`, 26, STORY.BANNER_MS);
+            this.shake(300, 0.008);
+          }
+          this.popups.introduce(`boss:${boss.NAME}`, boss.INTRO);
         } else if (e.alien.species && this.story) {
           const species = LEVELS[this.story.level].SPECIES[e.alien.kind];
           if (species) this.popups.introduce(species.NAME, species.INTRO);

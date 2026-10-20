@@ -15,6 +15,10 @@ type LevelAbility = "shielded" | "blinker" | "splitter";
  */
 export interface BossDef {
   NAME: string;
+  /** Its trick in one line ("WHO? · answer the missing number"), shown under
+   * the BOSS banner the first time it appears in a run (a part's: when it
+   * first comes in). */
+  INTRO: string;
   /** Its doodle (the level's page draws it by this name). */
   MODEL: string;
   /** How it fights (objects/bosses.ts); "burrow" = the mole's dig. */

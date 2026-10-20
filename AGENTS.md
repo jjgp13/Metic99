@@ -696,6 +696,10 @@ Green=multiplication, Yellow=division.
   trick** on top (owner: that's what makes a boss memorable; table in
   docs/SOLO_MODES_DESIGN.md §4): it changes how the fight feels, never its
   HP, with numbers readable when they count and a telegraph before danger.
+  The first time a boss (or a boss part: halves, raindrops, the monster
+  out from under the bed) comes in, one line under its banner names the
+  trick and what to do (`BossDef.INTRO`, e.g. "WHO? · answer the missing
+  number"); banners stack by their real heights.
   The last answer clears the
   level (`levelCleared`, the clear sequence below, then the next level
   with the same lives, score and energy). Game over = back to the story map (every run starts at
@@ -1070,6 +1074,17 @@ dMatch)`; it is 0 in solo play.
 ## Decision Log
 
 Newest first. Format: `YYYY-MM-DD — decision — rationale`.
+
+- **2026-10-20 — Every boss says its trick in one line (owner's picks).**
+  The owl's riddle changes what you type and only a "who?" bubble said so.
+  Owner picked the creature-intro shape "TRICK · rule" (over a worked
+  example like "3 + ? = 8 → type 5", and over a tip with no trick name),
+  and a line for second forms too (halves, raindrops, the monster out from
+  under the bed), shown once per run with no big banner. `INTRO` is
+  required on `BossDef`, so a new boss can't forget it. Found while
+  checking: banners stacked by count × the new one's size, so a 26 px BOSS
+  banner and a 15 px line overlapped when other banners were up; they now
+  stack by measured height.
 
 - **2026-10-20 — Every boss gets a signature trick; the three plain ones
   got theirs (owner's picks).** Audit: 7 bosses already had one (split,

@@ -53,6 +53,7 @@ export const TROLL_LAMP = {
 
 const CAVE_TROLL: BossDef = {
   NAME: "CAVE TROLL",
+  INTRO: "LAMPLIGHT · read it in the lamp's beam",
   MODEL: "boss_troll",
   MECHANIC: "lamp",
   BOX: { HALF_W: 46, BALLS_Y: 56, BOTTOM: 40 },

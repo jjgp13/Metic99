@@ -70,6 +70,7 @@ export const OWL_RIDDLE = {
  * harder than a sum, so it hops down slower than the mole (owner's rule). */
 const GREAT_OWL: BossDef = {
   NAME: "GREAT OWL",
+  INTRO: "WHO? · answer the missing number",
   MODEL: "boss_owl",
   MECHANIC: "riddle",
   // Its two eyes are its ball row (BALLS_Y above the body center).
