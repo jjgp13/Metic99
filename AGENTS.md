@@ -524,12 +524,12 @@ Green=multiplication, Yellow=division.
   the run. One POWER input (`{ type: "power" }`) uses it. The set is data: each
   entry has an `EFFECT` (`time` / `blast` / `shield`) plus its numbers, and
   bots play any power by its effect.
-  - **FREEZE** (time): field stopped, drains 25/s. The panic button.
+  - **FREEZE** (time): field stopped, drains 15/s. The panic button.
   - **SLOW** (time): field at 45%, drains 6/s, so a bar lasts ~17 s. About
-    twice the alien movement saved per energy, but aliens still creep.
-  - **BLAST**: 60 energy, destroys every alien on the field. No score, no
+    1.4× FREEZE's alien movement saved per energy, but aliens still creep.
+  - **BLAST**: 40 energy, destroys every alien on the field. No score, no
     energy, streak untouched, splitters don't split.
-  - **SHIELD**: 50 energy to arm (one at a time); the next alien that reaches
+  - **SHIELD**: 33 energy to arm (one at a time); the next alien that reaches
     the ship is destroyed instead of costing a life (no hit freeze, streak kept).
     A gold bubble shows around the ship while armed.
   Time powers are toggles needing 10 energy to start; they turn off when empty
@@ -539,6 +539,10 @@ Green=multiplication, Yellow=division.
   charge no energy (they still score and extend the streak) and, in a
   battle, cancel no incoming attacks; aliens destroyed by BLAST or SHIELD
   charge nothing.
+  **Balance target:** ace bots (≈ the owner) survive within ~±10% with any
+  power in Endless (12 seeds: FREEZE 185, SLOW 190, BLAST 197, SHIELD 171 s;
+  no power 120 s), and win about a fair share in an ace mirror battle
+  (`npm run match -- --powers freeze,slow,blast,shield --seats ace,ace,ace,ace,ace,ace,ace,ace`).
 - **Energy HUD**: the POWER button (named after the picked power) sits in
   both gutters beside the keypad, one per thumb (in a battle the left one is
   SEND); it lights while running/armed and dims when unaffordable.
@@ -1024,6 +1028,21 @@ dMatch)`; it is 0 in solo play.
 ## Decision Log
 
 Newest first. Format: `YYYY-MM-DD — decision — rationale`.
+
+- **2026-10-19 — Powers rebalanced after the energy cut: the weak three
+  got cheaper (owner picked C).** With scarce energy SLOW's cheap drain made
+  it the best pick (ace Endless FREEZE 160 / SLOW 190 / BLAST 144 / SHIELD
+  150 s; ace mirror battle wins per seat 7 / 28 / 4 / 12%, fair 12.5).
+  Tested three sets with bots: A = SLOW 9/s only (all ~150 s, BLAST still
+  4% in battle), B = SLOW 7/s, FREEZE 18/s, BLAST 44, SHIELD 36 (most even in
+  Endless, ±3%), C = FREEZE 25 → 15/s, BLAST 60 → 40, SHIELD 50 → 33, SLOW
+  unchanged. C: Endless 185 / 190 / 197 / 171 s (±7%), mirror battle 9 / 14
+  / 15 / 12% (most even), pilots story L4 clears 1/7/5/8 → 6/7/8/11 of 12;
+  the bar still sits full only 16–21% of the time, so energy stays scarce.
+  Flawless BLAST's ceiling rose 180 → 230 s (was 457 before the cut).
+  Aces clear story 1/4/8 with any power, so Endless and battles set the
+  numbers. Rookie SLOW stays weakest (113 s vs 93 with no power): rookie
+  power use is guessed. Tables: docs/learning/2026-10-19-power-balance.md.
 
 - **2026-10-19 — Energy is scarce, carries over between story levels, and
   its bar is at the top (owner's playtest notes 2+3).** Replayed playtest: a
