@@ -88,7 +88,7 @@ export const VOLCANO: LevelDef = {
   SEED: 1006,
   PATH_MS: 78_000,
   D: { FROM: 0.6, TO: 0.75 },
-  WAVES: { PROFILE: OWNER_WAVE, PEAK: 3 },
+  WAVES: { PROFILE: OWNER_WAVE, BASE: 1, PEAK: 3 },
   // Lava drips (darters) and fireflies (strafers); 3-ball sums are tortoises.
   TWO_BALL_KINDS: { darter: 0.55, strafer: 0.45, swooper: 0 },
   ABILITIES: [],

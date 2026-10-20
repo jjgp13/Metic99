@@ -110,7 +110,7 @@ export const NIGHT: LevelDef = {
   SEED: 1009,
   PATH_MS: 80_000,
   D: { FROM: 0.75, TO: 0.9 },
-  WAVES: { PROFILE: OWNER_WAVE, PEAK: 3 },
+  WAVES: { PROFILE: OWNER_WAVE, BASE: 1, PEAK: 4 },
   // Invaders (darters), comets (swoopers) and UFOs (strafers); 3-ball sums
   // are big invaders.
   TWO_BALL_KINDS: { darter: 0.45, strafer: 0.25, swooper: 0.3 },

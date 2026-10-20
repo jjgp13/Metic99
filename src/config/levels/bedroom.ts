@@ -147,7 +147,7 @@ export const BEDROOM: LevelDef = {
   SEED: 1010,
   PATH_MS: 65_000,
   D: { FROM: 0.8, TO: 0.95 },
-  WAVES: { PROFILE: OWNER_WAVE, PEAK: 3 },
+  WAVES: { PROFILE: OWNER_WAVE, BASE: 2, PEAK: 4 },
   // Soldiers (darters), jacks-in-the-box (strafers) and rubber balls
   // (swoopers); 3-ball sums are teddy bears.
   TWO_BALL_KINDS: { darter: 0.4, strafer: 0.3, swooper: 0.3 },

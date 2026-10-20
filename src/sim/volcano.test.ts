@@ -64,7 +64,7 @@ describe("story level 6: the volcano", () => {
   it("fireflies flash in step, all dark at the same moment", () => {
     // A burst all along: nobody answers here, so a rest (one sum at a time)
     // would never bring two fireflies up together.
-    const level = { ...VOLCANO, WAVES: { PROFILE: [{ KIND: "burst", SHARE: 1 }], PEAK: 3 } } as const;
+    const level = { ...VOLCANO, WAVES: { PROFILE: [{ KIND: "burst", SHARE: 1 }], BASE: 1, PEAK: 3 } } as const;
     let together = 0;
     for (const seed of [4, 1, 2, 3]) {
       const field = new Field({ seed, level, lives: 99 });

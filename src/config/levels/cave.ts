@@ -76,7 +76,7 @@ export const CAVE: LevelDef = {
   // Bots (20 seeds, starting here with 3 lives): rookie clears 2/20, pilot
   // 18/20 (losing ~1 life), ace 20/20. d 0.5 → 0.65 left pilots 1/20.
   D: { FROM: 0.45, TO: 0.6 },
-  WAVES: { PROFILE: OWNER_WAVE, PEAK: 3 },
+  WAVES: { PROFILE: OWNER_WAVE, BASE: 1, PEAK: 3 },
   // Bats (strafers) and glowworms (darters swinging on their threads; 3-ball
   // sums are big glowworms that lower themselves in jerks).
   TWO_BALL_KINDS: { darter: 0.45, strafer: 0.55, swooper: 0 },

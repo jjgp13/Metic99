@@ -1,8 +1,9 @@
 /**
  * Story report: every bot level plays each story level from its start (3
  * lives, like a run's first level) on several seeds, headless, and prints
- * how often it clears the level, how long a level takes, and in which part
- * of the level's wave the hits land. Run with `npm run bots:story` (add
+ * how often it clears the level, how long a level takes, in which part of
+ * the level's wave the hits land, and in which part the monsters that hit
+ * came in (a push's monsters often land in the rest after it). Run with `npm run bots:story` (add
  * `-- --stage 4` or `-- --stage 1,2,3` for some levels, `-- --seeds 20`,
  * `-- --power none` or `-- --power freeze`; default SLOW, the owner's pick).
  *
@@ -11,6 +12,7 @@
  */
 import { BOT, LEVELS, SIM, STORY, type BotLevel, type PowerKind } from "../src/config/constants";
 import { Bot } from "../src/sim/Bot";
+import type Alien from "../src/objects/Alien";
 import { Field } from "../src/sim/Field";
 import { quantile } from "../src/sim/stats";
 
@@ -29,6 +31,18 @@ const BOTS = (list("level") ?? Object.keys(BOT.LEVELS)) as BotLevel[];
 const MAX_MS = 8 * 60_000;
 
 const s = (ms: number) => `${Math.round(ms / 1000)} s`;
+/** A wave stretch's name: its kind, and a push's height ("spike .35"). */
+const stretch = (field: Field, bossUp: boolean) => {
+  const w = field.wave;
+  if (bossUp) return "boss";
+  if (w === null) return "path";
+  return w.kind === "spike" || w.kind === "ramp" ? `${w.kind} ${String(w.height).replace(/^0/, "")}` : w.kind;
+};
+const shares = (counts: Map<string, number>, total: number) =>
+  [...counts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([where, n]) => `${where} ${Math.round((100 * n) / total)}%`)
+    .join(", ");
 const rows = [];
 for (const stage of STAGES) {
   const level = LEVELS[stage - 1];
@@ -41,6 +55,7 @@ for (const stage of STAGES) {
     let powerSteps = 0;
     let steps = 0;
     const hitsIn = new Map<string, number>();
+    const hitsFrom = new Map<string, number>();
     for (let seed = 1; seed <= SEEDS; seed++) {
       const field = new Field({
         seed,
@@ -51,6 +66,7 @@ for (const stage of STAGES) {
       const bot = Bot.forSeat(botLevel, seed);
       bot.usesPower = POWER !== "none";
       let bossAt: number | null = null;
+      const cameIn = new Map<Alien, string>();
       while (!field.knockedOut && !field.cleared && field.elapsedMs < MAX_MS) {
         bot.update(field, SIM.STEP_MS);
         if (field.power.running) powerSteps++;
@@ -58,10 +74,13 @@ for (const stage of STAGES) {
         steps++;
         if (bossAt === null && field.boss !== null) bossAt = field.elapsedMs;
         for (const e of field.takeEvents()) {
+          if (e.type === "spawned") cameIn.set(e.alien, stretch(field, bossAt !== null));
           if (e.type !== "hit") continue;
           hits++;
-          const where = bossAt !== null ? "boss" : field.wave?.kind ?? "path";
+          const where = stretch(field, bossAt !== null);
           hitsIn.set(where, (hitsIn.get(where) ?? 0) + 1);
+          const from = cameIn.get(e.alien) ?? "?";
+          hitsFrom.set(from, (hitsFrom.get(from) ?? 0) + 1);
         }
       }
       if (bossAt !== null) pathMs.push(bossAt);
@@ -81,10 +100,8 @@ for (const stage of STAGES) {
       "boss fight": bossMs.length ? s(quantile(bossMs, 0.5)) : "-",
       "power on": `${Math.round((100 * powerSteps) / Math.max(1, steps))}%`,
       "hits/run": (hits / SEEDS).toFixed(1),
-      "hits in": [...hitsIn.entries()]
-        .sort((a, b) => b[1] - a[1])
-        .map(([where, n]) => `${where} ${Math.round((100 * n) / hits)}%`)
-        .join(", "),
+      "hits in": shares(hitsIn, hits),
+      "hitters came in": shares(hitsFrom, hits),
     });
   }
 }

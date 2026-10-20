@@ -95,7 +95,7 @@ export const SWAMP: LevelDef = {
   // min). Starts below level 3's end because every creature has a trait;
   // from d 0.5 (the last fifth) 3-ball turtles join.
   D: { FROM: 0.3, TO: 0.55 },
-  WAVES: { PROFILE: OWNER_WAVE, PEAK: 3 },
+  WAVES: { PROFILE: OWNER_WAVE, BASE: 1, PEAK: 3 },
   // Peepers (strafers), slime blobs (darters) and snails (swoopers). Slimes
   // are the rarest: their splitlings are what hits pilots most.
   TWO_BALL_KINDS: { darter: 0.3, strafer: 0.4, swooper: 0.3 },

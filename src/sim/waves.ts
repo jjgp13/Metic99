@@ -1,9 +1,11 @@
-import { WAVES, type WaveKind, type WaveSegment } from "../config/constants";
+import type { WaveKind, WaveSegment } from "../config/constants";
 
 /** Where a path is in its wave: the stretch, and how hard it pushes (0..1). */
 export interface WavePoint {
   kind: WaveKind;
-  /** 0 = rest, 1 = a full burst. */
+  /** The stretch's top: 0 for a rest, its HEIGHT for a push, 1 for a burst. */
+  height: number;
+  /** How hard it pushes right now: 0 = rest, 1 = a full burst. */
   intensity: number;
 }
 
@@ -16,23 +18,22 @@ export function waveAt(profile: readonly WaveSegment[], p: number): WavePoint {
   let start = 0;
   for (const seg of profile) {
     const end = start + seg.SHARE / total;
-    if (p < end) return { kind: seg.KIND, intensity: intensityOf(seg.KIND, (p - start) / (end - start)) };
+    if (p < end) return pointIn(seg, (p - start) / (end - start));
     start = end;
   }
-  const last = profile[profile.length - 1];
-  return { kind: last.KIND, intensity: intensityOf(last.KIND, 1) };
+  return pointIn(profile[profile.length - 1], 1);
 }
 
-/** How hard a stretch pushes `t` (0..1) of the way through it. */
-function intensityOf(kind: WaveKind, t: number): number {
-  switch (kind) {
+/** The wave `t` (0..1) of the way through one stretch. */
+function pointIn(seg: WaveSegment, t: number): WavePoint {
+  switch (seg.KIND) {
     case "rest":
-      return 0;
+      return { kind: seg.KIND, height: 0, intensity: 0 };
     case "spike":
-      return WAVES.SPIKE;
+      return { kind: seg.KIND, height: seg.HEIGHT, intensity: seg.HEIGHT };
     case "ramp":
-      return WAVES.RAMP_TOP * t;
+      return { kind: seg.KIND, height: seg.HEIGHT, intensity: seg.HEIGHT * t };
     case "burst":
-      return 1;
+      return { kind: seg.KIND, height: 1, intensity: 1 };
   }
 }

@@ -107,7 +107,7 @@ export const SNOW: LevelDef = {
   SEED: 1008,
   PATH_MS: 68_000,
   D: { FROM: 0.7, TO: 0.85 },
-  WAVES: { PROFILE: OWNER_WAVE, PEAK: 3 },
+  WAVES: { PROFILE: OWNER_WAVE, BASE: 1, PEAK: 4 },
   // Penguins (darters) and snowballs (swoopers); 3-ball sums are ice blocks.
   TWO_BALL_KINDS: { darter: 0.55, strafer: 0, swooper: 0.45 },
   ABILITIES: [],

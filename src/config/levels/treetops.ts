@@ -95,7 +95,7 @@ export const TREETOPS: LevelDef = {
   // Two unsolved at a time from the start (level 1 mostly had one). Bots
   // (20 seeds): rookie clears 10/20 (level 1: 16/20), pilot 19/20, ace 20/20.
   D: { FROM: 0.3, TO: 0.45 },
-  WAVES: { PROFILE: OWNER_WAVE, PEAK: 3 },
+  WAVES: { PROFILE: OWNER_WAVE, BASE: 1, PEAK: 3 },
   // Birds (darters), owls (strafers), squirrels (swoopers).
   TWO_BALL_KINDS: { darter: 0.3, strafer: 0.3, swooper: 0.4 },
   ABILITIES: [],

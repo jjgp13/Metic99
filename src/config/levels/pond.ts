@@ -83,7 +83,7 @@ export const POND: LevelDef = {
   // pilot 10/12, ace 12/12 (~2:40 to clear).
   PATH_MS: 80_000,
   D: { FROM: 0.18, TO: 0.4 },
-  WAVES: { PROFILE: OWNER_WAVE, PEAK: 2 },
+  WAVES: { PROFILE: OWNER_WAVE, BASE: 1, PEAK: 2 },
   MAX_BALLS: 4,
   // Fish (darters) and dragonflies (strafers); 3–4 ball sums are frogs.
   TWO_BALL_KINDS: { darter: 0.55, strafer: 0.45, swooper: 0 },

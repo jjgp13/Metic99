@@ -80,7 +80,10 @@ describe("story level 9: the night sky", () => {
       }
       for (const [a, b] of pairs) {
         const sameBeat = a.spawnedAt === b.spawnedAt && a.prevY === b.prevY;
-        if (sameBeat && !field.recovering) {
+        // The readability guard may hold one of them still for a step (an
+        // alien just below it), so only steps both took are compared.
+        const bothMoved = a.y !== a.prevY && b.y !== b.prevY;
+        if (sameBeat && bothMoved && !field.recovering) {
           // A row moves as one: the same step at the same moment.
           expect(a.y - a.prevY).toBeCloseTo(b.y - b.prevY, 6);
           together++;

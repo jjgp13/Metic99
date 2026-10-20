@@ -140,7 +140,7 @@ export const SKY: LevelDef = {
   SEED: 1007,
   PATH_MS: 78_000,
   D: { FROM: 0.65, TO: 0.8 },
-  WAVES: { PROFILE: OWNER_WAVE, PEAK: 3 },
+  WAVES: { PROFILE: OWNER_WAVE, BASE: 1, PEAK: 4 },
   // Swallows (darters), kites (strafers) and paper planes (swoopers); 3-ball
   // sums are big kites with three bows on their tails.
   TWO_BALL_KINDS: { darter: 0.35, strafer: 0.35, swooper: 0.3 },

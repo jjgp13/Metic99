@@ -156,9 +156,14 @@ describe("story level 8: the snowy mountain", () => {
     expect(woundUp).toBe(true);
     expect(thrown).not.toBeNull();
     expect(thrown!.ballCount).toBe(2);
-    const y0 = thrown!.y;
-    for (let i = 0; i < 240; i++) field.step(STEP);
-    expect(thrown!.y).toBeGreaterThan(y0); // it rolls down the slope
+    // It rolls down the slope (a hit's pushback may lift it meanwhile).
+    let rolled = false;
+    for (let i = 0; i < 600 && !rolled; i++) {
+      const y = thrown!.y;
+      field.step(STEP);
+      rolled = !field.recovering && thrown!.y > y;
+    }
+    expect(rolled).toBe(true);
   });
 
   it("an ace clears it on every one of 5 seeds; the yeti takes HP answers", () => {

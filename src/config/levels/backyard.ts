@@ -23,11 +23,13 @@ export const BACKYARD: LevelDef = {
   NAME: "THE BACKYARD",
   PAGE: "backyard",
   SEED: 1001,
-  // Owner's playtest: 3 min to the mole was too long and too easy. Bots
-  // (12 seeds): rookie 4/12, pilot and ace 12/12; an ace clears in ~2:10.
-  PATH_MS: 85_000,
+  // Owner's playtest: 3 min to the mole was too long and too easy. 88 s =
+  // 44 bars of its 120 BPM song, so the waves land on its phrases
+  // (docs/MUSIC_PROMPTS.md). Bots (20 seeds): rookie 4/20, pilot and ace
+  // 20/20; an ace clears in ~1:54.
+  PATH_MS: 88_000,
   D: { FROM: 0.1, TO: 0.35 },
-  WAVES: { PROFILE: OWNER_WAVE, PEAK: 2 },
+  WAVES: { PROFILE: OWNER_WAVE, BASE: 1, PEAK: 2 },
   // Bugs: beetles (darters) and worms (swoopers); no divers yet.
   TWO_BALL_KINDS: { darter: 0.6, strafer: 0, swooper: 0.4 },
   ABILITIES: [],

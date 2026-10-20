@@ -23,10 +23,8 @@ yet: tell Claude when the first files exist).
 
 ## Level tracks (the path)
 
-1. **The Backyard** (dirt): bouncy and curious, 120 BPM, C major. A
-   hopping square-wave melody like a beetle scuttling, plucky staccato
-   bass, light shaker on the noise channel. Sunny afternoon, a little
-   mischievous.
+1. **The Backyard** (dirt): see "Level 1, timed to the waves" below
+   (its song follows the level's waves bar by bar).
 2. **The Pond** (water): gentle and bubbly, 112 BPM, F major. Rippling
    arpeggios that rise and fall like water, a lazy swinging bass, soft
    "plop" noise hits. Frogs croaking on the off-beat.
@@ -56,6 +54,60 @@ yet: tell Claude when the first files exist).
     with surprising key changes. Callbacks to earlier levels' melodies,
     wind-up toy rhythms, triumphant but still silly. Everything the kid
     imagined comes together.
+
+## Level 1, timed to the waves
+
+Level 1's path is 88 s of escalating waves (`OWNER_WAVE` ×
+`BACKYARD.WAVES` in the code): three pushes, each bigger than the one
+before, with a rest back to one sum at a time after each. At 120 BPM a bar
+is 2 s, so the path is exactly 44 bars, and each stretch is a whole
+number of 4-bar phrases:
+
+| Bars | Seconds | Stretch | Intensity | On screen (base 1, peak 2) | Chords |
+| --- | --- | --- | --- | --- | --- |
+| 1–4 | 0–8 | rest (warm-up) | 0 | 1 sum, slow spawns | C – Am – F – G |
+| 5–8 | 8–16 | wave 1: spike | 0.35 | 1 sum, quicker spawns | C – F – G – C |
+| 9–12 | 16–24 | rest | 0 | 1 sum, slow | C – Am – F – G |
+| 13–20 | 24–40 | wave 2: spike | 0.7 | 2 sums, fast spawns | Am – F – C – G ×2, bar 20 = D7 (lift) |
+| 21–24 | 40–48 | rest | 0 | 1 sum, slow | C – Am – F – G |
+| 25–32 | 48–64 | wave 3: ramp | 0 → 1.0 | 1 → 2 sums (2 from ~56 s), spawns speed up | C – F – G – C, then Am – F – C – G with D7 on bar 32 |
+| 33–40 | 64–80 | wave 3: burst (the peak) | 1.0 | 2 sums, fastest spawns | C – B♭ – F – G ×2 |
+| 41–44 | 80–88 | rest (a breath before the boss) | 0 | 1 sum, slow | C – Am – F – G |
+
+Then the boss comes in once the field is clear and the game crossfades to
+`level01-boss`. **Honest limits:** the path runs on field time, so SLOW
+(and the 3 s freeze after a hit) stretches it by up to 25% (path ≤ 110 s
+of real time), and the music starts a moment after the level does (the
+track loads then). The song drifts a few bars late in a long run; the
+calm opening that the loop returns to covers it.
+
+**Prompt** (after the shared style; it replaces "about 90–120 seconds"
+with exactly 88 s):
+
+> **The Backyard** (dirt): bouncy and curious, 120 BPM, C major, exactly
+> 44 bars (88 seconds) in 4/4, looping seamlessly from bar 44 back to bar
+> 1. A hopping square-wave melody like a beetle scuttling, plucky staccato
+> triangle bass, a light shaker on the noise channel. Sunny afternoon, a
+> little mischievous. The energy rises and falls in three waves, each
+> bigger than the one before, and always settles back to the same calm
+> groove between them:
+> - Bars 1–4, calm: C – Am – F – G. Sparse melody, bass on the beat, shaker
+>   only.
+> - Bars 5–8, wave 1 (small): C – F – G – C. Add a second square voice in
+>   thirds and a light kick on 1 and 3.
+> - Bars 9–12, calm again: C – Am – F – G, back to the bars 1–4 groove.
+> - Bars 13–20, wave 2 (bigger, twice as long): Am – F – C – G twice, with
+>   bar 20 on D7 as a lift. Eighth-note bass, snare on 2 and 4, the melody
+>   climbs higher.
+> - Bars 21–24, calm again: C – Am – F – G, the same calm groove.
+> - Bars 25–32, wave 3 builds: C – F – G – C, then Am – F – C – G with bar
+>   32 on D7. Start from the calm groove and add a layer every two bars
+>   (harmony voice, eighth-note bass, snare, then a rising arpeggio).
+> - Bars 33–40, the peak: C – B♭ – F – G twice. Full drums with
+>   noise-channel fills, fast arpeggios, the melody at its highest and
+>   busiest: the most exciting part of the song.
+> - Bars 41–44, calm: C – Am – F – G, drop straight back to the calm groove
+>   of bars 1–4 (a breath before the boss), ending so it flows into bar 1.
 
 ## Boss tracks
 

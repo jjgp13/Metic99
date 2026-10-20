@@ -644,11 +644,17 @@ Green=multiplication, Yellow=division.
   path (speed, sum size). The path runs on **field time** (freezes and SLOW
   hold it) but never slower than `STORY.PATH_MIN_PACE` (0.8) of the game
   clock, so a level lasts about **2 minutes, boss included** however it is
-  played (path ~65–88 s). **Waves** (`LevelDef.WAVES`, `sim/waves.ts`): a
-  profile of rest / spike / ramp / burst stretches (shares of the path;
-  every level uses `OWNER_WAVE`: rest, spike, rest, spike, rest, ramp,
-  burst, rest) sets the unsolved cap (1 at rest → the level's `PEAK` in a
-  burst) and the spawn interval (×1.5 → ×0.55, `WAVES`). The per-level
+  played (path ~65–88 s). **Waves** (`LevelDef.WAVES`, `sim/waves.ts`):
+  **escalating** pushes with rests back to the same base. The shape is a
+  profile of rest / spike / ramp / burst stretches (shares of the path), a
+  push carrying its own `HEIGHT` 0..1; every level uses `OWNER_WAVE`
+  (in bars of level 1's song: rest 4, spike .35 ×4, rest 4, spike .7 ×8,
+  rest 4, ramp to 1 ×8, burst ×8, rest 4; its timeline is in
+  docs/MUSIC_PROMPTS.md). The intensity sets the unsolved cap (the
+  level's `BASE` at rest → its `PEAK` in a burst) and the spawn interval
+  (×1.5 → ×0.55, `WAVES`). The scale grows by level (BASE/PEAK: L1–2
+  1/2, L3–6 1/3, L7–9 1/4, L10 2/4) on top of the D range, so a level's
+  peaks are bigger than the last level's. The per-level
   path lengths and bot numbers below are from when each level was built,
   before the 2-minute change (docs/SOLO_MODES_DESIGN.md §2). At the end
   of the path no spawns come until the board is clear, then the **boss**
@@ -998,6 +1004,21 @@ dMatch)`; it is 0 in solo play.
 ## Decision Log
 
 Newest first. Format: `YYYY-MM-DD — decision — rationale`.
+
+- **2026-10-20 — Story waves escalate: each peak bigger, every rest back to
+  the base, bigger swings level by level (owner's ask).** A push now
+  carries its own HEIGHT (wave 1 .35, wave 2 .7, then a climb to a full
+  burst) and each level sets its scale (`WAVES.BASE` / `PEAK` unsolved
+  sums), chosen by the owner over per-level heights (10 lists to tune)
+  and over heights computed from a formula (every level the same shape):
+  one shared profile + a scale per level. Profile in 4-bar phrases of
+  level 1's 120 BPM song so its music can follow the waves (level 1 path
+  85 → 88 s = 44 bars). Bots (20 seeds, SLOW): aces clear all 10 in
+  111–129 s; pilots 20/16/19/18/19/19/16/19/19/13; rookies 4/3/11/0/1/5/0/1/0/0.
+  The monsters that hit come in during pushes (~90%), not rests
+  (`npm run bots:story` now shows both when and where hitters came in).
+  Two level tests assumed a calm field (a row's step held by the
+  readability guard, a snowball lifted by pushback) and were loosened.
 
 - **2026-10-19 — Story levels come in waves and last ~2 minutes (owner's
   playtest notes 4 + 7).** The felt load was flat (the unsolved cap sat at

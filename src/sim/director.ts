@@ -107,13 +107,14 @@ export class LevelDirector implements SpawnDirector {
     const params = { ...base, maxBalls: this.level.MAX_BALLS ?? base.maxBalls };
     // Boss phase: the boss and a minion or two, no more.
     if (p >= 1) return { ...params, maxUnsolved: STORY.BOSS_PHASE_UNSOLVED };
-    // The wave: from one sum at a time and slow spawns (rest) to the
-    // level's peak and fast spawns (burst).
+    // The wave: from the level's base and slow spawns (rest) to its peak
+    // and fast spawns (burst).
     const w = this.wave(s).intensity;
     const lerp = (from: number, to: number) => from + (to - from) * w;
+    const { BASE, PEAK } = this.level.WAVES;
     return {
       ...params,
-      maxUnsolved: Math.round(lerp(WAVES.REST_UNSOLVED, this.level.WAVES.PEAK)),
+      maxUnsolved: Math.round(lerp(BASE, PEAK)),
       spawnInterval: params.spawnInterval * lerp(WAVES.INTERVAL_X.REST, WAVES.INTERVAL_X.BURST),
     };
   }
