@@ -20,3 +20,8 @@ export * from "./tuning/storage";
 export * from "./tuning/render3d";
 export * from "./tuning/doodle";
 export * from "./tuning/story";
+// The story, in order: one file per level in config/levels/. Exported here,
+// after tuning/story, and not from tuning/story itself: the level files read
+// tuning/story's values (OWNER_WAVE) as they load, so tuning/story must be
+// done loading first; an import cycle between the two would read them early.
+export { LEVELS } from "./levels";
