@@ -2,7 +2,6 @@ import Phaser from "phaser";
 import { DOODLE, GAME, LEADERBOARD, LEVELS, STORY, STORY_MAP } from "../config/constants";
 import { selectedShip } from "../config/ships";
 import { drawPaper } from "../renderDoodle/paper";
-import { drawFrames, type DoodleRecipe } from "../renderDoodle/pencil";
 import { shipIconFrames } from "../renderDoodle/shipIcons";
 import { drawTrail, islandFrames } from "../renderDoodle/storyMap";
 import { stageBoard } from "../services/leaderboard";
@@ -15,6 +14,7 @@ import {
   type StoryProgress,
 } from "../services/storyProgress";
 import { onKeyDown } from "../ui/keyboard";
+import { pencilButton } from "../ui/pencilButton";
 import { textStyle } from "../ui/theme";
 
 /** Doodles are drawn at 2× and shown at half size, for a sharp picture. */
@@ -184,8 +184,8 @@ export default class StoryMapScene extends Phaser.Scene {
 
   private makeButtons(progress: StoryProgress): void {
     const y = GAME.HEIGHT - 40;
-    this.makeButton(84, y, 120, "BACK", () => this.scene.start("MenuScene"));
-    this.makeButton(GAME.WIDTH / 2, y, 150, progress.bestRun > 0 ? `RUNS · ${progress.bestRun}` : "RUN SCORES", () =>
+    pencilButton(this, 84, y, 120, "BACK", () => this.scene.start("MenuScene"));
+    pencilButton(this, GAME.WIDTH / 2, y, 150, progress.bestRun > 0 ? `RUNS · ${progress.bestRun}` : "RUN SCORES", () =>
       this.scene.start("LeaderboardScene", {
         browse: true,
         board: LEADERBOARD.STORY_RUN_BOARD,
@@ -194,7 +194,7 @@ export default class StoryMapScene extends Phaser.Scene {
         back: "StoryMapScene",
       }),
     );
-    this.makeButton(GAME.WIDTH - 84, y, 120, this.saved ? "CONTINUE" : "PLAY", () => this.play(), DOODLE.TARGET);
+    pencilButton(this, GAME.WIDTH - 84, y, 120, this.saved ? "CONTINUE" : "PLAY", () => this.play(), DOODLE.TARGET);
     if (this.saved) {
       const run = this.saved;
       this.add
@@ -210,35 +210,6 @@ export default class StoryMapScene extends Phaser.Scene {
         this.start(null);
       });
     }
-  }
-
-  /** A pencil box with a label; `ink` hatches it (the main button). */
-  private makeButton(x: number, y: number, w: number, label: string, onClick: () => void, ink?: string): void {
-    const h = 44;
-    const key = `storyMap:button:${w}:${ink ?? "plain"}`;
-    if (!this.textures.exists(key)) {
-      const box: DoodleRecipe = {
-        w: w + 8,
-        h: h + 8,
-        draw: (p) =>
-          p.shape(
-            [
-              [-w / 2, -h / 2],
-              [w / 2, -h / 2],
-              [w / 2, h / 2],
-              [-w / 2, h / 2],
-            ],
-            ink,
-            { hachureGap: 5, fillWeight: 0.6 },
-          ),
-      };
-      this.textures.addCanvas(key, drawFrames(box, SHARP, 1, w)[0]);
-    }
-    const bg = this.add.image(x, y, key).setScale(1 / SHARP).setInteractive({ useHandCursor: true });
-    const text = this.add.text(x, y, label, textStyle(20, DOODLE.GRAPHITE)).setOrigin(0.5);
-    bg.on("pointerover", () => text.setColor(DOODLE.TARGET));
-    bg.on("pointerout", () => text.setColor(DOODLE.GRAPHITE));
-    bg.on("pointerdown", onClick);
   }
 
   /** Continue the saved run, or start a new one from island 1. */
