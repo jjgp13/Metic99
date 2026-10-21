@@ -127,7 +127,8 @@ describe("Bot powers (FREEZE)", () => {
     const median = (xs: number[]) => [...xs].sort((a, b) => a - b)[2];
     const without = median(seeds.map((s) => play(s, false).field.elapsedMs));
     const withPowers = median(seeds.map((s) => play(s, true).field.elapsedMs));
-    expect(withPowers).toBeGreaterThan(without * 1.5);
+    // ~1.4× since energy is scarce (ENERGY.POWER_RATE); it was ~2.6× before.
+    expect(withPowers).toBeGreaterThan(without * 1.25);
   });
 
   it("freezes only when the board is dangerous, and unfreezes once it's clear", () => {

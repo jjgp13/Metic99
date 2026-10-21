@@ -57,7 +57,7 @@ export interface RunExtras {
   battle: { players: number; opponents: string[]; placement: number | null } | null;
   /** Story mode: which level (index into LEVELS) and the score carried in
    * (each level attempt is its own record; null outside story). */
-  story: { level: number; startScore: number } | null;
+  story: { level: number; startScore: number; startEnergy: number } | null;
   hits: { atMs: number; kind: string; model: string | null; ability: string | null; digits: readonly number[]; d: number }[];
 }
 
@@ -117,6 +117,7 @@ function runRecord(field: Field, extras: RunExtras) {
       power: field.power.kind,
       level: extras.story?.level ?? null,
       score: extras.story?.startScore ?? 0,
+      energy: extras.story?.startEnergy ?? 0,
       steps: field.steps,
       inputs: field.inputLog.map(({ step, input }) => [step, compact(input)]),
     },

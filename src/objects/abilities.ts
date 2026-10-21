@@ -50,6 +50,18 @@ export interface AbilityHost {
    * null (nothing placed) if the field is full or its box there would break
    * the readability rule. Optional: hosts without levels (test fakes) skip it. */
   spawnCreature?(kind: AlienKind, x: number, y: number): Alien | null;
+  /** Story: a missing-number riddle on `alien` (2 balls): it shows the
+   * first number and a "?", and the answer is the second number, at least
+   * `minAnswer` (the first plus it is the total the boss shows). The answer
+   * is unique on the field. False if none is free (it keeps its sum). */
+  rerollMissing?(alien: Alien, minAnswer: number): boolean;
+  /** Story: the creature nearest to `hunter` (center to center) within
+   * `reachPx` that a boss could eat: a lethal, non-boss alien. Null if none. */
+  preyNear?(hunter: Alien, reachPx: number): Alien | null;
+  /** Story: a boss eats `prey`: it leaves the field, scoring nothing. False
+   * (and it stays) if the player has typed or fired at it: a committed
+   * answer is never taken away. */
+  swallow?(prey: Alien): boolean;
 }
 
 export abstract class Ability {
@@ -63,6 +75,12 @@ export abstract class Ability {
    * ball, unless an ability hides them one by one (the Moon's shadow). */
   ballCover(_i: number, _n: number): number {
     return this.cover;
+  }
+
+  /** What ball `i` shows: its digit, unless an ability writes something
+   * else on it (the Great Owl's "?"). */
+  ballText(_i: number, digit: number): string {
+    return String(digit);
   }
 
   /** Kill score multiplier (on top of the normal formula). */
@@ -221,10 +239,15 @@ export class Boss extends Ability {
   onHit(alien: Alien, host: AbilityHost): boolean {
     this.hp -= 1;
     if (this.hp <= 0) return false;
-    host.rerollSum(alien); // if no free sum is found it keeps the old one
+    this.newSum(alien, host);
     const [x, y] = this.surfaceAt(alien);
     this.burrow(alien, x, y);
     return true;
+  }
+
+  /** Its next sum after an answer it survives. */
+  protected newSum(alien: Alien, host: AbilityHost): void {
+    host.rerollSum(alien); // if no free sum is found it keeps the old one
   }
 
   /** Where it pops up after an answer: the other side of the field and up. */

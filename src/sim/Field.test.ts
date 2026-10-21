@@ -144,8 +144,10 @@ describe("Field", () => {
       let charged = 0;
       while (!f.knockedOut && f.steps < 60 * 60 * 3) {
         bot.update(f, STEP);
-        const on = f.power.running;
         f.step(STEP);
+        // A time power can run dry at the start of a step; kills later in
+        // that step happen with it off, so read it after the step.
+        const on = f.power.running;
         for (const e of f.takeEvents()) {
           if (e.type !== "solved" || !on) continue;
           whileOn++;
@@ -157,7 +159,7 @@ describe("Field", () => {
     }
   });
 
-  it("BLAST needs a full bar and destroys every alien for no score or energy", () => {
+  it("BLAST needs its cost and destroys every alien for no score or energy", () => {
     const f = new Field({ seed: 9, power: "blast" });
     while (f.aliens.filter((a) => a.active).length < 2) f.step(STEP);
     f.energy.charge(f.power.cost - 1);

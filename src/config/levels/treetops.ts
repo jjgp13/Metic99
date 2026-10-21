@@ -1,4 +1,5 @@
-import { OWNER_WAVE, type BossDef, type LevelDef } from "../tuning/story";
+import type { BossDef, LevelDef } from "../tuning/story";
+import { OWNER_WAVE } from "../tuning/waves";
 
 /**
  * Level 3: THE TREETOPS (doodles: renderDoodle/levels/treetops.ts; traits:
@@ -53,32 +54,31 @@ export const HOVER = {
 
 /** The Great Owl's blink: its eyes are its numbers. Every answer makes it
  * blink faster (OPEN_MS shrinks by SHRINK_MS per answer, down to MIN_OPEN_MS). */
-export const OWL_BLINK = {
-  FIRST_OPEN_MS: 1800, // after it lands: at least REVEAL_MS, to read the sum
-  OPEN_MS: 2600,
-  SHRINK_MS: 250,
-  MIN_OPEN_MS: 1400,
-  WARN_MS: 500, // the eyes droop before they shut
-  WARN_FLUTTERS: 2,
-  WARN_COVER: 0.4,
-  LID_MS: 160,
-  CLOSED_MS: 1000,
+/**
+ * The Great Owl's riddle (objects/owlBoss.ts): "WHO?". Its eyes show one
+ * number and a "?", its belly the total ("= 8"); the answer is the missing
+ * number (8 - 3 = 5), never below MIN_ANSWER. Its eyes stay open while it
+ * perches (the riddle is its trick, not blinking), shut while it flies.
+ */
+export const OWL_RIDDLE = {
+  MIN_ANSWER: 2,
 } as const;
 
-/** Level 3's boss: a great owl perched high in the tree, blinking. Each
- * answer but the last ruffles it: it flies to a branch on the other side
- * (eyes shut while flying) and blinks faster. Six answers, so it hops down
- * slower than the mole (owner's rule: more answers, slower). */
+/** Level 3's boss: a great owl perched high in the tree, asking riddles.
+ * Each answer but the last ruffles it: it flies to a branch on the other side
+ * (eyes shut while flying) and asks a new one. Six answers, and a riddle is
+ * harder than a sum, so it hops down slower than the mole (owner's rule). */
 const GREAT_OWL: BossDef = {
   NAME: "GREAT OWL",
+  INTRO: "WHO? · answer the missing number",
   MODEL: "boss_owl",
-  MECHANIC: "blink",
+  MECHANIC: "riddle",
   // Its two eyes are its ball row (BALLS_Y above the body center).
   BOX: { HALF_W: 44, BALLS_Y: 22, BOTTOM: 40 },
   KIND: "lumberer",
   HP: 6,
   BALLS: 2,
-  SPEED: 0.4,
+  SPEED: 0.35,
   SCORE_MULT: 6,
   BURROW_UP_PX: 120,
   BURROW_MS: 900,

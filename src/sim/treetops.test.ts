@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { SIM, STORY, type BotLevel } from "../config/constants";
-import { TREETOPS } from "../config/levels/treetops";
-import { OwlBoss } from "../objects/owlBoss";
+import { TREETOPS, OWL_RIDDLE } from "../config/levels/treetops";
+import { WiseOwl } from "../objects/owlBoss";
 import { HeadTurn, Leap } from "../objects/treetopsTraits";
 import { Bot } from "./Bot";
 import { Field, type FieldEvent } from "./Field";
@@ -75,19 +75,33 @@ describe("story level 3: the treetops", () => {
     expect(hiddenSwooping).toBe(0);
   });
 
-  it("the Great Owl blinks faster with every answer and can be beaten", () => {
+  it("the Great Owl asks riddles: the answer is its missing number, and it can be beaten", () => {
     let cleared = 0;
+    let riddles = 0;
+    let badRiddles = 0;
     for (const seed of [1, 2, 3, 4, 5]) {
-      const { field, events } = playLevel(seed, "ace");
+      const { field, events } = playLevel(seed, "ace", (f, stepEvents) => {
+        for (const e of stepEvents) {
+          if (e.type !== "solved" || e.alien !== f.boss) continue;
+          // What was typed: the second eye's number, not the total.
+          riddles++;
+          const [, missing] = e.digits;
+          if (e.digits.length !== 2 || missing < OWL_RIDDLE.MIN_ANSWER) badRiddles++;
+        }
+        const boss = f.boss;
+        if (boss?.active && boss.ability instanceof WiseOwl && boss.ability.riddle) {
+          if (boss.result !== boss.digits[1] || boss.ability.ballText(1, boss.digits[1]) !== "?") badRiddles++;
+        }
+      });
       if (!field.cleared) continue;
       cleared++;
-      const owl = field.boss!.ability as OwlBoss;
-      expect(owl).toBeInstanceOf(OwlBoss);
-      expect(owl.openMs).toBeLessThan(new OwlBoss(TREETOPS.BOSS).openMs);
+      expect(field.boss!.ability).toBeInstanceOf(WiseOwl);
       const answers = events.filter((e) => e.type === "solved" && e.alien === field.boss);
       expect(answers).toHaveLength(TREETOPS.BOSS.HP);
       expect(events[events.length - 1].type).toBe("levelCleared");
     }
     expect(cleared).toBeGreaterThanOrEqual(3);
+    expect(riddles).toBeGreaterThan(0);
+    expect(badRiddles).toBe(0);
   });
 });

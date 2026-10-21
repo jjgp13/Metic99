@@ -1,7 +1,8 @@
-import { BALL_LAYOUTS, DOODLE } from "../../config/constants";
+import { BALL_LAYOUTS, DOODLE, GAME } from "../../config/constants";
 import type Alien from "../../objects/Alien";
+import { WiseOwl } from "../../objects/owlBoss";
 import { Leap } from "../../objects/treetopsTraits";
-import type { CreatureLook, PageDef } from "../pages";
+import type { BossLook, CreatureLook, PageDef } from "../pages";
 import type { DoodleRecipe, Point } from "../pencil";
 
 /**
@@ -35,14 +36,16 @@ const C = {
 const LEAF: DoodleRecipe = {
   w: 34,
   h: 22,
-  draw(p) {
+  draw(p, t) {
+    // It rustles: the leaf tips a little toward and away from us.
+    const tip = 7 * (0.85 + 0.15 * Math.cos(t * TAU));
     const outline: Point[] = [
       [-14, 0],
-      [-6, -7],
-      [6, -7],
+      [-6, -tip],
+      [6, -tip],
       [14, 0],
-      [6, 7],
-      [-6, 7],
+      [6, tip],
+      [-6, tip],
     ];
     p.shape(outline, C.leaf, { hachureGap: 3 });
     p.line(-14, 0, 14, 0, { strokeWidth: 1 });
@@ -56,8 +59,9 @@ const LEAF: DoodleRecipe = {
 /** A branch with a fork and a leaf at its tip. */
 const BRANCH: DoodleRecipe = {
   w: 80,
-  h: 34,
-  draw(p) {
+  h: 38,
+  draw(p, t) {
+    const flutter = Math.sin(t * TAU) * 1.5;
     p.curve(
       [
         [-36, 10],
@@ -68,8 +72,8 @@ const BRANCH: DoodleRecipe = {
       { stroke: C.bark, strokeWidth: 2.4 },
     );
     p.line(2, 1, 14, -12, { stroke: C.bark, strokeWidth: 1.6 });
-    p.ellipse(18, -14, 12, 7, C.leaf, { hachureGap: 2.6 });
-    p.ellipse(36, -10, 10, 6, C.leaf, { hachureGap: 2.6 });
+    p.ellipse(18, -14 + flutter, 12, 7, C.leaf, { hachureGap: 2.6 });
+    p.ellipse(36, -10 - flutter, 10, 6, C.leaf, { hachureGap: 2.6 });
   },
 };
 
@@ -124,6 +128,30 @@ const FEATHER: DoodleRecipe = {
     p.ellipse(0, -2, 8, 26, undefined, { strokeWidth: 1 });
     p.line(0, 14, 0, -14, { strokeWidth: 1 });
     for (const y of [-8, -2, 4]) p.line(0, y, 3, y - 3, { strokeWidth: 0.7 });
+  },
+};
+
+// --- Drifts (renderDoodle/drifts.ts) ------------------------------------------
+
+/** A leaf spinning down from the canopy, flipping (thinner mid-flip). */
+const FALLING_LEAF: DoodleRecipe = {
+  w: 22,
+  h: 14,
+  draw(p, t) {
+    const half = 4.5 * (0.45 + 0.55 * Math.abs(Math.cos(t * Math.PI)));
+    p.shape(
+      [
+        [-9, 0],
+        [-3, -half],
+        [4, -half],
+        [9, 0],
+        [4, half],
+        [-3, half],
+      ],
+      C.leaf,
+      { hachureGap: 2.6, strokeWidth: 1 },
+    );
+    p.line(-9, 0, 9, 0, { strokeWidth: 0.7 });
   },
 };
 
@@ -468,19 +496,78 @@ const GREAT_OWL_FLYING: DoodleRecipe = {
   },
 };
 
+/** Where the Great Owl writes its riddle's total (its belly) and asks "who?". */
+const RIDDLE = { TOTAL_Y: 18, FONT_PX: 22, ASK_DX: 66, ASK_DY: -50 } as const;
+
+/**
+ * The Great Owl's riddle total, over everything like its numbers: on its
+ * belly, so its eyes read "3 ?" and the belly "= 8". Hidden while it flies,
+ * like its eyes.
+ */
+function drawRiddle(ctx: CanvasRenderingContext2D, boss: Alien, alpha: number): void {
+  const owl = boss.ability;
+  if (!(owl instanceof WiseOwl) || !owl.riddle || owl.burrowing) return;
+  const x = boss.viewX(alpha);
+  const y = boss.viewY(alpha);
+  ctx.save();
+  ctx.font = `${RIDDLE.FONT_PX}px "${DOODLE.FONT}", cursive`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  const text = `= ${owl.total(boss)}`;
+  const w = ctx.measureText(text).width + 10;
+  ctx.fillStyle = DOODLE.PAPER;
+  ctx.strokeStyle = DOODLE.GRAPHITE;
+  ctx.lineWidth = 1.4;
+  ctx.beginPath();
+  ctx.ellipse(x, y + RIDDLE.TOTAL_Y, w / 2, RIDDLE.FONT_PX * 0.6, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = DOODLE.BALL_INK;
+  ctx.fillText(text, x, y + RIDDLE.TOTAL_Y + 1);
+  ctx.restore();
+}
+
+/** "who?" in a speech bubble by its ear tuft: on the page under every
+ * alien, since it reaches outside the owl's box. */
+function drawAsk(ctx: CanvasRenderingContext2D, boss: Alien, alpha: number): void {
+  const owl = boss.ability;
+  if (!(owl instanceof WiseOwl) || !owl.riddle || owl.burrowing) return;
+  const x = boss.viewX(alpha);
+  const y = boss.viewY(alpha);
+  ctx.save();
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.lineWidth = 1.4;
+  ctx.font = `16px "${DOODLE.FONT}", cursive`;
+  ctx.fillStyle = DOODLE.GRAPHITE;
+  ctx.strokeStyle = DOODLE.GRAPHITE;
+  const askX = x + (x < GAME.WIDTH / 2 ? 1 : -1) * RIDDLE.ASK_DX; // toward the page's middle
+  ctx.fillText("who?", askX, y + RIDDLE.ASK_DY);
+  ctx.beginPath();
+  ctx.ellipse(askX, y + RIDDLE.ASK_DY, 22, 12, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+}
+
+const OWL_LOOK: BossLook = { up: GREAT_OWL, hidden: GREAT_OWL_FLYING, under: drawAsk, over: drawRiddle };
+
 export const TREETOPS_PAGE: PageDef = {
   paper: "#eef3df",
   rule: "rgba(110, 140, 120, 0.3)",
   margin: "rgba(214, 84, 84, 0.32)",
   props: [
-    { recipe: LEAF, weight: 4 },
+    { recipe: LEAF, weight: 4, fps: 2 },
     { recipe: OAK_LEAF, weight: 2 },
-    { recipe: BRANCH, weight: 2.5 },
+    { recipe: BRANCH, weight: 2.5, fps: 3 },
     { recipe: ACORN, weight: 2 },
     { recipe: NEST, weight: 0.8 },
     { recipe: FEATHER, weight: 1 },
   ],
   propGap: 44,
+  drifts: [
+    { recipe: FALLING_LEAF, count: 3, vx: 6, vy: 18, swayPx: 20, swayHz: 0.2, spinPerS: 0.6, fps: 3 },
+    { recipe: FEATHER, count: 1, vx: 4, vy: 8, swayPx: 24, swayHz: 0.15, spinPerS: 0.4 },
+  ],
   creatures: { squirrel: SQUIRREL, owl: OWL, bird: BIRD, hummingbird: HUMMINGBIRD },
-  bosses: { boss_owl: { up: GREAT_OWL, hidden: GREAT_OWL_FLYING } },
+  bosses: { boss_owl: OWL_LOOK },
 };

@@ -107,7 +107,8 @@ export const MONSTERS = {
     BOB_MS: 1800,
     FIRST_MS: 15000, // field time before the first one
     INTERVAL_MS: { min: 18000, max: 28000 }, // between drifters
-    ENERGY_BURST: 40,
+    // Cut with ENERGY.POWER_RATE (was 40): still ~2.5 kills' worth of energy.
+    ENERGY_BURST: 16,
   },
 } as const;
 

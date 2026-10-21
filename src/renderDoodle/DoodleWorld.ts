@@ -1,11 +1,12 @@
 import rough from "roughjs";
 import type { RoughCanvas } from "roughjs/bin/canvas";
 import type { Drawable } from "roughjs/bin/core";
-import { DOODLE, ENEMY, GAME, MODEL_BOXES, PLAYER, RECOVERY } from "../config/constants";
+import { DOODLE, ENEMY, GAME, LEVEL_CLEAR, MODEL_BOXES, PLAYER, RECOVERY } from "../config/constants";
 import type Alien from "../objects/Alien";
 import { Boss, Shielded } from "../objects/abilities";
 import type { AnswerView, InkPoint } from "../render3d/AnswerStars";
-import type { WorldSnapshot } from "../render3d/World3D";
+import type { ShipLaunchPose, WorldSnapshot } from "../render3d/World3D";
+import { DriftLayer } from "./drifts";
 import { PAGES, drawPageTile, layOutProps, type BossLook, type CreatureLook, type PlacedProp } from "./pages";
 import { drawPaper } from "./paper";
 import { drawFrames, type DoodleRecipe, type Point } from "./pencil";
@@ -98,6 +99,7 @@ export default class DoodleWorld {
   private pageId: string | null = null;
   private pageTile: HTMLCanvasElement | null = null;
   private props: PlacedProp[] = [];
+  private drifts: DriftLayer | null = null;
   private readonly sprites = new Map<string, HTMLCanvasElement[]>();
 
   private readonly looks = new Map<Alien, AlienLook>();
@@ -113,6 +115,8 @@ export default class DoodleWorld {
   private shipWords: ShipWord[] = [];
   /** Set once the ship is destroyed: its halves, and how long ago. */
   private wreck: { pieces: ShipPiece[]; age: number } | null = null;
+  /** The launch's "zoom!" was written (once per launch). */
+  private launchWordShown = false;
   private shakeLeft = 0;
   private shakeIntensity = 0;
 
@@ -136,9 +140,11 @@ export default class DoodleWorld {
     this.kickLeft = 0;
     this.shipWords = [];
     this.wreck = null;
+    this.launchWordShown = false;
     this.pageId = null;
     this.pageTile = null;
     this.props = [];
+    this.drifts = null;
     this.looks.clear();
     this.bursts = [];
     this.solved = null;
@@ -157,7 +163,7 @@ export default class DoodleWorld {
     this.syncCanvasRect();
     const ctx = this.ctx;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    if (s.page) this.drawPage(s.page);
+    if (s.page) this.drawPage(s.page, time, delta);
     else if (this.paper) ctx.drawImage(this.paper, 0, 0);
 
     let dx = 0;
@@ -182,14 +188,15 @@ export default class DoodleWorld {
     this.drawBursts(delta);
     this.drawShipWords(delta);
     for (const a of aliens) this.drawBalls(a, s.alpha, boil, delta);
+    for (const a of aliens) this.bossLook(a)?.over?.(this.ctx, a, s.alpha);
     for (const a of aliens) if (a.ability instanceof Boss) this.drawBossPips(a, a.ability, s.alpha);
   }
 
   /**
-   * Story: the level's page, scrolled `scrolledPx` down, with its props. The
-   * tile repeats every screen height, so two copies cover the view.
+   * Story: the level's page, scrolled `scrolledPx` down, with its props and
+   * drifts. The tile repeats every screen height, so two copies cover the view.
    */
-  private drawPage(page: { id: string; scrolledPx: number; lengthPx: number }): void {
+  private drawPage(page: { id: string; scrolledPx: number; lengthPx: number }, time: number, delta: number): void {
     const def = PAGES[page.id];
     if (!def) {
       if (this.paper) this.ctx.drawImage(this.paper, 0, 0);
@@ -199,6 +206,7 @@ export default class DoodleWorld {
       this.pageId = page.id;
       this.pageTile = null;
       this.props = layOutProps(page.id, def, page.lengthPx);
+      this.drifts = new DriftLayer(def.drifts ?? []);
     }
     this.pageTile ??= drawPageTile(def, this.scale);
     const ctx = this.ctx;
@@ -216,10 +224,26 @@ export default class DoodleWorld {
       ctx.save();
       ctx.translate(prop.x, y);
       ctx.rotate(prop.angle);
-      this.drawSprite(prop.key, () => prop.recipe, 0);
+      this.drawSprite(prop.key, () => prop.recipe, loopFrame(time, prop.fps, prop.phase));
       ctx.restore();
     }
+    this.drawDrifts(page.id, time, delta);
     ctx.restore();
+  }
+
+  /** The page's drifting seeds, snow or leaves (faint, under every alien). */
+  private drawDrifts(pageId: string, time: number, delta: number): void {
+    if (!this.drifts) return;
+    this.drifts.step(delta / 1000);
+    const ctx = this.ctx;
+    ctx.globalAlpha = DOODLE.PAGE_DRIFT_ALPHA;
+    for (const d of this.drifts.drifts) {
+      ctx.save();
+      ctx.translate(d.x + DriftLayer.swayX(d), d.y);
+      ctx.rotate(d.angle);
+      this.drawSprite(`drift:${pageId}:${d.index}`, () => d.def.recipe, loopFrame(time, d.def.fps ?? 0, d.phase));
+      ctx.restore();
+    }
   }
 
   /** A boss's answers left, as pips under its body (hollow = answered). */
@@ -398,7 +422,7 @@ export default class DoodleWorld {
       ctx.scale(pop, pop);
       this.drawSprite(`ball:${a.ballTexture}`, () => R.ballRing(ring), boil + look.phase + i);
       ctx.fillStyle = DOODLE.BALL_INK;
-      ctx.fillText(String(a.digits[i]), 0, 1);
+      ctx.fillText(a.ability?.ballText(i, a.digits[i]) ?? String(a.digits[i]), 0, 1);
       const ballCover = a.ability?.ballCover(i, n) ?? 0;
       if (ballCover > 0) {
         // The Blinker's eyelid: pencil shading pulled down over the digit.
@@ -428,10 +452,11 @@ export default class DoodleWorld {
   /**
    * The ship: leaning toward its target; knocked down, blinking and dazed
    * (stars circling) while the field is frozen after a hit; snapped in two
-   * once the last life is gone.
+   * once the last life is gone; blasting off the top after a level clear.
    */
   private drawShip(s: WorldSnapshot, time: number, boil: number, delta: number): void {
     if (s.shipDown) return this.drawWreck(s.shipX, delta);
+    if (s.shipLaunch) return this.drawLaunch(s.shipX, s.shipLaunch, boil);
     if (s.shipHurt > this.lastHurt + 0.01) this.onShipHit(s.shipX);
     this.lastHurt = s.shipHurt;
 
@@ -515,6 +540,64 @@ export default class DoodleWorld {
       this.drawSprite(this.shipKey(), () => recipe, 0);
       ctx.restore();
     }
+  }
+
+  /**
+   * The ship squashing onto the ground, then stretched and flying off the
+   * top on its flame and speed lines. It squashes from its bottom edge, so
+   * it looks pressed against the ground rather than shrunk.
+   */
+  private drawLaunch(x: number, pose: ShipLaunchPose, boil: number): void {
+    const recipe = this.shipRecipe();
+    const y = PLAYER.Y - pose.liftPx;
+    const bottom = y + (recipe.h / 2) * pose.scaleY;
+    if (pose.trail > 0 && !this.launchWordShown) {
+      this.launchWordShown = true;
+      this.shipWords.push({ text: pick(DOODLE.LAUNCH_WORDS), x: x + DOODLE.LAUNCH_WORD_DX, age: 0 });
+    }
+    // The lines start where the ship took off, never below it.
+    if (pose.trail > 0) this.drawSpeedLines(x, bottom, PLAYER.Y + recipe.h / 2, pose.trail);
+
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.translate(x + (Math.random() * 2 - 1) * pose.shiverPx, bottom);
+    ctx.scale(pose.scaleX, pose.scaleY);
+    ctx.translate(0, -recipe.h / 2);
+    this.drawSprite(this.shipKey(), () => recipe, boil);
+    ctx.restore();
+  }
+
+  /** A flickering flame and pencil speed lines streaming down from `top`
+   * (cut off at `floor`). */
+  private drawSpeedLines(x: number, top: number, floor: number, trail: number): void {
+    const ctx = this.ctx;
+    ctx.save();
+    // Re-jittered every frame: the lines scribble like the rest of the page.
+    const flamePx = DOODLE.LAUNCH_FLAME_PX * trail * (0.8 + Math.random() * 0.4);
+    ctx.beginPath();
+    ctx.moveTo(x - 7, top - 2);
+    ctx.lineTo(x, top + flamePx);
+    ctx.lineTo(x + 7, top - 2);
+    ctx.closePath();
+    ctx.fillStyle = DOODLE.INK.flame;
+    ctx.fill();
+    ctx.strokeStyle = DOODLE.GRAPHITE;
+    ctx.lineWidth = 1.3;
+    ctx.stroke();
+
+    ctx.globalAlpha = DOODLE.SPEED_LINE_ALPHA;
+    ctx.lineCap = "round";
+    for (const [dx, share, width] of DOODLE.SPEED_LINES) {
+      const start = top + 6 + Math.random() * 8;
+      const end = Math.min(floor, start + LEVEL_CLEAR.TRAIL_PX * share * trail);
+      if (end <= start) continue;
+      ctx.lineWidth = width;
+      ctx.beginPath();
+      ctx.moveTo(x + dx + Math.random() - 0.5, start);
+      ctx.lineTo(x + dx + Math.random() * 2 - 1, end);
+      ctx.stroke();
+    }
+    ctx.restore();
   }
 
   /** "ouch!" next to the ship, floating up and fading. */
@@ -710,6 +793,11 @@ export default class DoodleWorld {
       this.sprites.clear();
     }
   }
+}
+
+/** Which frame of a looping doodle shows at `time` (ms), `fps` frames a second. */
+function loopFrame(time: number, fps: number, phase: number): number {
+  return Math.floor((time / 1000) * fps + phase * DOODLE.BOIL_FRAMES);
 }
 
 const pick = (words: readonly string[]) => words[Math.floor(Math.random() * words.length)];

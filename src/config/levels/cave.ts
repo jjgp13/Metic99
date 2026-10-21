@@ -1,5 +1,6 @@
 import type { BlinkTiming } from "../../objects/abilities";
-import { OWNER_WAVE, type BossDef, type LevelDef } from "../tuning/story";
+import type { BossDef, LevelDef } from "../tuning/story";
+import { OWNER_WAVE } from "../tuning/waves";
 
 /**
  * Level 5: THE DARK CAVE (doodles: renderDoodle/levels/cave.ts).
@@ -52,6 +53,7 @@ export const TROLL_LAMP = {
 
 const CAVE_TROLL: BossDef = {
   NAME: "CAVE TROLL",
+  INTRO: "LAMPLIGHT · read it in the lamp's beam",
   MODEL: "boss_troll",
   MECHANIC: "lamp",
   BOX: { HALF_W: 46, BALLS_Y: 56, BOTTOM: 40 },

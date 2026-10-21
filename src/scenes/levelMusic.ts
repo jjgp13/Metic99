@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { MUSIC } from "../config/constants";
+import { loadOptionalMusic } from "./extraMusic";
 import { music } from "./music";
 
 /** A run's music files in public/assets/music/: a looping path track and,
@@ -35,6 +36,8 @@ export class LevelMusic {
   ) {
     music.play(scene, tracks.path);
     if (tracks.boss) music.preload(scene, tracks.boss);
+    // A story level: loaded now so the victory jingle starts on time when the boss falls.
+    if (tracks.boss) loadOptionalMusic(scene, MUSIC.LEVEL_CLEAR_FILE);
     scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.stop(0));
   }
 

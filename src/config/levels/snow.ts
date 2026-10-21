@@ -1,4 +1,5 @@
-import { OWNER_WAVE, type BossDef, type LevelDef } from "../tuning/story";
+import type { BossDef, LevelDef } from "../tuning/story";
+import { OWNER_WAVE } from "../tuning/waves";
 
 /*
  * Level 8: THE SNOWY MOUNTAIN (doodles: renderDoodle/levels/snow.ts; rules
@@ -81,6 +82,7 @@ export const YETI_STOMP = {
 /** Level 8's boss: a big clumsy yeti that stomps and throws snowballs. */
 const YETI: BossDef = {
   NAME: "YETI",
+  INTRO: "STOMP · it throws snowballs that grow",
   MODEL: "boss_yeti",
   MECHANIC: "snow_stomp",
   BOX: { HALF_W: 48, BALLS_Y: 50, BOTTOM: 40 },

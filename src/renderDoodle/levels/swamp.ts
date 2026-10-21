@@ -36,7 +36,8 @@ const C = {
 const PUDDLE: DoodleRecipe = {
   w: 50,
   h: 26,
-  draw(p) {
+  draw(p, t) {
+    const spread = 6 + 4 * t; // its ripple widens, then a new one starts
     const edge: Point[] = [
       [-22, 2],
       [-16, -7],
@@ -50,39 +51,43 @@ const PUDDLE: DoodleRecipe = {
     p.shape(edge, C.mud, { hachureGap: 3.2, hachureAngle: 10 });
     p.curve(
       [
-        [-8, -2],
+        [-spread, -2],
         [0, -4],
-        [8, -2],
+        [spread, -2],
       ],
       { strokeWidth: 0.8 },
     ); // a ripple
   },
 };
 
+/** Mud bubbles: each one swells, then pops and starts again, out of step. */
 const BUBBLES: DoodleRecipe = {
   w: 30,
   h: 30,
-  draw(p) {
-    for (const [x, y, d] of [
-      [-6, 4, 10],
-      [5, -2, 7],
-      [2, -10, 4],
-      [-9, -7, 3],
+  draw(p, t) {
+    for (const [x, y, d, offset] of [
+      [-6, 4, 10, 0],
+      [5, -2, 7, 0.5],
+      [2, -10, 4, 0.25],
+      [-9, -7, 3, 0.75],
     ]) {
-      p.circle(x, y, d, undefined, { strokeWidth: 1 });
+      const grown = (t + offset) % 1;
+      if (grown > 0.15) p.circle(x, y, d * grown, undefined, { strokeWidth: 1 });
     }
   },
 };
 
 const CATTAILS: DoodleRecipe = {
-  w: 30,
+  w: 34,
   h: 46,
-  draw(p) {
-    for (const [x, lean, top] of [
+  draw(p, t) {
+    const breeze = Math.sin(t * TAU) * 2;
+    for (const [x, stalkLean, top] of [
       [-5, -4, -16],
       [2, 1, -20],
       [7, 5, -12],
     ]) {
+      const lean = stalkLean + breeze;
       p.curve(
         [
           [x, 20],
@@ -137,6 +142,35 @@ const STEPPING_STONES: DoodleRecipe = {
     p.ellipse(-16, 3, 14, 9, undefined);
     p.ellipse(0, -3, 12, 8, undefined);
     p.ellipse(16, 2, 13, 9, undefined);
+  },
+};
+
+// --- Drifts (renderDoodle/drifts.ts) ------------------------------------------
+
+/** A wisp of swamp mist, drifting low across the page. */
+const MIST: DoodleRecipe = {
+  w: 80,
+  h: 16,
+  draw(p) {
+    p.curve(
+      [
+        [-36, 3],
+        [-20, -3],
+        [-4, 2],
+        [12, -3],
+        [26, 2],
+        [36, -1],
+      ],
+      { stroke: C.bubble, strokeWidth: 1.4, roughness: 1.6 },
+    );
+    p.curve(
+      [
+        [-22, 6],
+        [-6, 4],
+        [10, 7],
+      ],
+      { stroke: C.bubble, strokeWidth: 0.9 },
+    );
   },
 };
 
@@ -456,14 +490,15 @@ export const SWAMP_PAGE: PageDef = {
   rule: "rgba(110, 120, 90, 0.3)",
   margin: "rgba(160, 96, 60, 0.35)",
   props: [
-    { recipe: PUDDLE, weight: 3 },
-    { recipe: BUBBLES, weight: 2.5 },
-    { recipe: CATTAILS, weight: 3 },
+    { recipe: PUDDLE, weight: 3, fps: 2 },
+    { recipe: BUBBLES, weight: 2.5, fps: 2 },
+    { recipe: CATTAILS, weight: 3, fps: 2.5 },
     { recipe: LOG, weight: 1 },
     { recipe: REEDS, weight: 2 },
     { recipe: STEPPING_STONES, weight: 1 },
   ],
   propGap: 46,
+  drifts: [{ recipe: MIST, count: 3, vx: 7, vy: -2, swayPx: 4, swayHz: 0.1 }],
   creatures: { slime: SLIME, peeper: PEEPER, snail: SNAIL, turtle: TURTLE, firefly: FIREFLY },
   bosses: {
     boss_mud: { up: MUD_MONSTER, hidden: mudPuddle(84) },

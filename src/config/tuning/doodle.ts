@@ -37,6 +37,16 @@ export const DOODLE = {
     falcon: "#7d6bd6",
     dart: "#5f6b7d",
     pod: "#c07a3e",
+    // Ships the story unlocks, one per world (no ball colors as the body).
+    leaf: "#7a9e2c",
+    acorn: "#9a6a3a",
+    lava: "#5c4d4a",
+    ember: "#f2622a",
+    star: "#5b4bb0",
+    gold: "#e8b923",
+    crayonBody: "#e8473d",
+    crayonWindow: "#3d7be8",
+    crayonFlame: "#f5c12e",
     canopy: "#2a8f9e",
     flame: "#f08a2c",
   } as Record<string, string>,
@@ -97,10 +107,24 @@ export const DOODLE = {
   DOWN_PIECE_SPIN: 2.6, // rad/s
   DOWN_GRAVITY: 260, // px/s²
   DOWN_WORDS: ["KABOOM!", "CRASH!", "BOOM!"],
+  // A level cleared: the ship blasts off the top (timing in LEVEL_CLEAR).
+  LAUNCH_WORDS: ["zoom!", "whoosh!"],
+  LAUNCH_WORD_DX: 62, // written this far right of the ship, clear of it
+  /** Speed lines under the flying ship: [x offset px, length share, width px]. */
+  SPEED_LINES: [
+    [-15, 0.55, 1.2],
+    [-7, 1, 1.7],
+    [0, 0.7, 1.2],
+    [7, 0.9, 1.7],
+    [15, 0.5, 1.2],
+  ],
+  SPEED_LINE_ALPHA: 0.75,
+  LAUNCH_FLAME_PX: 22, // the flame under it, at full trail
 
   // Story pages (renderDoodle/pages.ts): the page scrolls as the path goes by.
   PAGE_SCROLL_PX_PER_S: 22,
   PAGE_PROP_ALPHA: 0.5, // props stay faint: the numbers must win
+  PAGE_DRIFT_ALPHA: 0.4, // drifts move, which draws the eye, so they are fainter still
   // A boss's answers left, as pips under it.
   BOSS_PIP_R: 4,
   BOSS_PIP_GAP: 12,

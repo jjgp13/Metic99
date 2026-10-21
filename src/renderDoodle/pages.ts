@@ -1,12 +1,15 @@
 import { DOODLE, GAME } from "../config/constants";
 import type Alien from "../objects/Alien";
+import type { DriftDef } from "./drifts";
 import type { DoodleRecipe } from "./pencil";
 
 /**
  * Story pages (docs/SOLO_MODES_DESIGN.md §2): each level is drawn on its
  * own notebook page that scrolls down as the level's path goes by, with
- * faint props (pebbles, grass…) doodled on it. The numbers must still win,
- * so props are light pencil drawn at PAGE_PROP_ALPHA.
+ * faint props (pebbles, grass…) doodled on it. Some props move in place
+ * (grass sways, ants march: their pre-drawn frames turn at `fps`) and little
+ * things drift across it (`drifts`: seeds, snow). The numbers must still
+ * win, so all of it is light pencil, slow, and under every alien.
  *
  * Each level's page lives in its own file under renderDoodle/levels/ (with
  * its creatures and its boss) and is listed in renderDoodle/levels/index.ts.
@@ -16,10 +19,13 @@ export interface PageDef {
   paper: string;
   rule: string;
   margin: string;
-  /** Props scattered along the path, picked by weight. */
-  props: { recipe: DoodleRecipe; weight: number }[];
+  /** Props scattered along the path, picked by weight. A prop with `fps`
+   * moves in place: its recipe draws frame `t` of a loop (0..1). */
+  props: { recipe: DoodleRecipe; weight: number; fps?: number }[];
   /** Average px of path between two props. */
   propGap: number;
+  /** Little things drifting across the page (renderDoodle/drifts.ts). */
+  drifts?: DriftDef[];
   /** How the level's creatures look, by species name (SpeciesDef.NAME). */
   creatures: Record<string, CreatureLook>;
   /** How the level's boss looks, by its model (BossDef.MODEL). */
@@ -52,6 +58,9 @@ export interface BossLook {
   /** Drawn on the page under every alien while the boss is up (a lamp's
    * beam, a shadow); `ctx` is in logical px. */
   under?(ctx: CanvasRenderingContext2D, boss: Alien, alpha: number): void;
+  /** Drawn over everything, with the number balls (a sum's total written on
+   * the boss); `ctx` is in logical px. */
+  over?(ctx: CanvasRenderingContext2D, boss: Alien, alpha: number): void;
 }
 
 /** A prop placed on the page: `pathY` px along the path from the start. */
@@ -61,6 +70,9 @@ export interface PlacedProp {
   x: number;
   pathY: number;
   angle: number;
+  /** Frames per second of its loop (0 = still), and where in it it starts. */
+  fps: number;
+  phase: number;
 }
 
 export { PAGES } from "./levels";
@@ -119,6 +131,8 @@ export function layOutProps(pageId: string, page: PageDef, lengthPx: number): Pl
       x: 12 + Math.random() * (GAME.WIDTH - 24),
       pathY: y,
       angle: (Math.random() - 0.5) * 0.8,
+      fps: page.props[i].fps ?? 0,
+      phase: Math.random(),
     });
   }
   return out;
