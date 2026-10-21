@@ -55,7 +55,8 @@ export default class StoryMapScene extends Phaser.Scene {
     this.boiling = [];
     this.frame = 0;
     this.travelling = false;
-    music.play(this, MUSIC.MAP_FILE);
+    // After the last boss the ending plays once, to its end, map or not.
+    if (music.playing !== MUSIC.ENDING_FILE) music.play(this, MUSIC.MAP_FILE);
     const progress = loadStoryProgress();
     this.saved = loadSavedRun();
 
