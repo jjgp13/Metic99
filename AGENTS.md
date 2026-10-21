@@ -1152,6 +1152,14 @@ dMatch)`; it is 0 in solo play.
 
 Newest first. Format: `YYYY-MM-DD — decision — rationale`.
 
+- **2026-10-21 — Sound plays on iPhones with the silent switch on.** A
+  tester's iPhone was silent: iOS's ring/silent switch mutes Web Audio
+  (not media playback). `services/audioSession.ts` sets
+  `navigator.audioSession.type = "playback"` (iOS 17+), or on older iOS
+  loops a silent <audio> from the first tap; it also resumes audio on any
+  tap after a call or an app switch. The menu tells iPhone/iPad players
+  "no sound? turn off silent mode" in case an older iOS still mutes it.
+
 - **2026-10-21 — Playtest round 2 merged into master: one music player.**
   Round 2 (energy rework, boss tricks, level-clear sequence, ending,
   credits, ship unlocks) had its own song helpers; master's shared player

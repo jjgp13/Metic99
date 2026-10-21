@@ -12,6 +12,7 @@ import { textStyle } from "../ui/theme";
 import { lockedIconFrames, shipIconFrames } from "../renderDoodle/shipIcons";
 import { crownTexture } from "../renderDoodle/storyMap";
 import { music } from "./music";
+import { isIPhoneOrIPad } from "../services/audioSession";
 
 /**
  * Title / main menu. The first scene the player sees: a ship picker (a look
@@ -80,6 +81,12 @@ export default class MenuScene extends Phaser.Scene {
     this.add
       .text(cx, GAME.HEIGHT - 26, "runs are saved anonymously (no names) to tune the game", textStyle(12, PALETTE.TEXT_MUTED))
       .setOrigin(0.5);
+    // The silent switch can still mute the game on older iPhones (services/audioSession.ts).
+    if (isIPhoneOrIPad()) {
+      this.add
+        .text(cx, GAME.HEIGHT - 10, "the game has music! no sound? turn off silent mode", textStyle(12, PALETTE.TEXT_MUTED))
+        .setOrigin(0.5);
+    }
 
     onKeyDown(this, (e) => {
       if (e.key === "Enter") this.startEndless();

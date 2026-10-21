@@ -14,6 +14,7 @@ import { artMode } from "./config/artMode";
 import { DOODLE } from "./config/constants";
 import { getWorld3D } from "./render3d/World3D";
 import { loadDoodleFont } from "./renderDoodle/font";
+import { keepSoundOnIPhone } from "./services/audioSession";
 
 /**
  * Phaser entry point.
@@ -59,6 +60,7 @@ const config: Phaser.Types.Core.GameConfig = {
 
 function startGame(): void {
   const game = new Phaser.Game(config);
+  keepSoundOnIPhone(game);
   // Dev-only console handle for inspecting the running game (stripped from builds).
   if (import.meta.env.DEV) Object.assign(window, { __metic: { game, world: getWorld3D } });
 }
