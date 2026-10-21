@@ -58,7 +58,7 @@ export default class MenuScene extends Phaser.Scene {
     // the map shows how far you got and starts a run.
     this.makeButton(cx - 154, 522, "STORY", () => this.scene.start("StoryMapScene"), 144);
     // Endless: play until your lives run out (the world leaderboard).
-    this.makeButton(cx, 522, "ENDLESS", () => this.scene.start("GameScene"), 144);
+    this.makeButton(cx, 522, "ENDLESS", () => this.startEndless(), 144);
     // Battle royale vs bots (docs/MULTIPLAYER_DESIGN.md): you + 7 bots, one life.
     this.makeButton(cx + 154, 522, "BATTLE", () => this.scene.start("GameScene", { battle: true }), 144);
     this.makeButton(cx, 582, "HOW TO PLAY", () => this.scene.start("HowToPlayScene"));
@@ -71,8 +71,15 @@ export default class MenuScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     onKeyDown(this, (e) => {
-      if (e.key === "Enter") this.scene.start("GameScene");
+      if (e.key === "Enter") this.startEndless();
     });
+  }
+
+  /** Endless: the GameScene with no story and no battle. The empty data is
+   * needed: Phaser's start() without data hands the scene its last data,
+   * so ENDLESS after a battle or a story level replayed that instead. */
+  private startEndless(): void {
+    this.scene.start("GameScene", {});
   }
 
   /** ◀ ship ▶ carousel; the pick is saved and used by the next run. */
