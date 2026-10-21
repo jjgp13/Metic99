@@ -3,12 +3,26 @@ import { MUSIC } from "../config/constants";
 
 type Track = "path" | "boss";
 
+/** A run's music files in public/assets/music/: a looping path track and,
+ * for a story level, the boss track it switches to. */
+export interface MusicTracks {
+  path: string;
+  boss?: string;
+}
+
+/** A story level's tracks: level01-path.mp3 … level10-boss.mp3. */
+export function levelTracks(level: number): MusicTracks {
+  const n = String(level + 1).padStart(2, "0");
+  return { path: `level${n}-path.mp3`, boss: `level${n}-boss.mp3` };
+}
+
 /**
- * A story level's music (docs/MUSIC_PROMPTS.md): a looping path track, then
- * the level's boss track once the boss comes in. The tracks are loaded when
- * the level starts, not at boot (20 tracks would slow the first load on a
- * phone), so the music starts a moment after the level does. Pause, the
- * level card and game over fade it out; leaving the scene stops it.
+ * A run's music (docs/MUSIC_PROMPTS.md): a looping path track, then the
+ * level's boss track once the boss comes in. The tracks are loaded when
+ * the run starts, not at boot (20 tracks would slow the first load on a
+ * phone), so the music starts a moment after the run does. A track that
+ * is missing or fails to load just doesn't play. Pause, the level card and
+ * game over fade it out; leaving the scene stops it.
  */
 export class LevelMusic {
   private current: Phaser.Sound.BaseSound | null = null;
@@ -21,13 +35,13 @@ export class LevelMusic {
 
   constructor(
     private readonly scene: Phaser.Scene,
-    /** Index into LEVELS (0 = level 1). */
-    private readonly level: number,
+    private readonly tracks: MusicTracks,
   ) {
     const load = scene.load;
-    for (const track of ["path", "boss"] as const) {
-      const key = this.key(track);
-      if (!scene.cache.audio.exists(key)) load.audio(key, `assets/music/${this.file(track)}`);
+    for (const file of [tracks.path, tracks.boss]) {
+      if (!file) continue;
+      const key = musicKey(file);
+      if (!scene.cache.audio.exists(key)) load.audio(key, `assets/music/${file}`);
     }
     load.once(Phaser.Loader.Events.COMPLETE, () => this.play(this.wanted));
     load.start();
@@ -74,7 +88,9 @@ export class LevelMusic {
   }
 
   private play(track: Track): void {
-    const key = this.key(track);
+    const file = this.tracks[track];
+    if (!file) return;
+    const key = musicKey(file);
     if (this.stopped || !this.scene.cache.audio.exists(key)) return;
     const old = this.current;
     if (old && old.key === key) return;
@@ -84,13 +100,8 @@ export class LevelMusic {
     if (this.paused) sound.pause(); // loaded while the game was paused
     this.current = sound;
   }
+}
 
-  private key(track: Track): string {
-    return `music:${this.file(track)}`;
-  }
-
-  /** level01-path.mp3 … level10-boss.mp3 (public/assets/music/). */
-  private file(track: Track): string {
-    return `level${String(this.level + 1).padStart(2, "0")}-${track}.mp3`;
-  }
+function musicKey(file: string): string {
+  return `music:${file}`;
 }
