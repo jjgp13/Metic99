@@ -68,6 +68,14 @@ the migration loses no scores.
 The theme is the Endless theme picked on the menu (`GameScene.theme`,
 config/themes.ts), "plain" when none.
 
+**Unknown ids don't lose a score:** if the database refuses the details
+because an id isn't in its list (code 23514, e.g. a new ship added in the
+game before its migration), `submitScore` also sends the score again
+alone. Tested live: a `ufo` ship returned 23514 and left the ticket
+unused. Refusals that point at a forged run (survival longer than the
+match, a score too high for its time) are not retried
+(`retryWithoutDetails`, unit-tested).
+
 ### 4. The board
 **What changed:** Endless rows show rank + name, ship icon, power, world,
 time and score, with a small column header. Older scores show only name and

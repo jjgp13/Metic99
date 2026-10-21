@@ -320,8 +320,10 @@ docs/SOLO_MODES_DESIGN.md   Story mode plan: 10 scrolling levels + bosses, Endle
   the score must fit the survival time (same 3000/s cap); all in the same
   transaction. Public read, no API writes (RLS). `getTop` embeds the details
   for Endless (falls back to the plain board on an older database);
-  `submitScore` retries without details if the database doesn't know them
-  (PGRST202: the call never ran, the ticket is unused). The Endless board
+  `submitScore` retries without details if the database refuses them
+  (PGRST202 = it predates them; 23514 = an id its CHECK doesn't list yet,
+  e.g. a new ship shipped before its migration): the ticket is still
+  unused, so the score still counts. Implausible runs are not retried. The Endless board
   shows a ship icon, power, world and time per row; older scores show only
   name and score. GameScene builds them (`endlessDetails()`) and passes them
   through NameEntry (`BoardScore.details`).

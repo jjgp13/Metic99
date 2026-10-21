@@ -27,6 +27,20 @@ export function detailArgs(details?: EndlessDetails): Record<string, string | nu
 }
 
 /**
+ * Whether a submit refused because of its details should be sent again
+ * without them, so the score still counts. Both refusals leave the match
+ * ticket unused (the call never ran, or the database undid it):
+ * - PGRST202: no submit_run takes details (database before endless-details.sql);
+ * - 23514: a CHECK failed, i.e. a ship, power or theme id the database
+ *   doesn't list yet (a new one added in the game but not in the SQL).
+ * Other refusals (survival longer than the match, a score too high for its
+ * time) are not retried: they point at a forged run, not a missing id.
+ */
+export function retryWithoutDetails(errorCode: string | undefined): boolean {
+  return errorCode === "PGRST202" || errorCode === "23514";
+}
+
+/**
  * A score row's embedded `endless_runs` as details, or null when it has none
  * (an older score, or another board). Supabase returns a one-to-one embed as
  * an object, but an array is accepted too in case it isn't detected as one.

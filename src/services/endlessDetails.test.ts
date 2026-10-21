@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { POWER_KINDS, RENDER3D } from "../config/constants";
 import { THEMES } from "../config/themes";
 import sql from "../../supabase/endless-details.sql?raw";
-import { detailArgs, formatSurvival, parseDetails } from "./endlessDetails";
+import { detailArgs, formatSurvival, parseDetails, retryWithoutDetails } from "./endlessDetails";
 
 describe("detailArgs", () => {
   it("sends the four details under submit_run's parameter names", () => {
@@ -12,6 +12,18 @@ describe("detailArgs", () => {
 
   it("sends nothing without details, so story and battle calls keep their old shape", () => {
     expect(detailArgs()).toEqual({});
+  });
+});
+
+describe("retryWithoutDetails", () => {
+  it("retries when the database lacks the details or an id", () => {
+    expect(retryWithoutDetails("PGRST202")).toBe(true); // no submit_run with details
+    expect(retryWithoutDetails("23514")).toBe(true); // a ship/power/theme check failed
+  });
+
+  it("doesn't retry a run the server finds implausible, or a network failure", () => {
+    expect(retryWithoutDetails("P0001")).toBe(false); // raise exception in submit_run
+    expect(retryWithoutDetails(undefined)).toBe(false);
   });
 });
 

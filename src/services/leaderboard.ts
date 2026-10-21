@@ -1,6 +1,6 @@
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { LEADERBOARD } from "../config/constants";
-import { type EndlessDetails, detailArgs, parseDetails } from "./endlessDetails";
+import { type EndlessDetails, detailArgs, parseDetails, retryWithoutDetails } from "./endlessDetails";
 
 /** Which board a score goes on: 0 = Endless, 1–10 = a story stage, 99 = a story run. */
 export type Board = number;
@@ -182,7 +182,8 @@ export async function startMatch(board: Board = LEADERBOARD.ENDLESS_BOARD): Prom
  * is false and rank/top are best-effort. A timeout guards against a hung network
  * leaving the player stuck on "submitting". The match id is single-use and is
  * cleared whether or not the submit succeeds. `details` (Endless only) go
- * with the score; a database that doesn't know them yet gets the score alone.
+ * with the score; if the database refuses them (it doesn't know them yet, or
+ * not one of their ids), the score is sent again alone.
  */
 export async function submitScore(
   name: string,
@@ -209,9 +210,12 @@ export async function submitScore(
 
   const run = async (): Promise<SubmitResult> => {
     let { data, error } = await call(true);
-    // PGRST202 = no submit_run with these parameters: the database predates
-    // endless-details.sql. The call never ran, so the ticket is still unused.
-    if (error?.code === "PGRST202" && details) ({ data, error } = await call(false));
+    // The database doesn't know the details (or one of their ids): the
+    // score goes on the board without them, with the same unused ticket.
+    if (error && details && retryWithoutDetails(error.code)) {
+      console.warn("[leaderboard] details refused, submitting the score alone:", error.message);
+      ({ data, error } = await call(false));
+    }
     if (error) {
       console.error("[leaderboard] submit failed:", error.message);
       const top = await getTop(board);
