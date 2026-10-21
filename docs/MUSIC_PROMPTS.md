@@ -1,6 +1,7 @@
 # Story mode music: chiptune prompts
 
-Prompts for a text-to-music model, one track per level plus a boss track.
+Prompts for a text-to-music model: a path and a boss track per level,
+plus the menu, the story map, the story ending and Endless (last section).
 Each level is a kid's imagined world doodled in a notebook
 (docs/SOLO_MODES_DESIGN.md §3), so the music is playful 8-bit, never dark
 or epic.
@@ -241,3 +242,97 @@ Then add one line for the boss:
 9. **The Moon:** a spooky-silly theremin-like square-wave wobble.
 10. **Under-the-Bed Monster:** a creeping bass line that bursts into the
     loudest, happiest chase of the game.
+
+## Menu, story map, ending and Endless
+
+Four tracks outside the levels. They share one **main theme**, so the
+game has a musical identity and the ending can bring it back as a memory
+(a leitmotif). Paste the shared style first, then the track's block.
+
+**The main theme** (named in every block below): a 2-bar hopping tune,
+four notes stepping up (do – mi – sol – la), then three notes falling
+back home (sol – mi – re – do), like a pencil drawing a loop.
+
+**Files** (not played by the game yet): `menu.mp3`, `map.mp3`,
+`ending.mp3`, `endless.mp3` in `public/assets/music/`.
+
+**Endless and world themes** (owner's pick, 2026-10-20): Endless keeps
+one set of rules (all monsters, the score-led curve, one leaderboard);
+the player may pick a world they unlocked in story mode as a cosmetic
+theme (its page and its path song). `endless.mp3` is the default theme's
+song.
+
+### Main menu: about 69 s, loops
+
+> **112 BPM, C major, 32 bars, loops (bar 32 flows into bar 1).**
+> Catchy and welcoming, the game's signature tune: it states the main
+> theme clearly, the one a player hums after closing the game. Mid-energy:
+> a menu, not a level, so no big build-ups.
+>
+> 1. Bars 1–8, **Theme:** the lead plays the main theme twice over a
+>    bouncy bass and a light beat. C – G – Am – F | C – G – F – G.
+> 2. Bars 9–16, **Theme with harmony:** the second square voice joins in
+>    thirds, a little arpeggio underneath. Same chords.
+> 3. Bars 17–24, **Contrast:** a new answering tune, gentler, the drums
+>    thinner. F – G – Em – Am | Dm – G – C – C.
+> 4. Bars 25–32, **Theme, full:** everything playing, the theme an octave
+>    up for the first 4 bars. C – G – Am – F | Dm – G – F – G.
+
+### Story map: about 69 s, loops
+
+> **84 BPM, F major, 24 bars, loops.** Calm and wandering: planning the
+> next adventure over a notebook map. The main theme played slower and
+> softer, as if someone is humming it while drawing the trail between
+> islands. A soft square lead with gentle vibrato, a quiet triangle bass,
+> a soft tick on the noise channel like footsteps, no snare.
+>
+> 1. Bars 1–8, **Hummed theme:** F – Dm – B♭ – C | F – Dm – Gm – C.
+> 2. Bars 9–16, **Looking around:** a slow arpeggio answers the theme.
+>    B♭ – C – Am – Dm | Gm – C – F – F.
+> 3. Bars 17–24, **Back to the theme**, a little warmer, the harmony voice
+>    joins. F – Am – B♭ – Gm | F – C – B♭ – C.
+
+### Story ending: about 2 min 15 s, plays once
+
+> **72 BPM, C major, 40 bars, plays once and ends on a long held chord (no
+> loop).** Nostalgic and warm: the kid closes the notebook after the whole
+> adventure. It starts like a music box, remembers every world, swells
+> into one big happy chorus, and fades back to the music box.
+>
+> 1. Bars 1–8, **Music box:** the main theme, very slow, one high soft
+>    square voice with a gentle echo, a quiet bass on the first beat only.
+>    C – Am – F – G | C – Em – F – G.
+> 2. Bars 9–28, **Memories:** two bars per world, in story order, each a
+>    soft short quote of that world's tune: the backyard's hop, the pond's
+>    ripples, the treetops' climbing scale, the swamp's wobble, the cave's
+>    drips, the volcano's runs, the windy sky's gliding notes, the snowy
+>    mountain's bells, the night sky's twinkles, the bedroom's toy march.
+>    A light beat comes in slowly. Two chords per memory: C – Am, F – G,
+>    Em – Am, Dm – G, C – Am, F – G, Em – Am, Dm – G, F – Fm, Gsus4 – G7
+>    (the F to F minor is the bittersweet moment).
+> 3. Bars 29–36, **Chorus:** the key lifts to D major, every voice plays
+>    the main theme together, warm and happy, the biggest moment of the
+>    track but never loud or harsh. D – A – Bm – G | D – A – G – A.
+> 4. Bars 37–40, **Music box again:** back to C, drums out, the theme's
+>    last notes on the music box, ending on a long held C chord.
+>    F – Fm – C – C.
+
+### Endless (default theme): about 1 min 50 s, loops
+
+> **140 BPM, A minor, 64 bars, loops.** The most challenging track of the
+> game: fast, dense and driving, for a mode that only gets harder. It
+> remixes every world: all the monsters are on the field at once. No full
+> rests: the energy dips a little once, then climbs to the end of the
+> loop.
+>
+> 1. Bars 1–8, **Main theme, in minor:** the theme over a driving
+>    eighth-note bass and a full beat. Am – F – C – G | Am – F – G – E7.
+> 2. Bars 9–48, **World remix:** four bars per world, in story order, each
+>    world's tune in a fast remix (the backyard's hop through the
+>    bedroom's toy march), on alternating chord rows: Am – F – C – G, then
+>    F – G – Em – Am.
+> 3. Bars 49–56, **Short dip:** the drums thin to kick and hi-hat, the bass
+>    pulses, a riser builds. Dm – Em – F – G | Dm – Em – F – E7.
+> 4. Bars 57–64, **Climax:** double-time drums, the main theme in octaves,
+>    the loudest part, leading straight back into bar 1.
+>    F – G – Am – Am | F – G – E7 – E7.

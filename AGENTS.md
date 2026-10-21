@@ -1005,6 +1005,15 @@ dMatch)`; it is 0 in solo play.
 
 Newest first. Format: `YYYY-MM-DD — decision — rationale`.
 
+- **2026-10-20 — Endless = one set of rules; story worlds are cosmetic
+  themes (owner's pick).** Endless keeps every monster, the score-led curve
+  and one leaderboard; a world the player unlocked in story (boss beaten)
+  can be picked as a theme: its page and path song, never its creatures or
+  traits (those change difficulty). Rejected: picking a level with its own
+  rules (scores not comparable, or 10 boards). Like Tetris 99's themes.
+  Paid themes skipped (accounts, payments). Menu, map, ending and Endless
+  songs share one main theme (docs/MUSIC_PROMPTS.md); not wired yet.
+
 - **2026-10-20 — Level songs follow the level's waves (docs/MUSIC_PROMPTS.md).**
   Owner's ask: the first soundtrack looped a short phrase; songs should
   rise and fall with the difficulty. Each path song is 44 bars, one per
