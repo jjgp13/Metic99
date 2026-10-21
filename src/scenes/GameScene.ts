@@ -1,16 +1,24 @@
 import Phaser from "phaser";
 import { DOODLE, LEADERBOARD, LEVELS, MATCH, RECOVERY, STORY, TARGET_STRATEGIES, type TargetStrategy } from "../config/constants";
 import { inputMode } from "../config/inputMode";
+import { levelTracks, selectedTheme, type Theme } from "../config/themes";
 import type { InkEvent } from "../handwriting/inkReader";
 import type Alien from "../objects/Alien";
 import { ABILITY_KINDS, Boss, type AbilityKind } from "../objects/abilities";
 import { isLeaderboardEnabled, stageBoard, startMatch } from "../services/leaderboard";
 import { rankFor, recordRun } from "../services/masteryStats";
 import { hitRecord, initPlaytestLog, logRun, type InputSource, type RunExtras } from "../services/playtestLog";
-import { clearSavedRun, recordLevel, recordStoryRun, saveRun as saveStoryRun } from "../services/storyProgress";
+import {
+  clearSavedRun,
+  loadStoryProgress,
+  recordLevel,
+  recordStoryRun,
+  saveRun as saveStoryRun,
+} from "../services/storyProgress";
 import type { Bot } from "../sim/Bot";
 import { ANSWER_MAX_DIGITS, type Field, type FieldEvent, type FieldInput } from "../sim/Field";
 import type { Match, MatchEvent } from "../sim/Match";
+import type { PageView } from "../render3d/World3D";
 import { SimClock } from "../sim/SimClock";
 import type { PowerUse } from "../sim/energy";
 import { summarizeSolves } from "../sim/stats";
@@ -21,7 +29,7 @@ import { EnergyHud } from "../ui/hud/EnergyHud";
 import { GameOverScreen } from "../ui/hud/GameOverScreen";
 import { InputPanel, type PadKey } from "../ui/hud/InputPanel";
 import { LevelClearCard } from "../ui/hud/LevelClearCard";
-import { LevelMusic, levelTracks } from "./levelMusic";
+import { LevelMusic } from "./levelMusic";
 import { PauseOverlay } from "../ui/hud/PauseOverlay";
 import { Popups } from "../ui/hud/Popups";
 import { Reticle } from "../ui/hud/Reticle";
@@ -56,7 +64,9 @@ export default class GameScene extends Phaser.Scene {
   private autopilot: Bot | null = null;
   /** Story mode: the run so far (this scene plays its current level). */
   private story: StoryRun | null = null;
-  /** Story mode: the level's music. */
+  /** Endless: the theme picked (a page and a song; the rules never see it). */
+  private theme: Theme | null = null;
+  /** Story: the level's music; Endless: the theme's song. */
   private music: LevelMusic | null = null;
   private clock!: SimClock;
   /** What the playtest log records beyond the field (services/playtestLog.ts). */
@@ -92,6 +102,9 @@ export default class GameScene extends Phaser.Scene {
   create(data?: { battle?: boolean; story?: StoryRun }): void {
     this.story = data?.story ?? null;
     const run = setUpRun({ battle: data?.battle ?? false, story: this.story });
+    // Read here, not in setUpRun: the theme is for the view and the music only.
+    const endless = !this.story && !run.match;
+    this.theme = endless ? selectedTheme(loadStoryProgress().furthest) : null;
     this.field = run.field;
     this.match = run.match;
     this.autopilot = run.autopilot;
@@ -129,7 +142,8 @@ export default class GameScene extends Phaser.Scene {
       void startMatch();
     }
     initPlaytestLog();
-    this.music = this.story ? new LevelMusic(this, levelTracks(this.story.level)) : null;
+    if (this.story) this.music = new LevelMusic(this, levelTracks(this.story.level));
+    else this.music = this.theme ? new LevelMusic(this, { path: this.theme.music }) : null;
     // Story: a run left in the middle continues from the start of this level.
     if (this.story) saveStoryRun(this.story);
     if (this.story) {
@@ -565,16 +579,24 @@ export default class GameScene extends Phaser.Scene {
     };
   }
 
-  /** Story: the level's page and how far it has scrolled, for the field view. */
-  private pageView(): { id: string; scrolledPx: number; lengthPx: number } | null {
-    if (!this.story) return null;
-    const level = LEVELS[this.story.level];
+  /**
+   * The page under the field and how far it has scrolled, for the field
+   * view: a story level's page follows its path; an Endless theme's page
+   * scrolls with the game clock and never ends.
+   */
+  private pageView(): PageView | null {
     const pxPerMs = DOODLE.PAGE_SCROLL_PX_PER_S / 1000;
-    return {
-      id: level.PAGE,
-      scrolledPx: (this.field.levelProgress ?? 0) * level.PATH_MS * pxPerMs,
-      lengthPx: level.PATH_MS * pxPerMs,
-    };
+    if (this.story) {
+      const level = LEVELS[this.story.level];
+      return {
+        id: level.PAGE,
+        scrolledPx: (this.field.levelProgress ?? 0) * level.PATH_MS * pxPerMs,
+        lengthPx: level.PATH_MS * pxPerMs,
+        loops: false,
+      };
+    }
+    if (!this.theme?.page) return null;
+    return { id: this.theme.page, scrolledPx: this.field.elapsedMs * pxPerMs, lengthPx: DOODLE.THEME_LOOP_PX, loops: true };
   }
 
   /**

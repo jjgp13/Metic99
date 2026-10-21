@@ -7,6 +7,7 @@ import GameScene from "./scenes/GameScene";
 import NameEntryScene from "./scenes/NameEntryScene";
 import LeaderboardScene from "./scenes/LeaderboardScene";
 import StoryMapScene from "./scenes/StoryMapScene";
+import ThemePickerScene from "./scenes/ThemePickerScene";
 import HandwritingLabScene from "./scenes/HandwritingLabScene";
 import { artMode } from "./config/artMode";
 import { DOODLE } from "./config/constants";
@@ -45,6 +46,7 @@ const config: Phaser.Types.Core.GameConfig = {
     BootScene,
     MenuScene,
     StoryMapScene,
+    ThemePickerScene,
     HowToPlayScene,
     GameScene,
     NameEntryScene,

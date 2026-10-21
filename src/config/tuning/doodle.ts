@@ -101,6 +101,10 @@ export const DOODLE = {
   // Story pages (renderDoodle/pages.ts): the page scrolls as the path goes by.
   PAGE_SCROLL_PX_PER_S: 22,
   PAGE_PROP_ALPHA: 0.5, // props stay faint: the numbers must win
+  // An Endless theme's page has no end: its props repeat every this many px
+  // of scroll (3 screens ≈ 98 s at the scroll speed). Must stay taller than
+  // a screen plus two props, or a prop would show twice at once.
+  THEME_LOOP_PX: 2160,
   // A boss's answers left, as pips under it.
   BOSS_PIP_R: 4,
   BOSS_PIP_GAP: 12,

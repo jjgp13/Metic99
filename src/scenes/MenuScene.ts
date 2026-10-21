@@ -15,7 +15,7 @@ import { shipIconFrames } from "../renderDoodle/shipIcons";
  * map), ENDLESS or
  * BATTLE (you + 7 bots), HOW TO PLAY and SCORES. Buttons are large pointer
  * targets (mobile-friendly); ←/→ change ship, ↑/↓ change power and Enter
- * plays ENDLESS.
+ * opens ENDLESS (its theme picker).
  */
 export default class MenuScene extends Phaser.Scene {
   constructor() {
@@ -55,8 +55,9 @@ export default class MenuScene extends Phaser.Scene {
     // Story: 10 levels with bosses, lives carried over (docs/SOLO_MODES_DESIGN.md);
     // the map shows how far you got and starts a run.
     this.makeButton(cx - 154, 522, "STORY", () => this.scene.start("StoryMapScene"), 144);
-    // Endless: play until your lives run out (the world leaderboard).
-    this.makeButton(cx, 522, "ENDLESS", () => this.scene.start("GameScene"), 144);
+    // Endless: play until your lives run out (the world leaderboard), after
+    // picking a theme (a world beaten in story: its page and song only).
+    this.makeButton(cx, 522, "ENDLESS", () => this.scene.start("ThemePickerScene"), 144);
     // Battle royale vs bots (docs/MULTIPLAYER_DESIGN.md): you + 7 bots, one life.
     this.makeButton(cx + 154, 522, "BATTLE", () => this.scene.start("GameScene", { battle: true }), 144);
     this.makeButton(cx, 582, "HOW TO PLAY", () => this.scene.start("HowToPlayScene"));
@@ -69,7 +70,7 @@ export default class MenuScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     onKeyDown(this, (e) => {
-      if (e.key === "Enter") this.scene.start("GameScene");
+      if (e.key === "Enter") this.scene.start("ThemePickerScene");
     });
   }
 

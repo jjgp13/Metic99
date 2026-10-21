@@ -96,12 +96,15 @@ src/
     difficulty.ts     Logistic difficulty curve
     ships.ts          Player's ship choice (menu picker, saved in localStorage)
     powers.ts         Player's power choice (menu picker, saved in localStorage)
+    themes.ts         Endless themes (a beaten world's page + path song) and
+                      the saved pick; never reaches the sim
     inputMode.ts      On-screen input choice: keypad or drawing pad (localStorage)
   scenes/
     BootScene.ts      Preloads assets; defers animations (static frames for now)
     MenuScene.ts      Title screen: ship picker + PLAY / BATTLE / HOW TO PLAY / SCORES
     StoryMapScene.ts  The STORY button: one island per stage, best scores,
                       "?" for stages not reached; PLAY = a run from island 1
+    ThemePickerScene.ts The ENDLESS button: pick a theme, then PLAY
     HowToPlayScene.ts Static rules screen reached from the menu
     GameScene.ts      Composition root: builds the run and the HUD parts,
                       maps keypad/keyboard/pad to Field inputs, steps the
@@ -140,6 +143,7 @@ src/
                       InputPanel, PauseOverlay, GameOverScreen, Ducker
                       (fades HUD under aliens); positions in layout.ts
     DrawPad.ts        The drawing pad: pointer capture, glowing ink, "?" flash
+    pencilButton.ts   A pencil-box button for the paper screens (map, themes)
     keyboard.ts       `onKeyDown`: each key press delivered once (Phaser bug)
     battleViews.ts    `BattleView` seam for the battle UI (M8): views of the
                       other players get `match.tiles()` + match events each
@@ -274,7 +278,8 @@ docs/SOLO_MODES_DESIGN.md   Story mode plan: 10 scrolling levels + bosses, Endle
   board, both `LeaderboardScene` browse with BACK → map; PLAY / Enter →
   `GameScene` with `{ story: { level: 0, lives, score, levelScores: [] } }`);
   ENDLESS (and
-  Enter) → `GameScene`; BATTLE → `GameScene` with `{ battle: true }` (no leaderboard); HOW TO PLAY → `HowToPlayScene`; SCORES → `LeaderboardScene` in
+  Enter) → `ThemePickerScene` (pick a theme; PLAY / Enter → `GameScene`, BACK /
+  Esc → menu); BATTLE → `GameScene` with `{ battle: true }` (no leaderboard); HOW TO PLAY → `HowToPlayScene`; SCORES → `LeaderboardScene` in
   **browse** mode (fetches `getTop()` itself, BACK → menu).
 - Game-over flow (when enabled): GAME OVER overlay → `NameEntryScene` (3–6 char
   length selector + initials) → `submitScore` (via the match gate) →
@@ -690,6 +695,20 @@ Green=multiplication, Yellow=division.
   game over deletes it. **Music:** each level loads its own path + boss
   track (`public/assets/music/levelNN-{path,boss}.mp3`, `scenes/levelMusic.ts`)
   and crossfades to the boss track when the boss comes in.
+  **Endless themes** (`config/themes.ts`, `ThemePickerScene`, like Tetris
+  99's): the ENDLESS button opens a picker of the plain page plus one theme
+  per story world; a world opens once its boss is beaten
+  (`StoryProgress.furthest`), locked ones show a dashed "?" island and
+  "beat its boss in STORY". A theme is only a look and a song: its page
+  (paper + props, scrolling with the game clock and repeating its props
+  every `DOODLE.THEME_LOOP_PX`) and its path song (looped, no boss track).
+  Never its creatures, traits, ball layouts or waves: Endless keeps
+  EndlessDirector, its curve and its one board. GameScene reads the pick
+  (`STORAGE.THEME`; a locked pick falls back to the plain page) and gives
+  it only to the snapshot's `page` and to `LevelMusic`; the Field never
+  sees it. The plain page plays `endless.mp3` (docs/MUSIC_PROMPTS.md); a
+  missing file just plays nothing. The 3D view (`?art=3d`) draws no pages,
+  so there a theme is only its song.
   Built: level 1, THE BACKYARD (now 100 s, d 0.1 → 0.35; beetles whose eyes are
   the numbers and sometimes march in pairs, worms made of numbers, a
   butterfly that folds its wings over its numbers; boss GIANT MOLE, 5
@@ -1004,6 +1023,18 @@ dMatch)`; it is 0 in solo play.
 ## Decision Log
 
 Newest first. Format: `YYYY-MM-DD — decision — rationale`.
+
+- **2026-10-20 — Endless themes live outside the sim.** A beaten world can
+  dress Endless in its page and path song. The pick is read by GameScene
+  and handed only to the view (snapshot `page`) and the music, not put on
+  `Field` like the story level (the owner's first guess): a level is rules
+  (species, waves, seed), a theme is not, and keeping it out means replays,
+  bots and the future server never carry it and no rule can start reading
+  it. Picker = its own paper screen after ENDLESS (11 cards, island
+  sketches reused from the map). An Endless page has no end, so its props
+  repeat every 3 screens. Also fixed an import cycle (tuning/story ↔
+  levels) that had left GitHub Pages blank since the escalating-waves
+  merge: LEVELS is now exported by the constants barrel.
 
 - **2026-10-20 — Level songs follow the level's waves (docs/MUSIC_PROMPTS.md).**
   Owner's ask: the first soundtrack looped a short phrase; songs should

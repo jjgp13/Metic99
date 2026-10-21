@@ -101,13 +101,17 @@ export function drawPageTile(page: PageDef, scale: number): HTMLCanvasElement {
 
 /**
  * Scatter the page's props along `lengthPx` of path (plus a screen's worth
- * already in view at the start). Visual only, so Math.random is fine; it is
- * done once per level and kept, so the props don't jump.
+ * already in view at the start). A page that `loops` (Endless) gets props
+ * only within one loop, [0, lengthPx), since it repeats them every
+ * `lengthPx`. Visual only, so Math.random is fine; it is done once per run
+ * and kept, so the props don't jump.
  */
-export function layOutProps(pageId: string, page: PageDef, lengthPx: number): PlacedProp[] {
+export function layOutProps(pageId: string, page: PageDef, lengthPx: number, loops = false): PlacedProp[] {
   const total = page.props.reduce((t, p) => t + p.weight, 0);
   const out: PlacedProp[] = [];
-  for (let y = -GAME.HEIGHT; y < lengthPx + GAME.HEIGHT; y += page.propGap * (0.5 + Math.random())) {
+  const from = loops ? 0 : -GAME.HEIGHT;
+  const to = loops ? lengthPx : lengthPx + GAME.HEIGHT;
+  for (let y = from; y < to; y += page.propGap * (0.5 + Math.random())) {
     let r = Math.random() * total;
     const i = Math.max(
       0,
@@ -122,4 +126,15 @@ export function layOutProps(pageId: string, page: PageDef, lengthPx: number): Pl
     });
   }
   return out;
+}
+
+/**
+ * Where a prop is drawn on screen (logical y) when the page has scrolled
+ * `scrolledPx`. A looping page repeats every `loopPx`, so a prop is seen at
+ * every y one loop apart; this returns the copy at or just below the top,
+ * and the caller also draws the one a loop higher (`y - loopPx`).
+ */
+export function propScreenY(prop: PlacedProp, scrolledPx: number, loopPx: number | null): number {
+  const y = scrolledPx - prop.pathY;
+  return loopPx === null ? y : ((y % loopPx) + loopPx) % loopPx;
 }

@@ -1,20 +1,8 @@
 import Phaser from "phaser";
 import { MUSIC } from "../config/constants";
+import type { MusicTracks } from "../config/themes";
 
 type Track = "path" | "boss";
-
-/** A run's music files in public/assets/music/: a looping path track and,
- * for a story level, the boss track it switches to. */
-export interface MusicTracks {
-  path: string;
-  boss?: string;
-}
-
-/** A story level's tracks: level01-path.mp3 … level10-boss.mp3. */
-export function levelTracks(level: number): MusicTracks {
-  const n = String(level + 1).padStart(2, "0");
-  return { path: `level${n}-path.mp3`, boss: `level${n}-boss.mp3` };
-}
 
 /**
  * A run's music (docs/MUSIC_PROMPTS.md): a looping path track, then the
