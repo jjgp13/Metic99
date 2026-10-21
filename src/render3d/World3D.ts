@@ -31,8 +31,9 @@ export interface WorldSnapshot {
   /** Story: a level was cleared and the ship is blasting off the top
    * (scenes/shipLaunch.ts), or null. */
   shipLaunch: ShipLaunchPose | null;
-  /** Story: the level's page and how far it has scrolled (null in Endless). */
-  page: { id: string; scrolledPx: number; lengthPx: number } | null;
+  /** The page under the field and how far it has scrolled: a story level's,
+   * or an Endless theme's (null = plain paper). */
+  page: PageView | null;
   /** The answer the background stars spell out, or null. */
   answer: AnswerView | null;
   /** The alien the typed answer points at (lock-on), or null. */
@@ -50,6 +51,17 @@ export interface ShipLaunchPose {
   shiverPx: number;
   /** Speed lines under it, 0 (none, still on the ground) to 1 (full length). */
   trail: number;
+}
+
+/** A notebook page scrolling under the field (drawn by the doodle view). */
+export interface PageView {
+  /** renderDoodle PAGES id. */
+  id: string;
+  scrolledPx: number;
+  /** Story: the path's length (props laid out along it). Endless: one
+   * loop of props, repeated forever (`loops`). */
+  lengthPx: number;
+  loops: boolean;
 }
 
 /** A model's `anim_*` part, with its rest rotation and mirror side. */

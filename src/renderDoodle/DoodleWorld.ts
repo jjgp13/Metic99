@@ -5,9 +5,9 @@ import { DOODLE, ENEMY, GAME, LEVEL_CLEAR, MODEL_BOXES, PLAYER, RECOVERY } from 
 import type Alien from "../objects/Alien";
 import { Boss, Shielded } from "../objects/abilities";
 import type { AnswerView, InkPoint } from "../render3d/AnswerStars";
-import type { ShipLaunchPose, WorldSnapshot } from "../render3d/World3D";
+import type { PageView, ShipLaunchPose, WorldSnapshot } from "../render3d/World3D";
 import { DriftLayer } from "./drifts";
-import { PAGES, drawPageTile, layOutProps, type BossLook, type CreatureLook, type PlacedProp } from "./pages";
+import { PAGES, drawPageTile, layOutProps, propScreenY, type BossLook, type CreatureLook, type PlacedProp } from "./pages";
 import { drawPaper } from "./paper";
 import { drawFrames, type DoodleRecipe, type Point } from "./pencil";
 import * as R from "./recipes";
@@ -95,7 +95,8 @@ export default class DoodleWorld {
   /** Scale the cached doodles were drawn at (redrawn if the screen changes a lot). */
   private spriteScale = 0;
   private paper: HTMLCanvasElement | null = null;
-  /** Story: the level's page (tiles as it scrolls) and its props. */
+  /** The page under the field (tiles as it scrolls) and its props: a story
+   * level's or an Endless theme's. */
   private pageId: string | null = null;
   private pageTile: HTMLCanvasElement | null = null;
   private props: PlacedProp[] = [];
@@ -193,10 +194,11 @@ export default class DoodleWorld {
   }
 
   /**
-   * Story: the level's page, scrolled `scrolledPx` down, with its props and
-   * drifts. The tile repeats every screen height, so two copies cover the view.
+   * The page, scrolled `scrolledPx` down, with its props and drifts. The
+   * tile repeats every screen height, so two copies cover the view; a
+   * looping page (Endless) also repeats its props every `lengthPx`.
    */
-  private drawPage(page: { id: string; scrolledPx: number; lengthPx: number }, time: number, delta: number): void {
+  private drawPage(page: PageView, time: number, delta: number): void {
     const def = PAGES[page.id];
     if (!def) {
       if (this.paper) this.ctx.drawImage(this.paper, 0, 0);
@@ -205,7 +207,7 @@ export default class DoodleWorld {
     if (this.pageId !== page.id) {
       this.pageId = page.id;
       this.pageTile = null;
-      this.props = layOutProps(page.id, def, page.lengthPx);
+      this.props = layOutProps(page.id, def, page.lengthPx, page.loops);
       this.drifts = new DriftLayer(def.drifts ?? []);
     }
     this.pageTile ??= drawPageTile(def, this.scale);
@@ -218,14 +220,17 @@ export default class DoodleWorld {
     ctx.save();
     ctx.setTransform(this.scale, 0, 0, this.scale, 0, 0);
     ctx.globalAlpha = DOODLE.PAGE_PROP_ALPHA;
+    const loopPx = page.loops ? page.lengthPx : null;
     for (const prop of this.props) {
-      const y = page.scrolledPx - prop.pathY;
-      if (y < -prop.recipe.h || y > GAME.HEIGHT + prop.recipe.h) continue;
-      ctx.save();
-      ctx.translate(prop.x, y);
-      ctx.rotate(prop.angle);
-      this.drawSprite(prop.key, () => prop.recipe, loopFrame(time, prop.fps, prop.phase));
-      ctx.restore();
+      const y = propScreenY(prop, page.scrolledPx, loopPx);
+      for (const copyY of loopPx === null ? [y] : [y, y - loopPx]) {
+        if (copyY < -prop.recipe.h || copyY > GAME.HEIGHT + prop.recipe.h) continue;
+        ctx.save();
+        ctx.translate(prop.x, copyY);
+        ctx.rotate(prop.angle);
+        this.drawSprite(prop.key, () => prop.recipe, loopFrame(time, prop.fps, prop.phase));
+        ctx.restore();
+      }
     }
     this.drawDrifts(page.id, time, delta);
     ctx.restore();

@@ -18,6 +18,7 @@ import {
   type StoryProgress,
 } from "../services/storyProgress";
 import { onKeyDown } from "../ui/keyboard";
+import { pencilButton } from "../ui/pencilButton";
 import { textStyle } from "../ui/theme";
 import { music } from "./music";
 
@@ -265,8 +266,8 @@ export default class StoryMapScene extends Phaser.Scene {
 
   private makeButtons(progress: StoryProgress): void {
     const y = GAME.HEIGHT - 40;
-    this.makeButton(84, y, 120, "BACK", () => this.scene.start("MenuScene"));
-    this.makeButton(GAME.WIDTH / 2, y, 150, progress.bestRun > 0 ? `RUNS · ${progress.bestRun}` : "RUN SCORES", () =>
+    pencilButton(this, 84, y, 120, "BACK", () => this.scene.start("MenuScene"));
+    pencilButton(this, GAME.WIDTH / 2, y, 150, progress.bestRun > 0 ? `RUNS · ${progress.bestRun}` : "RUN SCORES", () =>
       this.scene.start("LeaderboardScene", {
         browse: true,
         board: LEADERBOARD.STORY_RUN_BOARD,
@@ -275,7 +276,7 @@ export default class StoryMapScene extends Phaser.Scene {
         back: "StoryMapScene",
       }),
     );
-    this.makeButton(GAME.WIDTH - 84, y, 120, this.saved ? "CONTINUE" : "PLAY", () => this.play(), DOODLE.TARGET);
+    pencilButton(this, GAME.WIDTH - 84, y, 120, this.saved ? "CONTINUE" : "PLAY", () => this.play(), DOODLE.TARGET);
     if (this.saved) {
       const run = this.saved;
       this.add

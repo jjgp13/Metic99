@@ -19,8 +19,8 @@ import { music } from "./music";
  * map), ENDLESS or
  * BATTLE (you + 7 bots), HOW TO PLAY and SCORES. Buttons are large pointer
  * targets (mobile-friendly); ←/→ change ship, ↑/↓ change power and Enter
- * plays ENDLESS. Some ships are unlocked by the story (services/shipUnlocks),
- * and finishing it puts a crown over the title.
+ * opens ENDLESS (its theme picker). Some ships are unlocked by the story
+ * (services/shipUnlocks), and finishing it puts a crown over the title.
  */
 export default class MenuScene extends Phaser.Scene {
   constructor() {
@@ -67,7 +67,8 @@ export default class MenuScene extends Phaser.Scene {
     // Story: 10 levels with bosses, lives carried over (docs/SOLO_MODES_DESIGN.md);
     // the map shows how far you got and starts a run.
     this.makeButton(cx - 154, 522, "STORY", () => this.scene.start("StoryMapScene", {}), 144);
-    // Endless: play until your lives run out (the world leaderboard).
+    // Endless: play until your lives run out (the world leaderboard), after
+    // picking a theme (a world beaten in story: its page and song only).
     this.makeButton(cx, 522, "ENDLESS", () => this.startEndless(), 144);
     // Battle royale vs bots (docs/MULTIPLAYER_DESIGN.md): you + 7 bots, one life.
     this.makeButton(cx + 154, 522, "BATTLE", () => this.scene.start("GameScene", { battle: true }), 144);
@@ -85,11 +86,10 @@ export default class MenuScene extends Phaser.Scene {
     });
   }
 
-  /** Endless: the GameScene with no story and no battle. The empty data is
-   * needed: Phaser's start() without data hands the scene its last data,
-   * so ENDLESS after a battle or a story level replayed that instead. */
+  /** Endless: its theme picker first (scenes/ThemePickerScene.ts), which
+   * then starts the run. */
   private startEndless(): void {
-    this.scene.start("GameScene", {});
+    this.scene.start("ThemePickerScene");
   }
 
   /** ◀ ship ▶ carousel; the pick is saved and used by the next run. A ship
