@@ -36,8 +36,15 @@ reads didn't change.
 in a new migration (drop + add the constraint). A new fact (e.g. kills) →
 a column on `endless_runs` (nullable or with a default), a new defaulted
 parameter on `submit_run`, `detailArgs` and `parseDetails`.
-**Verified by:** checked the live `scores.id` type (bigint, matches the
-link). The migration has **not** been run against a database yet.
+**Verified by:** applied to MeticWeb on 2026-10-21. Then, on the live
+database, one `do` block called `submit_run` seven ways and ended by
+raising an error on purpose, so Postgres undid every row it wrote: a valid
+submit (score + detail row), the old call shape (score only), a forged
+ship (refused; the ticket stayed unused, no score left), survival longer
+than the ticket, a score too high for its survival, partial details, and
+details on a story board (all refused). With the public key: the board read
+returns the details as an object (null for older scores), a direct insert
+into `endless_runs` is refused, and both call shapes reach the function.
 
 ### 2. The pure core: `services/endlessDetails.ts`
 **What changed:** `detailArgs` (details → RPC arguments, none without

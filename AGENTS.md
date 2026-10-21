@@ -1180,7 +1180,9 @@ Newest first. Format: `YYYY-MM-DD — decision — rationale`.
   context) over new nullable columns on `scores` (simpler reads, but every
   mode's facts in one wide table) and a JSON column (no type or id checks).
   `scores` stays the one ranking table. A count of runs played was left
-  out: initials aren't an identity. Not applied to the live project yet.
+  out: initials aren't an identity. Applied to MeticWeb the same day
+  (tested live inside a rolled-back transaction: valid, old call shape,
+  forged ship, long survival, high score, partial, story board).
 - **2026-10-21 — Sound plays on iPhones with the silent switch on.** A
   tester's iPhone was silent: iOS's ring/silent switch mutes Web Audio
   (not media playback). `services/audioSession.ts` sets
