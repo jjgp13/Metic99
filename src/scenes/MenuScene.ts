@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { DOODLE, GAME, POWERS, POWER_KINDS, RENDER3D } from "../config/constants";
+import { DOODLE, GAME, MUSIC, POWERS, POWER_KINDS, RENDER3D } from "../config/constants";
 import { artMode } from "../config/artMode";
 import { selectPower, selectedPower } from "../config/powers";
 import { selectShip, selectedShip } from "../config/ships";
@@ -8,6 +8,7 @@ import { onKeyDown } from "../ui/keyboard";
 import { PALETTE, css } from "../config/palette";
 import { textStyle } from "../ui/theme";
 import { shipIconFrames } from "../renderDoodle/shipIcons";
+import { music } from "./music";
 
 /**
  * Title / main menu. The first scene the player sees: a ship picker (a look
@@ -24,6 +25,7 @@ export default class MenuScene extends Phaser.Scene {
 
   create(): void {
     const cx = GAME.WIDTH / 2;
+    music.play(this, MUSIC.MENU_FILE);
 
     // A few drifting stars to match the in-game backdrop.
     for (let i = 0; i < 40; i++) {

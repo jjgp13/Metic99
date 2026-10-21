@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { DOODLE, LEADERBOARD, LEVELS, MATCH, RECOVERY, STORY, TARGET_STRATEGIES, type TargetStrategy } from "../config/constants";
+import { DOODLE, LEADERBOARD, LEVELS, MATCH, MUSIC, RECOVERY, STORY, TARGET_STRATEGIES, type TargetStrategy } from "../config/constants";
 import { inputMode } from "../config/inputMode";
 import type { InkEvent } from "../handwriting/inkReader";
 import type Alien from "../objects/Alien";
@@ -21,7 +21,8 @@ import { EnergyHud } from "../ui/hud/EnergyHud";
 import { GameOverScreen } from "../ui/hud/GameOverScreen";
 import { InputPanel, type PadKey } from "../ui/hud/InputPanel";
 import { LevelClearCard } from "../ui/hud/LevelClearCard";
-import { LevelMusic, levelTracks } from "./levelMusic";
+import { ENDLESS_TRACKS, LevelMusic, levelTracks } from "./levelMusic";
+import { music } from "./music";
 import { PauseOverlay } from "../ui/hud/PauseOverlay";
 import { Popups } from "../ui/hud/Popups";
 import { Reticle } from "../ui/hud/Reticle";
@@ -56,7 +57,7 @@ export default class GameScene extends Phaser.Scene {
   private autopilot: Bot | null = null;
   /** Story mode: the run so far (this scene plays its current level). */
   private story: StoryRun | null = null;
-  /** Story mode: the level's music. */
+  /** Story: the level's music; Endless: its song; battles: none yet. */
   private music: LevelMusic | null = null;
   private clock!: SimClock;
   /** What the playtest log records beyond the field (services/playtestLog.ts). */
@@ -129,7 +130,11 @@ export default class GameScene extends Phaser.Scene {
       void startMatch();
     }
     initPlaytestLog();
-    this.music = this.story ? new LevelMusic(this, levelTracks(this.story.level)) : null;
+    if (this.story) this.music = new LevelMusic(this, levelTracks(this.story.level));
+    else this.music = this.match ? null : new LevelMusic(this, ENDLESS_TRACKS);
+    if (!this.music) music.stop(this); // a battle: the menu's song fades out
+    // The last level: the ending's song is ready to start when its boss falls.
+    if (this.story && this.story.level + 1 === LEVELS.length) music.preload(this, MUSIC.ENDING_FILE);
     // Story: a run left in the middle continues from the start of this level.
     if (this.story) saveStoryRun(this.story);
     if (this.story) {
@@ -530,11 +535,13 @@ export default class GameScene extends Phaser.Scene {
     if (this.gameOver || !this.story) return;
     this.gameOver = true;
     this.music?.stop();
+    const hasNext = this.story.level + 1 < LEVELS.length;
+    // The story is over: the ending plays once, on through name entry.
+    if (!hasNext) music.play(this, MUSIC.ENDING_FILE, { loop: false });
     this.reticle.clear();
     this.inputPanel.setEnabled(false);
     this.sound.play("explode", { volume: 0.6, rate: 0.6 });
     const f = this.field;
-    const hasNext = this.story.level + 1 < LEVELS.length;
     recordLevel(this.story.level, f.score - f.startScore, true);
     // The last level built: the run ends here (the next stage isn't built yet).
     if (!hasNext) this.newHighScore = recordStoryRun(f.score);
