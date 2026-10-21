@@ -1,22 +1,8 @@
 import Phaser from "phaser";
 import { MUSIC } from "../config/constants";
+import { loadOptionalMusic } from "./extraMusic";
 import { music } from "./music";
-
-/** A run's music files in public/assets/music/: a looping path track and,
- * for a story level, the boss track it switches to. */
-export interface MusicTracks {
-  path: string;
-  boss?: string;
-}
-
-/** A story level's tracks: level01-path.mp3 … level10-boss.mp3. */
-export function levelTracks(level: number): MusicTracks {
-  const n = String(level + 1).padStart(2, "0");
-  return { path: `level${n}-path.mp3`, boss: `level${n}-boss.mp3` };
-}
-
-/** Endless plays one song (docs/MUSIC_PROMPTS.md, "Endless"). */
-export const ENDLESS_TRACKS: MusicTracks = { path: MUSIC.ENDLESS_FILE };
+import type { MusicTracks } from "../config/themes";
 
 /**
  * A run's music (docs/MUSIC_PROMPTS.md): a looping path track, then the
@@ -35,6 +21,8 @@ export class LevelMusic {
   ) {
     music.play(scene, tracks.path);
     if (tracks.boss) music.preload(scene, tracks.boss);
+    // A story level: loaded now so the victory jingle starts on time when the boss falls.
+    if (tracks.boss) loadOptionalMusic(scene, MUSIC.LEVEL_CLEAR_FILE);
     scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.stop(0));
   }
 

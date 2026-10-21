@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { LEVELS, SIM, STORY, type BotLevel } from "../config/constants";
+import type { BigFrogDef } from "../config/levels/pond";
 import { Boss } from "../objects/abilities";
 import { BigFrog } from "../objects/pondCreatures";
 import { Bot } from "./Bot";
@@ -83,6 +84,37 @@ describe("story level 2, the pond", () => {
     expect(field.cleared).toBe(true);
     const bossAnswers = events.filter((e) => e.type === "solved" && e.alien === field.boss);
     expect(bossAnswers).toHaveLength(POND.BOSS.HP);
+  });
+
+  it("the Big Frog aims its tongue while it croaks, then eats the creature and grows a number", () => {
+    const FROG = POND.BOSS as BigFrogDef;
+    let aimedInTheAir = 0;
+    let aims = 0;
+    let gulps = 0;
+    let ateTarget = 0;
+    let maxBalls = 0;
+    for (const seed of [1, 2, 3, 4, 5, 6]) {
+      let lastGulp = 0;
+      playPond(seed, "rookie", (f) => {
+        const boss = f.boss;
+        if (!boss?.active || !(boss.ability instanceof BigFrog)) return;
+        const frog = boss.ability;
+        if (frog.prey && frog.burrowing) aimedInTheAir++;
+        if (frog.prey && boss.mode === "windup") aims++;
+        maxBalls = Math.max(maxBalls, boss.ballCount);
+        if (frog.gulpLeftMs > lastGulp) {
+          gulps++;
+          // It never eats the alien the player has typed or fired at.
+          if (f.target && !f.target.active && f.target !== boss) ateTarget++;
+        }
+        lastGulp = frog.gulpLeftMs;
+      });
+    }
+    expect(aimedInTheAir).toBe(0);
+    expect(aims).toBeGreaterThan(0);
+    expect(gulps).toBeGreaterThan(0);
+    expect(ateTarget).toBe(0);
+    expect(maxBalls).toBe(FROG.MAX_BALLS);
   });
 
   it("pilots and aces clear it", () => {

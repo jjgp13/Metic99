@@ -1,5 +1,6 @@
 import type { BlinkTiming } from "../../objects/abilities";
-import { OWNER_WAVE, type BossDef, type LevelDef } from "../tuning/story";
+import type { BossDef, LevelDef } from "../tuning/story";
+import { OWNER_WAVE } from "../tuning/waves";
 
 /**
  * Level 4: THE MUD SWAMP (doodles: renderDoodle/levels/swamp.ts; its own
@@ -11,6 +12,7 @@ import { OWNER_WAVE, type BossDef, type LevelDef } from "../tuning/story";
  * 2-ball sum that sinks once and glops back up before it's beaten. */
 const MUD_HALF: BossDef = {
   NAME: "MUD MONSTER SPLITS",
+  INTRO: "TWO HALVES · beat both of them",
   MODEL: "boss_mud_half",
   MECHANIC: "mud_half",
   // Half of the whole's box, so both halves start inside it (MUD_SPLIT).
@@ -34,6 +36,7 @@ const MUD_HALF: BossDef = {
  */
 const MUD_MONSTER: BossDef = {
   NAME: "MUD MONSTER",
+  INTRO: "MUD · it sinks, then splits in two",
   MODEL: "boss_mud",
   MECHANIC: "split",
   BOX: { HALF_W: 44, BALLS_Y: 52, BOTTOM: 36 },

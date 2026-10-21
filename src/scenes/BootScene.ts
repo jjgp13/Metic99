@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import { PALETTE } from "../config/palette";
 import { GAME, RENDER3D } from "../config/constants";
 import { getWorld3D } from "../render3d/World3D";
+import type { EndingData } from "./EndingScene";
 
 /** Models packed as `{ glb: base64 }` JSON (the playtest Artifact build). */
 const MODELS_AS_JSON = import.meta.env.VITE_MODEL_PACK === "json";
@@ -83,8 +84,9 @@ export default class BootScene extends Phaser.Scene {
       if (MODELS_AS_JSON) this.load.json(`model:${name}`, `${base}/models/${name}.json`);
       else this.load.binary(`model:${name}`, `${base}/models/${name}.glb`);
     }
-    // Top-down ship renders for the menu's ship picker (built with the models).
-    for (const ship of RENDER3D.SHIPS) {
+    // Top-down ship renders for the menu's ship picker (built with the models;
+    // ships without a 3D model show their doodle there).
+    for (const ship of RENDER3D.SHIPS.filter((s) => (RENDER3D.MODELS as readonly string[]).includes(s.model))) {
       this.load.image(`icon:${ship.model}`, `${base}/icons/${ship.model}.png`);
     }
 
@@ -93,6 +95,7 @@ export default class BootScene extends Phaser.Scene {
     this.load.audio("explode", `${base}/sounds/Explosion.wav`);
     this.load.audio("blip", `${base}/sounds/Blip_Select7.wav`);
     this.load.audio("hurt", `${base}/sounds/Hit_Hurt12.wav`);
+    this.load.audio("launch", `${base}/sounds/Powerup.wav`); // the ship leaves after a level clear
   }
 
   create(): void {
@@ -113,11 +116,24 @@ export default class BootScene extends Phaser.Scene {
     );
     void getWorld3D()
       .loadModels(files)
-      .finally(() => this.scene.start(labRequested() ? "HandwritingLabScene" : "MenuScene"));
+      .finally(() => this.startFirstScene());
+  }
+
+  /** The menu, or a dev page asked for in the URL (not linked in game):
+   * `?lab=draw` the handwriting lab, `?ending=1` the story's ending. */
+  private startFirstScene(): void {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("lab") === "draw") this.scene.start("HandwritingLabScene");
+    else if (params.get("ending") === "1") this.scene.start("EndingScene", DEV_ENDING);
+    else this.scene.start("MenuScene");
   }
 }
 
-/** `?lab=draw` opens the handwriting lab instead of the menu (not linked in game). */
-function labRequested(): boolean {
-  return new URLSearchParams(window.location.search).get("lab") === "draw";
-}
+/** `?ending=1`: the ending with a made-up run (with a reward line, to
+ * check its spot), then the story map. */
+const DEV_ENDING: EndingData = {
+  score: 123456,
+  playedMs: 34 * 60_000,
+  unlocked: "the crayon ship",
+  next: { scene: "StoryMapScene", data: {} },
+};

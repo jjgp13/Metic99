@@ -27,7 +27,8 @@ begin;
 --    a power or a world means updating its check here too.
 --      ships:  RENDER3D.SHIPS (src/config/tuning/render3d.ts)
 --      powers: POWER_KINDS (src/config/tuning/powers.ts)
---      worlds: "notebook" + each LevelDef.PAGE (src/config/worlds.ts)
+--      themes: THEMES ids: "plain" + each LevelDef.PAGE (src/config/themes.ts)
+--    (src/services/endlessDetails.test.ts fails when one is missing here)
 create table if not exists public.endless_runs (
   score_id    bigint primary key references public.scores (id) on delete cascade,
   ship        text not null,
@@ -35,11 +36,12 @@ create table if not exists public.endless_runs (
   theme       text not null,
   survival_ms int  not null,
   constraint endless_runs_ship_chk
-    check (ship in ('ship_player', 'ship_dart', 'ship_pod')),
+    check (ship in ('ship_player', 'ship_dart', 'ship_pod', 'ship_leaf',
+                    'ship_lava', 'ship_star', 'ship_crayon')),
   constraint endless_runs_power_chk
     check (power in ('freeze', 'slow', 'blast', 'shield')),
   constraint endless_runs_theme_chk
-    check (theme in ('notebook', 'backyard', 'pond', 'treetops', 'swamp', 'cave',
+    check (theme in ('plain', 'backyard', 'pond', 'treetops', 'swamp', 'cave',
                      'volcano', 'sky', 'snow', 'night', 'bedroom')),
   -- A match ticket lasts 4 hours, so no run can be longer.
   constraint endless_runs_survival_chk

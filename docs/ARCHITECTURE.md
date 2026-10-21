@@ -113,6 +113,11 @@ fits here, and **what we didn't do**.
 - **Instead of:** callbacks/listeners passed into the sim (`onHit: () =>
   sound.play()`): the sim would call view code in the middle of its own
   update, which is hard to follow and to run headless.
+- **When not to add one:** if the view can work the moment out from what
+  it already reads, derive it there by comparing with last frame (edge
+  detection). "The power is ready" is `energy ≥ cost`, so `EnergyHud`
+  spots it (`ui/hud/powerCue.ts`) and the sim, bots and replays never
+  carry a look. Events are for facts only the rules know (a hit, a kill).
 
 ### 2.6 Strategy pattern, data-driven (powers, targeting, bot skill)
 
@@ -184,6 +189,9 @@ fits here, and **what we didn't do**.
 - **Where:** `scenes/GameScene.ts`, `ui/hud/*.ts`.
 - **Why:** each screen part (energy meter, answer display, pause overlay,
   game-over screen) is one short file you can read alone.
+- **Components get data, not choices:** `TopHud` is handed its life
+  icon's texture key; `GameScene` decides it from the art mode and the
+  picked ship (`lifeIconKey`), so the HUD part doesn't depend on either.
 - **Instead of:** one scene class drawing everything (what `GameScene` was
   before the 2026-10-08 refactor: ~1300 lines, ten jobs).
 
@@ -271,7 +279,74 @@ fits here, and **what we didn't do**.
   two versions that both accept the old arguments make the RPC call
   ambiguous.
 
-### 2.17 Detail table (one-to-one extension)
+### 2.17 Single source of truth (derive, don't copy)
+
+- **What:** each fact is stored in one place; anything else that needs it
+  computes it from there instead of keeping its own copy.
+- **Where:** `services/storyProgress.ts`: `runStage(saved)` says which
+  island the run in progress is on from the saved run (`STORAGE.STORY_SAVE`)
+  alone (no save = island 1), and `islandView` combines it with the
+  all-time progress to color or gray each island.
+- **Why:** the save is already written when a level starts or is cleared
+  and deleted on a game over, so it is always right. A second copy would
+  need every one of those places to update it too, and the first one that
+  forgot would show the ship on the wrong island.
+- **Instead of:** a `runFurthest` field in the stored progress, reset on a
+  game over: it works, but it is the same fact twice, with two writers.
+- **Also:** `services/shipUnlocks.ts`: which ships are unlocked is
+  `progress.furthest > ship.beat`, not a saved list. A "NEW SHIP!" is the
+  difference between the unlocks before and after a clear
+  (`newShips(before, after)`), so even an event can be derived.
+
+### 2.18 Pre-rendering + recycling (cheap animation)
+
+- **What:** draw an expensive picture once, in a few frames, and only
+  *copy* the right frame each frame (pre-rendering); keep a fixed set of
+  moving things and send each one back in when it leaves, instead of
+  creating and deleting them (recycling, a small object pool).
+- **Where:** `drawFrames()` in `renderDoodle/pencil.ts` pre-draws every
+  doodle; a story page's props loop those frames at their `fps`, and
+  `DriftLayer.reenter()` in `renderDoodle/drifts.ts` recycles the page's
+  seeds, leaves and snowflakes.
+- **Why:** Rough.js takes milliseconds per shape, far too slow to redraw 60
+  times a second on a phone; copying a small picture takes microseconds.
+  A fixed count of drifts also means a fixed cost per frame.
+- **Caution:** copying costs grow with the *pixels covered*, not with the
+  number of things: one big picture over the field costs more than many
+  small ones.
+
+### 2.19 Optional asset with a fallback (graceful degradation)
+
+- **What:** load a file that may not exist yet; when it's missing, do
+  something simpler instead of failing, and remember the miss so it isn't
+  asked for again.
+- **Where:** `loadOptionalMusic()` in `scenes/extraMusic.ts`: the menu
+  theme is silent without `menu.mp3`, and the level-clear jingle falls back
+  to a fanfare made of the blip sound played at rising pitches.
+- **Why:** the music is made one file at a time, and the game must ship
+  (and never crash) in between. The caller doesn't care whether the file
+  was there: it asks for "the jingle" and always gets one.
+- **Caution:** a missing file still costs one request and a console error
+  per visit (dev servers answer with an HTML page, which fails to decode).
+
+### 2.20 Finite state machine (named phases)
+
+- **What:** an object is always in exactly one named phase, and a single
+  `switch` says what each phase does when it ends and which phase comes
+  next. Entering a phase also undoes what the previous one left running.
+- **Where:** `GiantMole.steer` in `objects/mole.ts`: `MolePhase` is
+  walk → duck → dig → peek → duck → …; each phase is one glide or hold, and
+  the next starts when it ends. The jack-in-the-box (`JackPhase` in
+  `objects/bedroom.ts`) works the same way.
+- **Why:** the mole's whole rhythm reads top to bottom in one place, and a
+  phase that can't happen (peeking while underground) can't be written.
+- **Caution:** a phase can be cut short from outside (an answer mid-peek
+  starts a dig). Whatever the old phase set up must be cancelled then:
+  `digTo` calls `alien.hold(0)`, or the rest of the peek's hold would keep
+  the mole underground.
+- **Instead of:** a handful of booleans (`peeking`, `digging`, …) that can
+  be true together by mistake.
+### 2.21 Detail table (one-to-one extension)
 
 - **What:** a second table whose primary key is also a link to one row of
   the main table. It holds facts that only some rows have.

@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { LEVELS, SIM, STORY, type BotLevel } from "../config/constants";
 import { Boss } from "../objects/abilities";
+import { GiantMole } from "../objects/mole";
+import { MOLE_HILLS } from "../config/levels/backyard";
 import { Bot } from "./Bot";
 import { Field, type FieldEvent } from "./Field";
 
@@ -87,5 +89,65 @@ describe("story level 1", () => {
     const blasted = field.takeEvents().find((e) => e.type === "blasted");
     expect(blasted).toBeDefined();
     expect(boss.active).toBe(true);
+  });
+
+  it("energy carries over: a level starts with what the last one ended with", () => {
+    expect(new Field({ seed: 3, level: LEVEL_1, energy: 62 }).energy.value).toBe(62);
+    expect(new Field({ seed: 3, level: LEVEL_1, energy: 500 }).energy.value).toBe(100);
+    expect(new Field({ seed: 3, level: LEVEL_1 }).energy.value).toBe(0);
+  });
+
+  it("an armed shield goes back into the bar for the next level", () => {
+    const field = new Field({ seed: 3, level: LEVEL_1, power: "shield", energy: 70 });
+    field.apply({ type: "power" });
+    expect(field.power.shieldArmed).toBe(true);
+    expect(field.energy.value).toBe(70 - field.power.cost);
+    expect(field.carriedEnergy()).toBe(70);
+  });
+});
+
+describe("the Giant Mole (whack-a-mole)", () => {
+  it("peeks out of its molehills one at a time, the next one telegraphed", () => {
+    const phases = new Set<string>();
+    const hillsVisited = new Set<number>();
+    let peeks = 0;
+    let peeksAtAHill = 0;
+    let readableWhileDigging = 0;
+    let digsWithoutTelegraph = 0;
+    // 8 seeds: with 3 the peek count (~16) is too small for an 80% bar.
+    for (const seed of [1, 2, 3, 4, 5, 6, 7, 8]) {
+      const field = new Field({ seed, level: LEVEL_1, lives: STORY.LIVES });
+      const bot = Bot.forSeat("pilot", seed);
+      let wasPeeking = false;
+      while (!field.knockedOut && !field.cleared && field.steps < 30_000) {
+        bot.update(field, STEP);
+        field.step(STEP);
+        field.takeEvents();
+        const boss = field.boss;
+        if (!boss?.active || !(boss.ability instanceof GiantMole)) continue;
+        const mole = boss.ability;
+        phases.add(mole.phase);
+        const peeking = mole.phase === "peek";
+        if (peeking && !wasPeeking) {
+          peeks++;
+          const hill = (MOLE_HILLS.X as readonly number[]).indexOf(Math.round(boss.x));
+          if (hill >= 0) {
+            peeksAtAHill++;
+            hillsVisited.add(hill);
+          }
+        }
+        wasPeeking = peeking;
+        if (mole.phase === "dig" && mole.cover < 1) readableWhileDigging++;
+        if (mole.phase === "dig" && mole.nextHill === null) digsWithoutTelegraph++;
+      }
+      expect(field.cleared).toBe(true);
+    }
+    expect([...phases].sort()).toEqual(["dig", "duck", "peek", "walk"]);
+    // It pops out of every hill, and almost always out of a hill (another
+    // creature in its way can stop a dig short: it surfaces where it stopped).
+    expect(hillsVisited.size).toBe(MOLE_HILLS.X.length);
+    expect(peeksAtAHill / peeks).toBeGreaterThan(0.8);
+    expect(readableWhileDigging).toBe(0);
+    expect(digsWithoutTelegraph).toBe(0);
   });
 });

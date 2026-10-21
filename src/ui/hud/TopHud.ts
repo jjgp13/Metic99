@@ -7,9 +7,13 @@ import type { Ducker } from "./Ducker";
 const MARGIN = 12;
 const DIFFICULTY_BAR_Y = 44;
 const DIFFICULTY_BAR_W = GAME.WIDTH - 2 * MARGIN;
+/** A life icon's longer side, in logical px (any picture is fitted to it). */
+export const LIFE_ICON_PX = 22;
 
 export interface TopHudOptions {
   lives: number;
+  /** Texture key of the picture drawn for each life (GameScene picks it). */
+  lifeIcon: string;
   /** Dev autopilot (`?bot=ace`): its level is shown, else null. */
   autopilotLevel: string | null;
   onPause: () => void;
@@ -37,15 +41,17 @@ export class TopHud {
     );
 
     for (let i = 0; i < options.lives; i++) {
-      const icon = scene.add.image(GAME.WIDTH - 18 - i * 26, 22, "life").setScale(1.4);
+      const icon = scene.add.image(GAME.WIDTH - 18 - i * 26, 22, options.lifeIcon);
+      icon.setScale(LIFE_ICON_PX / Math.max(icon.width, icon.height));
       this.lifeIcons.push(ducker.add(icon));
     }
 
-    this.comboText = ducker.add(scene.add.text(MARGIN, 56, "", textStyle(14, PALETTE.GOLD)));
+    // Under the difficulty bar, on the left (the energy meter is top-right).
+    this.comboText = ducker.add(scene.add.text(MARGIN, 66, "", textStyle(14, PALETTE.GOLD)));
 
     if (options.autopilotLevel) {
       const label = `AUTOPILOT: ${options.autopilotLevel.toUpperCase()}`;
-      ducker.add(scene.add.text(GAME.WIDTH - MARGIN, 62, label, textStyle(12, PALETTE.ENERGY)).setOrigin(1, 0.5));
+      ducker.add(scene.add.text(MARGIN, 92, label, textStyle(12, PALETTE.ENERGY)).setOrigin(0, 0.5));
     }
 
     const pauseButton = ducker.add(scene.add.text(GAME.WIDTH / 2, 22, "II", textStyle(20, PALETTE.ACCENT)).setOrigin(0.5));

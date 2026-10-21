@@ -92,11 +92,34 @@ boxes and the spawner.
 A boss is a big doodle that takes **several answers**: each correct sum
 knocks a piece off, and it fights back between answers (minions, attacks,
 moving or hiding its numbers). Bosses reuse the ability hooks
-(`update` / `onHit` / `onKilled` + `AbilityHost`): the Owl blinks like the
-Blinker, the Mud Monster splits like the Splitter, and so on. Balance rule
-(owner's): the more answers a boss needs, the slower it advances. A boss
-reaching the ship costs a life, not the run. Each boss gets designed in its
-own level's milestone.
+(`update` / `onHit` / `onKilled` / `steer` / `pace` + `AbilityHost`): the
+Mud Monster splits like the Splitter, and so on. Balance rule (owner's):
+the more answers a boss needs, the slower it advances. A boss reaching the
+ship costs a life, not the run. Each boss gets designed in its own level's
+milestone.
+
+**Every boss has one signature trick** (owner, after a phone playtest: the
+storm cloud dropping a raindrop and the troll's lamp "make each boss
+memorable"). A trick changes how the fight feels, not its length: no extra
+HP (the owner lost level 10 in the boss fight), numbers readable whenever
+they count, a telegraph before anything dangerous, harder = slower.
+
+| # | Boss | Signature trick |
+| --- | --- | --- |
+| 1 | GIANT MOLE | whack-a-mole: peeks out of one of three molehills; the next hill shakes first (4 answers, was 5: the hiding made the fight longer) |
+| 2 | BIG FROG | hungry: its tongue aims at a creature while it croaks, eats it and grows a number |
+| 3 | GREAT OWL | riddles: "3 + ? = 8", the answer is the missing number |
+| 4 | MUD MONSTER | splits into two halves that both must be beaten |
+| 5 | CAVE TROLL | numbers only in the swinging lamp's beam; the light stuns it |
+| 6 | DRAGON | inhales, then fire breath melts its sum into a new one |
+| 7 | STORM CLOUD | rumbles, then thunder drops a raindrop (and every answer it survives) |
+| 8 | YETI | stomps and throws a snowball that picks up a number |
+| 9 | THE MOON | its phases: the shadow covers its numbers one by one |
+| 10 | UNDER-THE-BED | eyes peek from the dark, it flings toys, then climbs out |
+
+Levels 1–3 got theirs on 2026-10-20 (owner's picks of two ideas each;
+the others lost: the mole hearing wrong answers, the frog's belly-flop
+shoving creatures back, the owl's hoot freezing the page while it swoops).
 
 ## 5. Special monsters
 
@@ -169,19 +192,21 @@ Each level turns the monster kinds into its own creatures
 - a **march** (`MARCH: { SIZE, CHANCE }`): sometimes comes in a line, in
   step; a line skips the unsolved cap but obeys the threat budget;
 - an **intro** line shown the first time it appears.
-Bosses fight by a **mechanic** (`objects/bosses.ts`; "burrow" = the mole,
-"leap" = the Big Frog). A trait or boss that moves in its own way (darts,
-dives, leaps) scripts it in `Ability.steer(alien, fieldDelta)` with
+Bosses fight by a **mechanic** (`objects/bosses.ts`; "burrow" = the base
+dig, "molehills" = the Giant Mole, "leap" = the Big Frog, "lamp" = the
+cave troll…). A trait or boss that moves in its own way (darts, dives,
+leaps) scripts it in `Ability.steer(alien, fieldDelta)` with
 `alien.glideTo` / `alien.hold`; `steer` runs on field time, so freezes and
-SLOW hold it like any other movement.
-"lamp" = the cave troll). A boss's look may draw on the page under the
-field (`BossLook.under`: the troll's lamp beam).
+SLOW hold it like any other movement. A boss's look may draw on the page
+under the field (`BossLook.under`: the troll's lamp beam, the mole's
+molehills, the frog's tongue) or over everything with the numbers
+(`BossLook.over`: the owl's "= 8").
 
 ### Level status
 
 | # | Level | Built | Bots (20 seeds, starting there, 3 lives) |
 | --- | --- | --- | --- |
-| 1 | THE BACKYARD | ✓ beetles (eyes, march), worms (chain), butterfly (wings fold); GIANT MOLE | rookie 16, pilot 20, ace 20 |
+| 1 | THE BACKYARD | ✓ beetles (eyes, march), worms (chain), butterfly (wings fold); GIANT MOLE (whack-a-mole out of three molehills) | rookie 16, pilot 20, ace 20 |
 | 5 | THE DARK CAVE | ✓ bats (hang → wake → drop), glowworms (chain, glow on/off), mine cart (wheels = numbers); CAVE TROLL (numbers only in a swinging lamp's beam) | rookie 2, pilot 18, ace 20 |
 | 8 | THE SNOWY MOUNTAIN | ✓ penguins (lean → belly-slide, march), snowballs (pick up a number), ice blocks (no brakes), snowflake (gusts); YETI (stomps, throws snowballs) | rookie 0, pilot 6, ace 20 |
 
@@ -232,7 +257,11 @@ white number balls still win) with stalactites, rocks, crystals, drips.
    already there: `SpeciesDef.SPEED` (a creature with a hard trait moves
    slower), `Boss.surfaceAt` (where a boss pops up after an answer),
    `BossDef.PART` + `AbilityHost.spawnBossPart` (a boss that splits; the
-   level clears when no boss part is left).
+   level clears when no boss part is left), `Boss.newSum` (what sum it
+   takes after an answer), `Ability.ballText` (a ball that shows something
+   other than its digit, the owl's "?"), `AbilityHost.rerollMissing` (a
+   riddle whose answer is a missing number), `AbilityHost.preyNear` /
+   `swallow` (a boss that eats a creature).
 4. Check: `story.test.ts`-style run (every creature appears, no box
    overlaps), bots per level (rookie mostly clears early levels), the level
    played in the browser (`?bot=ace`), golden master unchanged.
@@ -383,13 +412,12 @@ sums of 2–4 balls (`MAX_BALLS: 4`).
 | Dragonfly | strafer | its big eyes are its numbers; patrols and buzzes, then **darts down in zips, hovering between them** (trait `dart`) |
 | Frog | lumberer (3–4 balls) | its spots are its numbers (`cluster` layout); hops, and **sits longer the more spots it has** (trait `hop`, +250 ms per ball) |
 | Duck (bonus) | drifter | a number on each wing; paddles across, tips its head down, then **dives** (numbers hidden) and pops up 70 px on (trait `dive`) |
-| **BIG FROG** | boss, `leap` | 6 answers of 4 balls; leaps onto the page, then **sits, croaks (shakes: the telegraph), and leaps** down and across to the next pad (~13 px/s, slower than the mole: more answers); each answer but the last sends it jumping back up, numbers hidden in the air |
+| **BIG FROG** | boss, `leap` | 6 answers of 3 balls (4 once it has eaten); leaps onto the page, then **sits, croaks (shakes: the telegraph), and leaps** down and across to the next pad (~13 px/s, slower than the mole: more answers); each answer but the last sends it jumping back up, numbers hidden in the air. **Hungry** (2026-10-20): while it croaks, its tongue aims (dotted line) at the nearest creature within 190 px; as the croak ends it eats it (no points) and its sum gets one more number (`AbilityHost.preyNear` / `swallow` + `addBall`), up to 4; it sits 300 ms longer per extra number. Answer that creature first to save it; one the player has typed or fired at is never eaten |
 
 Bots (20 seeds, 3 fresh lives): rookie clears 11/20, pilot 20/20, ace 20/20
-(level 1: 16/20, 20/20, 20/20). Fish cause most hits. Ideas left for later:
-a tongue that grabs (needs a way for a boss to act on the ship or a
-minion), croaks that call tadpole minions (needs an `AbilityHost` call to
-spawn one of the level's creatures).
+(level 1: 16/20, 20/20, 20/20). Fish cause most hits. Idea left for
+later: croaks that call tadpole minions (`AbilityHost.spawnCreature` now
+exists).
 **Level 3, THE TREETOPS (built 2026-10-18, sums only).** Rules in
 `config/levels/treetops.ts`, traits in `objects/treetopsTraits.ts`, boss in
 `objects/owlBoss.ts`, doodles in `renderDoodle/levels/treetops.ts`. Path
@@ -400,7 +428,7 @@ spawn one of the level's creatures).
 | Owl (strafer, 0.9×) | its eyes are its numbers; perched, it turns its head away on the Blinker's rhythm (a glance first), but always looks at you while it winds up and swoops |
 | Bird (darter, 0.6×) | flies in flocks of up to three (`MARCH`), a number on each wing ("wings" layout) |
 | Hummingbird (drifter, bonus) | darts ahead and hovers, again and again: catch it while it hovers |
-| GREAT OWL (boss, `blink`) | 6 answers of 2 balls in its big eyes; the eyes blink, and faster after each answer (open 2.6 s → 1.4 s); after an answer it flies to a branch on the other side, eyes shut; hops down at 0.4× |
+| GREAT OWL (boss, `riddle`) | 6 riddles in its big eyes: "WHO?" One eye shows a number, the other a "?", its belly the total ("= 8"); the answer is the missing number (`result` = the second ball, `AbilityHost.rerollMissing`, at least 2). Its eyes stay open while it perches (it blinked faster each answer until 2026-10-20: the riddle replaced that, both at once was harder, not different); after an answer it flies to a branch on the other side, eyes shut; hops down at 0.35× (a riddle is harder than a sum). The first taste of subtraction planned for this level |
 Bots (20 seeds, 3 lives): rookie clears 10/20 (level 1: 16/20), pilot 19/20,
 ace 20/20. Planned for this level once operations land: subtraction.
 ### Level 4: THE MUD SWAMP (built 2026-10-18, sums only)
@@ -415,7 +443,7 @@ ace 20/20. Planned for this level once operations land: subtraction.
 it into the mud (it pops up on the other side, like the mole); the second
 splits it into two halves (`BossDef.PART`), each with a 2-ball sum that
 sinks once and glops back up on its own side. Both halves must be beaten:
-6 answers in all (the mole: 5), so it moves at ×0.4 (the mole: ×0.45).
+6 answers in all (the mole had 5), so it moves at ×0.4 (the mole: ×0.45).
 While both halves are up no minions come (the boss phase allows 2 unsolved).
 Bots (20 seeds): see the AGENTS.md Decision Log. Planned math: + and −
 (subtraction comes as its own shared piece).

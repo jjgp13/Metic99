@@ -1,5 +1,6 @@
 import type { BlinkTiming } from "../../objects/abilities";
-import { OWNER_WAVE, type BossDef, type LevelDef } from "../tuning/story";
+import type { BossDef, LevelDef } from "../tuning/story";
+import { OWNER_WAVE } from "../tuning/waves";
 
 /*
  * Level 6: THE VOLCANO (doodles: renderDoodle/levels/volcano.ts; rules for
@@ -62,6 +63,7 @@ export const DRAGON_BREATH = {
 /** Level 6's boss: a dragon that breathes fire over its own numbers. */
 const DRAGON: BossDef = {
   NAME: "DRAGON",
+  INTRO: "FIRE BREATH · answer before it breathes",
   MODEL: "boss_dragon",
   MECHANIC: "breath",
   BOX: { HALF_W: 46, BALLS_Y: 46, BOTTOM: 40 },

@@ -8,7 +8,7 @@ export interface EndlessDetails {
   ship: string;
   /** Power kind (POWER_KINDS). */
   power: string;
-  /** World theme id: "notebook" or a stage's page id. */
+  /** Endless theme id (THEMES): "plain" or a story world's page id. */
   theme: string;
   /** How long the run lasted on the game clock (pauses excluded). */
   survivalMs: number;

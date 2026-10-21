@@ -31,9 +31,11 @@ interface RunDoc {
     forcedAbilities: string[] | null;
     /** v2+: the power picked for the run. v1 runs had SLOW + FREEZE buttons. */
     power?: PowerKind;
-    /** Story runs: the level (index into LEVELS) and the score carried in. */
+    /** Story runs: the level (index into LEVELS) and the score and energy
+     * carried in (energy: 0 before it carried over). */
     level?: number | null;
     score?: number;
+    energy?: number;
     steps: number;
     inputs: [number, string][];
   };
@@ -67,6 +69,7 @@ function optionsFor(run: RunDoc): FieldOptions {
     power: run.replay.power,
     level: level === null ? undefined : LEVELS[level],
     score: run.replay.score ?? 0,
+    energy: run.replay.energy ?? 0,
   };
 }
 

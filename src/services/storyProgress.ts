@@ -1,4 +1,4 @@
-import { STORAGE, STORY } from "../config/constants";
+import { ENERGY, STORAGE, STORY } from "../config/constants";
 
 /**
  * Story progress kept across visits in localStorage: how far the player has
@@ -38,12 +38,39 @@ export function mergeRun(prior: StoryProgress, total: number): { progress: Story
   };
 }
 
-/** What an island on the map shows. */
-export type IslandState = "cleared" | "reached" | "unreached";
+/**
+ * How an island looks: reached in this run (in color), reached only in an
+ * earlier run (gray pencil, until this run gets there again), or never
+ * reached (a "?").
+ */
+export type IslandLook = "run" | "before" | "unreached";
 
-export function islandState(progress: StoryProgress, stage: number): IslandState {
-  if (stage < progress.furthest) return "cleared";
-  return stage === progress.furthest ? "reached" : "unreached";
+export interface IslandView {
+  look: IslandLook;
+  /** Its boss was beaten, in this run or an earlier one. */
+  flag: boolean;
+}
+
+/** The stage the run in progress is on: the saved run's level, or island 1
+ * when there is none (a new run, or after a game over). The saved run is
+ * the only record of the run, so nothing else needs to be stored. */
+export function runStage(saved: SavedRun | null): number {
+  return saved?.level ?? 0;
+}
+
+/** The island the map flies the ship to, or null to just show it at
+ * `runStage`. A clear asks for a flight (`travelTo`), but Phaser hands a
+ * scene its last start's data again when it is restarted without any, so
+ * a game over would bring back the old request: trust it only while the
+ * saved run is really on that stage. */
+export function flightTo(saved: SavedRun | null, travelTo: number | undefined): number | null {
+  return travelTo !== undefined && saved?.level === travelTo ? travelTo : null;
+}
+
+/** What `stage`'s island shows, with the run in progress on `atStage`. */
+export function islandView(progress: StoryProgress, atStage: number, stage: number): IslandView {
+  const look: IslandLook = stage <= atStage ? "run" : stage <= progress.furthest ? "before" : "unreached";
+  return { look, flag: stage < progress.furthest };
 }
 
 export function loadStoryProgress(): StoryProgress {
@@ -85,7 +112,7 @@ export function parseProgress(value: unknown): StoryProgress {
 /**
  * The story run in progress, saved when each level starts (and when one is
  * cleared, as the next level), so a run left in the middle continues from
- * the start of that level with the lives and score it had there. A game
+ * the start of that level with the lives, score and energy it had there. A game
  * over or the end of the story deletes it.
  */
 export interface SavedRun {
@@ -95,6 +122,12 @@ export interface SavedRun {
   score: number;
   /** Points scored in each level already finished. */
   levelScores: number[];
+  /** Energy carried into this level (missing = an empty bar: a new run, or
+   * one saved before energy carried over). */
+  energy?: number;
+  /** Game-clock time of the levels already finished, for the ending's
+   * credits (missing = 0: a new run, or one saved before it was kept). */
+  playedMs?: number;
 }
 
 export function saveRun(run: SavedRun): void {
@@ -132,7 +165,9 @@ export function parseSavedRun(value: unknown): SavedRun | null {
   const score = whole(v.score);
   if (level < 0 || level >= STORY.STAGES || lives < 1 || lives > STORY.LIVES || score < 0) return null;
   const levelScores = Array.isArray(v.levelScores) ? v.levelScores.map(whole).map((n) => Math.max(0, n)) : [];
-  return { level, lives, score, levelScores: levelScores.slice(0, level) };
+  const energy = Math.min(ENERGY.MAX, Math.max(0, whole(v.energy)));
+  const playedMs = Math.max(0, whole(v.playedMs));
+  return { level, lives, score, levelScores: levelScores.slice(0, level), energy, playedMs };
 }
 
 function save(progress: StoryProgress): void {

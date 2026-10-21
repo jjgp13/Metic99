@@ -32,12 +32,13 @@ const C = {
 
 // --- Props --------------------------------------------------------------------
 
+/** Turns slowly: one arm's gap per loop, so the loop is seamless. */
 const SNOWFLAKE_PROP: DoodleRecipe = {
   w: 30,
   h: 30,
-  draw(p) {
+  draw(p, t) {
     for (let i = 0; i < 6; i++) {
-      const a = (i / 6) * TAU;
+      const a = ((i + t) / 6) * TAU;
       const [x, y] = [Math.cos(a) * 11, Math.sin(a) * 11];
       p.line(0, 0, x, y, { stroke: C.slate, strokeWidth: 1 });
       p.line(x * 0.6, y * 0.6, x * 0.6 + Math.cos(a + 0.9) * 4, y * 0.6 + Math.sin(a + 0.9) * 4, {
@@ -154,10 +155,11 @@ const PEAK: DoodleRecipe = {
   },
 };
 
+/** A snowdrift with powder blowing off its crest. */
 const DRIFT: DoodleRecipe = {
-  w: 50,
-  h: 20,
-  draw(p) {
+  w: 56,
+  h: 22,
+  draw(p, t) {
     p.curve(
       [
         [-22, 6],
@@ -169,10 +171,38 @@ const DRIFT: DoodleRecipe = {
       { stroke: C.frost, strokeWidth: 1.2 },
     );
     for (const [x, y] of [
-      [-10, 4],
-      [12, 2],
+      [-10, -2],
+      [6, -6],
+      [16, -1],
     ])
-      p.dot(x, y, 0.9, C.frost);
+      p.dot(x + t * 8, y - t * 2, 0.9, C.frost);
+  },
+};
+
+// --- Drifts (renderDoodle/drifts.ts) ------------------------------------------
+
+/** A snowflake far away: just a soft dot. */
+const FLAKE_DOT: DoodleRecipe = {
+  w: 6,
+  h: 6,
+  draw(p) {
+    p.circle(0, 0, 5, C.frost, { fillStyle: "solid", stroke: C.slate, strokeWidth: 0.8 });
+  },
+};
+
+/** A snowflake up close: a little six-armed star. */
+const FLAKE_STAR: DoodleRecipe = {
+  w: 14,
+  h: 14,
+  draw(p) {
+    for (let i = 0; i < 3; i++) {
+      const a = (i / 3) * Math.PI;
+      p.line(-Math.cos(a) * 5, -Math.sin(a) * 5, Math.cos(a) * 5, Math.sin(a) * 5, {
+        stroke: C.slate,
+        strokeWidth: 1.1,
+        roughness: 0.5,
+      });
+    }
   },
 };
 
@@ -515,14 +545,18 @@ export const SNOW_PAGE: PageDef = {
   rule: "rgba(110, 130, 160, 0.24)",
   margin: "rgba(214, 84, 84, 0.3)",
   props: [
-    { recipe: SNOWFLAKE_PROP, weight: 3 },
+    { recipe: SNOWFLAKE_PROP, weight: 3, fps: 1 },
     { recipe: PINE, weight: 2.5 },
     { recipe: SNOWY_ROCK, weight: 2 },
     { recipe: SKI_TRACKS, weight: 1.5 },
     { recipe: PEAK, weight: 1 },
-    { recipe: DRIFT, weight: 2 },
+    { recipe: DRIFT, weight: 2, fps: 3 },
   ],
   propGap: 46,
+  drifts: [
+    { recipe: FLAKE_DOT, count: 10, vx: -4, vy: 22, swayPx: 10, swayHz: 0.2 },
+    { recipe: FLAKE_STAR, count: 5, vx: -6, vy: 16, swayPx: 14, swayHz: 0.15, spinPerS: 0.6 },
+  ],
   creatures: { penguin: PENGUIN, snowball: SNOWBALL, "ice block": ICE_BLOCK, snowflake: SNOWFLAKE },
   bosses: { boss_yeti: YETI_LOOK },
 };

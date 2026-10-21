@@ -2,11 +2,10 @@
 // Re-exported by config/constants.ts; see docs/ENGINEERING.md §3.
 
 /**
- * Energy: kills charge a meter the player chooses when to spend (slow time now;
- * sending aliens to opponents in the battle royale, see
- * docs/MULTIPLAYER_DESIGN.md). Harder, faster and streakier kills charge more:
+ * Energy: every kill has a value; harder, faster and streakier kills are worth
+ * more:
  *
- *   gain = BASE * ballBonus * digitBonus * speedBonus * comboBonus
+ *   value = BASE * ballBonus * digitBonus * speedBonus * comboBonus
  *
  * - ballBonus: more numbers in the sum pay more.
  * - digitBonus: 1 for an average digit of 1, rising to DIGIT_MAX_MULT at 9.
@@ -14,8 +13,11 @@
  *   SLOW_MULT by SCORE.SLOW_MS (same window as the score's speed bonus).
  * - comboBonus: +COMBO_STEP per consecutive kill, capped at COMBO_MAX.
  *
- * An easy early kill gives ~8 (about 1.3 s of SLOW or 0.3 s of FREEZE); a fast
- * 3-ball kill on a streak gives 30+.
+ * The power meter (MAX) gets POWER_RATE of that value, so the power is scarce
+ * and worth saving: an easy early kill charges ~3, a strong player's kill on
+ * a streak ~8, so ~12 such kills fill the bar (it was ~5 at rate 1, and the
+ * bar sat full most of every level). In a battle the full value goes to
+ * cancelling incoming attacks and to the attack gauge (SEND, tuned at rate 1).
  */
 export const ENERGY = {
   MAX: 100,
@@ -26,6 +28,7 @@ export const ENERGY = {
   SLOW_MULT: 1.0,
   COMBO_STEP: 0.1,
   COMBO_MAX: 2.0,
+  POWER_RATE: 0.4,
 } as const;
 
 /**
@@ -42,10 +45,15 @@ export const ENERGY = {
  * - time: a toggle that drains PER_SEC while on and runs the player's own
  *   field (aliens + spawn clock) at FACTOR; the ship, bullets and difficulty
  *   clock keep full speed. Needs MIN_START to switch on.
- * - blast: pay COST (a full bar) to destroy every alien on the field. No score,
- *   no energy, splitters don't split.
+ * - blast: pay COST to destroy every alien on the field. No score, no energy,
+ *   splitters don't split.
  * - shield: pay COST to arm it; the next alien that reaches the ship is
  *   destroyed instead of costing a life. One at a time; buy it in the calm.
+ *
+ * Balanced by bots (`npm run bots`, `npm run match -- --powers
+ * freeze,slow,blast,shield`): ace bots (≈ the owner) should survive about as
+ * long with any of the four. Each number moves its power's survival on its
+ * own, so retune one power at a time and re-run.
  */
 export type PowerKind = "freeze" | "slow" | "blast" | "shield";
 
@@ -63,9 +71,10 @@ export type PowerDef = PowerInfo &
   );
 
 export const POWERS: Record<PowerKind, PowerDef> = {
-  // The panic button: total safety, twice the burn of SLOW per second saved.
+  // The panic button: total safety, ~1.4x SLOW's burn per second of alien
+  // movement saved.
   freeze: {
-    EFFECT: "time", FACTOR: 0, PER_SEC: 25, MIN_START: 10,
+    EFFECT: "time", FACTOR: 0, PER_SEC: 15, MIN_START: 10,
     NAME: "FREEZE", BLURB: "stop the field", COLOR: 0xb8d8ff,
   },
   // The tempo power: aliens still creep, but a bar lasts far longer.
@@ -74,14 +83,44 @@ export const POWERS: Record<PowerKind, PowerDef> = {
     NAME: "SLOW", BLURB: "field at half speed, cheap", COLOR: 0x5ef0ff,
   },
   blast: {
-    EFFECT: "blast", COST: 60,
-    NAME: "BLAST", BLURB: "full bar: clear the screen", COLOR: 0xff9f5a,
+    EFFECT: "blast", COST: 40,
+    NAME: "BLAST", BLURB: "clear the screen", COLOR: 0xff9f5a,
   },
   shield: {
-    EFFECT: "shield", COST: 50,
+    EFFECT: "shield", COST: 33,
     NAME: "SHIELD", BLURB: "the next hit is blocked", COLOR: 0xffd166,
   },
 };
 
 /** Menu order; the first is the default pick. */
 export const POWER_KINDS: readonly PowerKind[] = ["freeze", "slow", "blast", "shield"];
+
+/**
+ * The "power is ready" cues (ui/hud/EnergyHud, ui/hud/powerCue): looks only,
+ * the rules never read them. Owner's Playtest 3: the power sat ready but
+ * unused in 12–74% of dangerous moments, and the bar sat full (wasting
+ * energy) 27–66% of the time, so readiness is shown with motion, not size.
+ *
+ * - The ready moment (energy crosses the power's cost): the bar flashes and
+ *   pops, a READY tag pops in, the POWER buttons flash, a two-note chime.
+ * - While ready: the bar's gold glow and the buttons breathe (BREATHE_MS a
+ *   cycle). At 100 the tag says FULL and a light band runs up the bar.
+ * - The nudge: ready and a lethal, unanswered alien within NUDGE_PX of the
+ *   ship (the bots' "dangerous moment" distance): faster, stronger pulse.
+ */
+export const POWER_CUE = {
+  FLASH_MS: 700, // the ready moment's flash fades over this long
+  POP_SCALE: 1.6, // the tag (and bar) pop from this much bigger
+  BREATHE_MS: 1400,
+  NUDGE_MS: 420,
+  NUDGE_PX: 200,
+  /** Glow alpha: [low, high] while breathing, and while nudging. */
+  GLOW: { BREATHE: [0.15, 0.45], NUDGE: [0.35, 0.9] },
+  /** POWER button fill alpha (gold), same idea. */
+  BUTTON: { BREATHE: [0.08, 0.3], NUDGE: [0.25, 0.6] },
+  SHIMMER_MS: 900, // the light band's trip up a full bar
+  /** The chime: blips at these playback rates, CHIME_GAP_MS apart. */
+  CHIME_RATES: [1.4, 1.9],
+  CHIME_GAP_MS: 90,
+  CHIME_VOLUME: 0.35,
+} as const;

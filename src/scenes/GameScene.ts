@@ -1,17 +1,22 @@
 import Phaser from "phaser";
-import { DOODLE, LEADERBOARD, LEVELS, MATCH, MUSIC, RECOVERY, STORY, TARGET_STRATEGIES, type TargetStrategy } from "../config/constants";
+import { DOODLE, LEADERBOARD, LEVEL_CLEAR, LEVELS, MATCH, MUSIC, POWER_CUE, RECOVERY, STORY, TARGET_STRATEGIES, type TargetStrategy } from "../config/constants";
+import { artMode } from "../config/artMode";
 import { inputMode } from "../config/inputMode";
-import { selectedShip } from "../config/ships";
+import { PLAIN_THEME, levelTracks, selectedTheme, type Theme } from "../config/themes";
 import type { InkEvent } from "../handwriting/inkReader";
 import type Alien from "../objects/Alien";
 import { ABILITY_KINDS, Boss, type AbilityKind } from "../objects/abilities";
 import { isLeaderboardEnabled, stageBoard, startMatch } from "../services/leaderboard";
 import { rankFor, recordRun } from "../services/masteryStats";
 import { hitRecord, initPlaytestLog, logRun, type InputSource, type RunExtras } from "../services/playtestLog";
-import { clearSavedRun, recordLevel, recordStoryRun, saveRun as saveStoryRun } from "../services/storyProgress";
+import { clearSavedRun, loadStoryProgress, recordLevel, recordStoryRun, saveRun as saveStoryRun } from "../services/storyProgress";
+import { newShips, rewardLine } from "../services/shipUnlocks";
+import { selectedShip, type ShipChoice } from "../config/ships";
+import { shipIconFrames } from "../renderDoodle/shipIcons";
 import type { Bot } from "../sim/Bot";
 import { ANSWER_MAX_DIGITS, type Field, type FieldEvent, type FieldInput } from "../sim/Field";
 import type { Match, MatchEvent } from "../sim/Match";
+import type { PageView } from "../render3d/World3D";
 import { SimClock } from "../sim/SimClock";
 import type { PowerUse } from "../sim/energy";
 import { summarizeSolves } from "../sim/stats";
@@ -22,18 +27,21 @@ import { EnergyHud } from "../ui/hud/EnergyHud";
 import { GameOverScreen } from "../ui/hud/GameOverScreen";
 import { InputPanel, type PadKey } from "../ui/hud/InputPanel";
 import { LevelClearCard } from "../ui/hud/LevelClearCard";
-import { ENDLESS_TRACKS, LevelMusic, levelTracks } from "./levelMusic";
+import { LevelMusic } from "./levelMusic";
 import { music } from "./music";
+import { playLevelClearJingle } from "./extraMusic";
 import { PauseOverlay } from "../ui/hud/PauseOverlay";
 import { Popups } from "../ui/hud/Popups";
 import { Reticle } from "../ui/hud/Reticle";
 import { SendButton } from "../ui/hud/SendButton";
-import { TopHud } from "../ui/hud/TopHud";
+import { LIFE_ICON_PX, TopHud } from "../ui/hud/TopHud";
 import { onKeyDown } from "../ui/keyboard";
 import { createFieldView, type FieldView } from "./fieldView";
 import type { EndlessDetails } from "../services/endlessDetails";
+import type { EndingData, EndingNext } from "./EndingScene";
 import type { BoardScore } from "./NameEntryScene";
 import { setUpRun, type StoryRun } from "./runSetup";
+import { ShipLaunch } from "./shipLaunch";
 
 /**
  * The game screen. It is the *composition root* (docs/ARCHITECTURE.md §2.9):
@@ -59,7 +67,9 @@ export default class GameScene extends Phaser.Scene {
   private autopilot: Bot | null = null;
   /** Story mode: the run so far (this scene plays its current level). */
   private story: StoryRun | null = null;
-  /** Story: the level's music; Endless: its song; battles: none yet. */
+  /** Endless: the theme picked (a page and a song; the rules never see it). */
+  private theme: Theme | null = null;
+  /** Story: the level's music; Endless: the theme's song; battles: none yet. */
   private music: LevelMusic | null = null;
   private clock!: SimClock;
   /** What the playtest log records beyond the field (services/playtestLog.ts). */
@@ -72,6 +82,12 @@ export default class GameScene extends Phaser.Scene {
   private leaveAllowedAt = 0;
   /** Whether this run set a new personal best (name entry says so). */
   private newHighScore = false;
+  /** Story clear: the ships this clear unlocked (the map announces them). */
+  private unlockedShips: ShipChoice[] = [];
+  /** Story clear: the ship flying off, the minions popped, the results. */
+  private launch: ShipLaunch | null = null;
+  private readonly popped = new Set<Alien>();
+  private clearCard: LevelClearCard | null = null;
 
   // --- The screen ---
   private world!: FieldView;
@@ -95,6 +111,9 @@ export default class GameScene extends Phaser.Scene {
   create(data?: { battle?: boolean; story?: StoryRun }): void {
     this.story = data?.story ?? null;
     const run = setUpRun({ battle: data?.battle ?? false, story: this.story });
+    // Read here, not in setUpRun: the theme is for the view and the music only.
+    const endless = !this.story && !run.match;
+    this.theme = endless ? selectedTheme(loadStoryProgress().furthest) : null;
     this.field = run.field;
     this.match = run.match;
     this.autopilot = run.autopilot;
@@ -104,13 +123,19 @@ export default class GameScene extends Phaser.Scene {
     this.leaving = false;
     this.leaveAllowedAt = 0;
     this.newHighScore = false;
+    this.unlockedShips = [];
+    this.launch = null;
+    this.popped.clear();
+    this.clearCard = null;
     this.runExtras = {
       lives: this.field.lives,
       forcedAbilities: run.forcedAbilities,
       battle: this.match
         ? { players: MATCH.OPPONENTS.length + 1, opponents: [...MATCH.OPPONENTS], placement: null }
         : null,
-      story: this.story ? { level: this.story.level, startScore: this.story.score } : null,
+      story: this.story
+        ? { level: this.story.level, startScore: this.story.score, startEnergy: this.story.energy ?? 0 }
+        : null,
       inputMode: inputMode(),
       sources: { keypad: 0, keyboard: 0, pad: 0 },
       ink: { reads: 0, unknown: 0, scratch: 0 },
@@ -133,7 +158,7 @@ export default class GameScene extends Phaser.Scene {
     }
     initPlaytestLog();
     if (this.story) this.music = new LevelMusic(this, levelTracks(this.story.level));
-    else this.music = this.match ? null : new LevelMusic(this, ENDLESS_TRACKS);
+    else this.music = this.theme ? new LevelMusic(this, { path: this.theme.music }) : null;
     if (!this.music) music.stop(this); // a battle: the menu's song fades out
     // The last level: the ending's song is ready to start when its boss falls.
     if (this.story && this.story.level + 1 === LEVELS.length) music.preload(this, MUSIC.ENDING_FILE);
@@ -153,6 +178,7 @@ export default class GameScene extends Phaser.Scene {
     this.ducker = new Ducker(this);
     this.topHud = new TopHud(this, this.ducker, {
       lives: this.field.lives,
+      lifeIcon: lifeIconKey(this.textures),
       autopilotLevel: this.autopilot?.level ?? null,
       onPause: () => this.togglePause(),
     });
@@ -163,12 +189,16 @@ export default class GameScene extends Phaser.Scene {
       onInk: (e) => this.onInk(e),
     });
     this.sendButton = this.match ? new SendButton(this, this.field, (cost) => this.sendAttack(cost)) : null;
-    this.energyHud = new EnergyHud(this, this.field, { battle: this.match !== null, onPower: () => this.usePower() });
+    this.energyHud = new EnergyHud(this, this.ducker, this.field, {
+      battle: this.match !== null,
+      onPower: () => this.usePower(),
+      onReady: () => this.powerReadyChime(),
+    });
     this.popups = new Popups(this, this.ducker);
     this.pauseOverlay = new PauseOverlay(
       this,
       () => this.togglePause(),
-      this.story ? () => this.scene.start("StoryMapScene") : null,
+      this.story ? () => this.scene.start("StoryMapScene", {}) : null,
     );
 
     this.unseenMatchEvents = [];
@@ -217,7 +247,7 @@ export default class GameScene extends Phaser.Scene {
     const target = f.target?.active && !this.world.drawsTarget ? f.target : null;
     this.reticle.update(target, this.clock.alpha, delta);
     this.ducker.update(f.aliens, this.clock.alpha, delta);
-    this.energyHud.update(f);
+    this.energyHud.update(f, delta);
     this.sendButton?.update();
   }
 
@@ -244,13 +274,14 @@ export default class GameScene extends Phaser.Scene {
       {
         shipX: f.prevShipX + (f.shipX - f.prevShipX) * alpha,
         shipTargetX: f.target?.active ? f.target.viewX(alpha) : null,
-        aliens: f.aliens,
-        bullets: f.bullets,
+        aliens: this.popped.size ? f.aliens.filter((a) => !this.popped.has(a)) : f.aliens,
+        bullets: this.launch ? [] : f.bullets,
         alpha,
         aliensHidden: this.paused,
         shipShield: f.power.shieldArmed,
         shipHurt: Math.min(1, f.freezeLeftMs / RECOVERY.FREEZE_MS),
         shipDown: f.knockedOut,
+        shipLaunch: this.launch?.pose ?? null,
         answer: hidden ? null : this.answer.view,
         target: !hidden && f.target?.active ? f.target : null,
         page: this.pageView(),
@@ -268,12 +299,15 @@ export default class GameScene extends Phaser.Scene {
     switch (e.type) {
       case "spawned":
         if (e.alien.ability instanceof Boss) {
-          // Only the boss itself: its parts (raindrops, halves) are bosses
-          // too, but they come in quietly.
-          if (e.alien !== this.field.boss) break;
-          this.music?.boss();
-          this.popups.banner(`BOSS · ${e.alien.ability.def.NAME}!`, 26, STORY.BANNER_MS);
-          this.shake(300, 0.008);
+          const boss = e.alien.ability.def;
+          // Only the boss itself gets the big banner: its parts (raindrops,
+          // halves) are bosses too, but they come in with their line alone.
+          if (e.alien === this.field.boss) {
+            this.music?.boss();
+            this.popups.banner(`BOSS · ${boss.NAME}!`, 26, STORY.BANNER_MS);
+            this.shake(300, 0.008);
+          }
+          this.popups.introduce(`boss:${boss.NAME}`, boss.INTRO);
         } else if (e.alien.species && this.story) {
           const species = LEVELS[this.story.level].SPECIES[e.alien.kind];
           if (species) this.popups.introduce(species.NAME, species.INTRO);
@@ -291,7 +325,7 @@ export default class GameScene extends Phaser.Scene {
         this.topHud.setCombo(this.field.combo);
         this.topHud.setScore(this.field.score);
         this.popups.points(e.points, e.alien.x, e.alien.y);
-        this.popups.energyGain(e.energy, this.field.energy.fraction);
+        this.popups.energyGain(e.energy);
         this.popups.equation(e.digits, e.alien);
         this.world.answerSolved(String(e.digits.reduce((sum, d) => sum + d, 0)));
         if (e.burst > 0) this.popups.energyBurst(e.burst, e.alien.x, e.alien.y);
@@ -426,6 +460,15 @@ export default class GameScene extends Phaser.Scene {
     this.energyHud.update(this.field);
   }
 
+  /** The power just became ready: a soft rising two-note blip. */
+  private powerReadyChime(): void {
+    POWER_CUE.CHIME_RATES.forEach((rate, i) =>
+      this.time.delayedCall(i * POWER_CUE.CHIME_GAP_MS, () =>
+        this.sound.play("blip", { volume: POWER_CUE.CHIME_VOLUME, rate }),
+      ),
+    );
+  }
+
   private sendAttack(cost: number): void {
     if (this.gameOver || this.paused) return;
     this.field.apply({ type: "send", cost });
@@ -532,34 +575,71 @@ export default class GameScene extends Phaser.Scene {
     console.table(summarizeSolves(f.solves));
   }
 
-  /** Story: the boss is beaten. The field has stopped; show the card. */
+  /**
+   * Story: the boss is beaten and the field has stopped. In order: the
+   * minions left pop, the ship squashes and blasts off the top while the
+   * victory jingle plays, then the results card counts the score up; a tap
+   * after that goes on (leaveGameOver).
+   */
   private clearLevel(): void {
     if (this.gameOver || !this.story) return;
     this.gameOver = true;
     this.music?.stop();
-    const hasNext = this.story.level + 1 < LEVELS.length;
-    // The story is over: the ending plays once, on through name entry.
-    if (!hasNext) music.play(this, MUSIC.ENDING_FILE, { loop: false });
     this.reticle.clear();
+    this.answer.setVisible(false); // a half-typed answer for a minion that's about to pop
     this.inputPanel.setEnabled(false);
     this.sound.play("explode", { volume: 0.6, rate: 0.6 });
     const f = this.field;
-    recordLevel(this.story.level, f.score - f.startScore, true);
+    const stage = this.story.level;
+    const levelScore = f.score - f.startScore;
+    const hasNext = stage + 1 < LEVELS.length;
+    const prior = loadStoryProgress();
+    const priorBest = prior.best[stage] ?? 0;
+    this.unlockedShips = newShips(prior, recordLevel(stage, levelScore, true));
     // The last level built: the run ends here (the next stage isn't built yet).
     if (!hasNext) this.newHighScore = recordStoryRun(f.score);
     if (hasNext) saveStoryRun(this.nextRun());
     else clearSavedRun();
-    new LevelClearCard(this, {
-      number: this.story.level + 1,
-      name: LEVELS[this.story.level].NAME,
-      levelScore: f.score - f.startScore,
-      totalScore: f.score,
-      livesLeft: f.lives,
-      hasNext,
-    });
     this.saveRun(() => {});
-    this.leaveAllowedAt = this.time.now + STORY.CLEAR_MIN_MS;
+
+    this.popLeftovers();
+    this.launch = new ShipLaunch(this);
+    // No way out until the results are up (the card's first tap skips its count).
+    this.leaveAllowedAt = Infinity;
+    this.time.delayedCall(LEVEL_CLEAR.LAUNCH_AT_MS, () => {
+      playLevelClearJingle(this);
+      this.launch!.start(() =>
+        this.time.delayedCall(LEVEL_CLEAR.CARD_DELAY_MS, () => {
+          this.clearCard = new LevelClearCard(this, {
+            number: stage + 1,
+            name: LEVELS[stage].NAME,
+            levelScore,
+            totalScore: f.score,
+            livesLeft: f.lives,
+            kills: f.kills,
+            bestCombo: f.bestCombo,
+            levelMs: f.elapsedMs,
+            newBest: priorBest > 0 && levelScore > priorBest,
+            hasNext,
+          });
+          this.leaveAllowedAt = this.time.now;
+        }),
+      );
+    });
     this.input.on("pointerdown", () => this.leaveGameOver());
+  }
+
+  /** Story clear: the minions still on the field pop one by one (a look:
+   * the rules have ended, so they only leave the picture). */
+  private popLeftovers(): void {
+    const left = this.field.aliens.filter((a) => a.active);
+    left.forEach((alien, i) =>
+      this.time.delayedCall(LEVEL_CLEAR.POP_START_MS + i * LEVEL_CLEAR.POP_STAGGER_MS, () => {
+        this.popped.add(alien);
+        this.world.explode(alien.x, alien.y, alien);
+        this.sound.play("blip", { volume: 0.35, rate: 1.5 + i * 0.15 });
+      }),
+    );
   }
 
   /** Story: the run as it goes into the next level (after a clear). */
@@ -571,19 +651,29 @@ export default class GameScene extends Phaser.Scene {
       lives: f.lives,
       score: f.score,
       levelScores: [...story.levelScores, f.score - f.startScore],
+      energy: f.carriedEnergy(),
+      playedMs: (story.playedMs ?? 0) + f.elapsedMs,
     };
   }
 
-  /** Story: the level's page and how far it has scrolled, for the field view. */
-  private pageView(): { id: string; scrolledPx: number; lengthPx: number } | null {
-    if (!this.story) return null;
-    const level = LEVELS[this.story.level];
+  /**
+   * The page under the field and how far it has scrolled, for the field
+   * view: a story level's page follows its path; an Endless theme's page
+   * scrolls with the game clock and never ends.
+   */
+  private pageView(): PageView | null {
     const pxPerMs = DOODLE.PAGE_SCROLL_PX_PER_S / 1000;
-    return {
-      id: level.PAGE,
-      scrolledPx: (this.field.levelProgress ?? 0) * level.PATH_MS * pxPerMs,
-      lengthPx: level.PATH_MS * pxPerMs,
-    };
+    if (this.story) {
+      const level = LEVELS[this.story.level];
+      return {
+        id: level.PAGE,
+        scrolledPx: (this.field.levelProgress ?? 0) * level.PATH_MS * pxPerMs,
+        lengthPx: level.PATH_MS * pxPerMs,
+        loops: false,
+      };
+    }
+    if (!this.theme?.page) return null;
+    return { id: this.theme.page, scrolledPx: this.field.elapsedMs * pxPerMs, lengthPx: DOODLE.THEME_LOOP_PX, loops: true };
   }
 
   /**
@@ -592,6 +682,7 @@ export default class GameScene extends Phaser.Scene {
    */
   private leaveGameOver(): void {
     if (this.leaving || this.time.now < this.leaveAllowedAt) return;
+    if (this.clearCard?.finishCount()) return; // the first tap shows the whole score
     this.leaving = true;
     if (this.story) {
       const f = this.field;
@@ -599,18 +690,33 @@ export default class GameScene extends Phaser.Scene {
       const levelScores = [...this.story.levelScores, f.score - f.startScore];
       if (f.cleared && next < LEVELS.length) {
         // Back to the map: the ship flies to the next island, then a tap starts it.
-        this.scene.start("StoryMapScene", { travelTo: next });
-      } else if (isLeaderboardEnabled()) {
-        this.scene.start("NameEntryScene", {
-          score: f.score,
-          personalBest: this.newHighScore,
-          headline: f.cleared ? "STORY COMPLETE!" : "GAME OVER",
-          boards: storyBoards(f.score, levelScores),
-          title: "STORY RUNS",
-          back: "StoryMapScene",
-        });
+        this.scene.start("StoryMapScene", { travelTo: next, newShips: this.unlockedShips.map((s) => s.model) });
       } else {
-        this.scene.start("StoryMapScene");
+        // The run is over: name entry when the leaderboard is on, else the
+        // map. Beating the last level shows the ending first.
+        const after: EndingNext = isLeaderboardEnabled()
+          ? {
+              scene: "NameEntryScene",
+              data: {
+                score: f.score,
+                personalBest: this.newHighScore,
+                headline: f.cleared ? "STORY COMPLETE!" : "GAME OVER",
+                boards: storyBoards(f.score, levelScores),
+                title: "STORY RUNS",
+                back: "StoryMapScene",
+              },
+            }
+          : { scene: "StoryMapScene", data: {} };
+        if (f.cleared) {
+          const ending: EndingData = {
+            score: f.score,
+            playedMs: (this.story.playedMs ?? 0) + f.elapsedMs,
+            unlocked: rewardLine(this.unlockedShips),
+            next: after,
+          };
+          this.scene.start("EndingScene", ending);
+        }
+        else this.scene.start(after.scene, after.data);
       }
     } else if (isLeaderboardEnabled() && !this.match) {
       const f = this.field;
@@ -626,9 +732,7 @@ export default class GameScene extends Phaser.Scene {
     return {
       ship: selectedShip().model,
       power: this.field.power.kind,
-      // Until the world picker lands (config/worlds.ts: selectedWorldId()),
-      // every Endless run is played on the plain notebook page.
-      theme: "notebook",
+      theme: (this.theme ?? PLAIN_THEME).id,
       survivalMs: this.field.elapsedMs,
     };
   }
@@ -639,4 +743,12 @@ export default class GameScene extends Phaser.Scene {
 function storyBoards(total: number, levelScores: number[]): BoardScore[] {
   const stages = levelScores.map((score, i) => ({ board: stageBoard(i), score, label: `stage ${i + 1}` }));
   return [{ board: LEADERBOARD.STORY_RUN_BOARD, score: total, label: "run" }, ...stages.filter((s) => s.score > 0)];
+}
+
+/** The picture for each life in the top HUD: the picked ship's doodle in
+ * doodle art (one boil frame, drawn at 2× so it stays sharp), the old ship
+ * sprite in 3D art. */
+function lifeIconKey(textures: Phaser.Textures.TextureManager): string {
+  if (artMode() !== "doodle") return "life";
+  return shipIconFrames(textures, selectedShip().model, 2 * LIFE_ICON_PX)[0];
 }

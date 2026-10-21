@@ -13,7 +13,7 @@ Built in four subgoals, explained in that order.
 ship, power, theme, survival_ms)`: one row per Endless score, keyed by that
 score's id. `submit_run` takes four more parameters (default null) and writes
 the detail row in the same transaction as the score.
-**Pattern:** detail table, one-to-one (ARCHITECTURE.md §2.17), plus
+**Pattern:** detail table, one-to-one (ARCHITECTURE.md §2.21), plus
 backward-compatible migration (§2.16): the old game sends no details and
 still works.
 **Why this way:** owner's pick (B). Each mode keeps its own context in its
@@ -58,8 +58,8 @@ first, then without them, then without `level`. `submitScore` retries
 without details when the server answers PGRST202 ("no such function"). The
 call never ran, so the ticket is still unused. So deploying the game before
 the migration loses no scores.
-**How to change it later:** the world picker branch replaces
-`theme: "notebook"` with `selectedWorldId()`.
+The theme is the Endless theme picked on the menu (`GameScene.theme`,
+config/themes.ts), "plain" when none.
 
 ### 4. The board
 **What changed:** Endless rows show rank + name, ship icon, power, world,

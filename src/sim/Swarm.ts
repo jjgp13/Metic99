@@ -123,6 +123,7 @@ export class Swarm implements AbilityHost {
   private score = 0;
   private dMatch = 0;
   private locked: Alien | null = null;
+  private held: Alien | null = null;
   private events: SwarmEvent[] = [];
 
   constructor(options: SwarmOptions) {
@@ -162,6 +163,7 @@ export class Swarm implements AbilityHost {
     this.score = ctx.score;
     this.dMatch = ctx.dMatch;
     this.locked = ctx.locked;
+    this.held = ctx.held;
     this.elapsedMs += dt;
     this.fieldMs += dt * ctx.speed;
     const diff = this.difficulty;
@@ -330,6 +332,40 @@ export class Swarm implements AbilityHost {
     if (!this.aliens.every((o) => !o.active || !alien.overlaps(o))) return null;
     this.addAlien(alien);
     return alien;
+  }
+
+  rerollMissing(alien: Alien, minAnswer: number): boolean {
+    const max = Math.max(minAnswer, this.difficulty.maxDigit);
+    for (let attempt = 0; attempt < 12; attempt++) {
+      const first = this.rng.int(1, max);
+      const answer = this.rng.int(minAnswer, max);
+      if (this.byResult.has(answer)) continue;
+      this.byResult.delete(alien.result);
+      alien.setSum([first, answer], answer, this.elapsedMs);
+      this.byResult.set(answer, alien);
+      return true;
+    }
+    return false;
+  }
+
+  preyNear(hunter: Alien, reachPx: number): Alien | null {
+    let best: Alien | null = null;
+    let bestDist = reachPx;
+    for (const a of this.aliens) {
+      if (!a.active || !a.lethal || a === hunter || a.ability instanceof Boss) continue;
+      const dist = Math.hypot(a.x - hunter.x, a.y - hunter.y);
+      if (dist <= bestDist) {
+        best = a;
+        bestDist = dist;
+      }
+    }
+    return best;
+  }
+
+  swallow(prey: Alien): boolean {
+    if (!prey.active || prey === this.held || prey === this.locked) return false;
+    this.remove(prey);
+    return true;
   }
 
   // ---------------------------------------------------------------------------

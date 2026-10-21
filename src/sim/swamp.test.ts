@@ -92,9 +92,11 @@ describe("story level 4, the mud swamp", () => {
     }
   });
 
-  it("an ace clears it; a pilot mostly does", () => {
+  it("an ace clears it; a pilot sometimes does", () => {
     const seeds = [1, 2, 3, 4, 5, 6];
     expect(seeds.filter((s) => playSwamp(s, "ace").field.cleared).length).toBeGreaterThanOrEqual(5);
-    expect(seeds.filter((s) => playSwamp(s, "pilot").field.cleared).length).toBeGreaterThanOrEqual(2);
+    // Pilots lean on FREEZE here; with scarce energy (ENERGY.POWER_RATE) they
+    // clear fewer swamps (1/6 at rate 0.4, 2+/6 at rate 1).
+    expect(seeds.filter((s) => playSwamp(s, "pilot").field.cleared).length).toBeGreaterThanOrEqual(1);
   });
 });

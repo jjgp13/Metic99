@@ -1,5 +1,6 @@
 import type { BlinkTiming } from "../../objects/abilities";
-import { OWNER_WAVE, type BossDef, type LevelDef } from "../tuning/story";
+import type { BossDef, LevelDef } from "../tuning/story";
+import { OWNER_WAVE } from "../tuning/waves";
 
 /*
  * Level 10: THE KID'S BEDROOM, the finale (doodles:
@@ -98,6 +99,7 @@ const BED_BOX = { HALF_W: 60, BALLS_Y: 30, BOTTOM: 36 };
  */
 const MONSTER_OUT: BossDef = {
   NAME: "OUT FROM UNDER THE BED",
+  INTRO: "IT'S OUT! · no more hiding: finish it",
   MODEL: "boss_bedmonster",
   MECHANIC: "burrow",
   BOX: BED_BOX,
@@ -124,6 +126,7 @@ const MONSTER_OUT: BossDef = {
  */
 const UNDER_THE_BED: BossDef = {
   NAME: "UNDER-THE-BED MONSTER",
+  INTRO: "PEEKABOO · its eyes are the numbers",
   MODEL: "boss_underbed",
   MECHANIC: "bedroom_underbed",
   BOX: BED_BOX,

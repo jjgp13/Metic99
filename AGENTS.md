@@ -58,7 +58,27 @@ loop. See the Decision Log.
   GameScene talks to a `FieldView` (`scenes/fieldView.ts`) that DoodleWorld
   and World3D both fill from the same snapshot; `?art=3d` picks the 3D view.
   Each ship has its own doodle (`SHIPS` in `recipes.ts`), also shown in the
-  menu picker (`renderDoodle/shipIcons.ts`).
+  menu picker and as the top HUD's life icons (`renderDoodle/shipIcons.ts`;
+  `?art=3d` keeps the old life sprite).
+  **Ships the story unlocks** (`RENDER3D.SHIPS[].beat`, a look only like
+  every ship): FALCON, DART and POD from the start; beating the Great Owl
+  (stage 3) unlocks LEAF GLIDER, the Dragon (6) LAVA ROCKET, the Moon (9)
+  STAR CRUISER, and finishing the story the kid's own CRAYON ship (drawn
+  in crayon: `DoodleRecipe.look`). Unlocks are worked out from the stored
+  story progress (`services/shipUnlocks.ts`: `progress.furthest > beat`),
+  never saved, so a game over never takes one away. The picker shows a
+  locked ship as a dashed "?" with its name and what to beat; finishers
+  get a crown + STORY COMPLETE over the menu title and crowns on the map.
+  They are doodles only (the 3D view flies a voxel ship for them).
+  **Story pages are alive** (owner's playtest note): props with an `fps`
+  loop their pre-drawn frames (grass sways, ripples spread, stars twinkle,
+  lava cracks glow), and each page has `drifts` (`renderDoodle/drifts.ts`:
+  seeds, falling leaves, mist, dust, ash, snow, stardust) that float across
+  in screen space, recycled when they leave. Looks only (Math.random), drawn
+  over the props and under every alien at `DOODLE.PAGE_DRIFT_ALPHA` (0.4,
+  fainter than props), small and slow so the numbers win; nothing drifts
+  that could pass for a monster. Cost: drifts 0.01–0.07 ms/frame on the dev
+  PC (snow, 15 flakes, is the most), looping props ~0.
 - **Three.js** — the older 3D view of the playfield (`src/render3d/`, `?art=3d`). Chosen
   over Babylon.js / Unity WebGL for desktop + phone browsers: small bundle
   (~150 kB gz), fast mobile load, and plain TS that a future Node game server can
@@ -69,7 +89,9 @@ loop. See the Decision Log.
 - Node.js LTS required. `npm install` → `npm run dev` (port 5173) → `npm run build`.
   `npm run bots` plays every bot level headless and prints a report
   (`scripts/bot-report.ts`; `-- --lives 1 --seeds 20 --minutes 5
-  --ability splitter`), including which monsters cause the hits.
+  --ability splitter`, `--story 1,7` for story stages), including which
+  monsters cause the hits and how scarce energy is (first full bar, time
+  full, overflow).
   `npm run bots:story -- --stage 4` plays story levels from their start
   (`scripts/story-report.ts`): clears, level/path/boss time, and in which
   stretch of the wave the hits land.
@@ -96,12 +118,15 @@ src/
     difficulty.ts     Logistic difficulty curve
     ships.ts          Player's ship choice (menu picker, saved in localStorage)
     powers.ts         Player's power choice (menu picker, saved in localStorage)
+    themes.ts         Endless themes (a beaten world's page + path song) and
+                      the saved pick; never reaches the sim
     inputMode.ts      On-screen input choice: keypad or drawing pad (localStorage)
   scenes/
     BootScene.ts      Preloads assets; defers animations (static frames for now)
     MenuScene.ts      Title screen: ship picker + PLAY / BATTLE / HOW TO PLAY / SCORES
     StoryMapScene.ts  The STORY button: one island per stage, best scores,
                       "?" for stages not reached; PLAY = a run from island 1
+    ThemePickerScene.ts The ENDLESS button: pick a theme, then PLAY
     HowToPlayScene.ts Static rules screen reached from the menu
     music.ts          The page's one music player (one song at a time,
                       crossfades, loads on demand); levelMusic.ts = a
@@ -112,14 +137,28 @@ src/
                       turns its events into sound and HUD calls, and hands
                       World3D a snapshot every frame.
     runSetup.ts       A run's seed + Field or Match, or a story level
-                      (`StoryRun`: level, lives, score) (+ dev URL params)
+                      (`StoryRun`: level, lives, score, energy) (+ dev URL params)
+    shipLaunch.ts     The ship blasting off the top after a level clear:
+                      `ShipLaunch` keeps the time, `shipLaunchPose` the
+                      squash/stretch/climb; views draw `snapshot.shipLaunch`
+    levelMusic.ts     A story level's path + boss tracks
+    extraMusic.ts     Optional music: the menu/map theme, the level-clear
+                      jingle (a blip fanfare until its file exists)
     NameEntryScene.ts Arcade 5-char initials entry shown at game over
     LeaderboardScene.ts Global top-N board; dual-mode (post-run / menu browse)
+    EndingScene.ts    After the last level: a kid's hands color the bosses in
+                      crayon, THANK YOU FOR PLAYING, the score; then the
+                      credits on a new page (`?ending=1`)
+    endingCredits.ts  The credits' lines (pure): author, thank-you, the run
+                      told back (time, worlds, score), an unlock line
     HandwritingLabScene.ts `?lab=draw`: records real handwriting, exports JSON
   services/
     masteryStats.ts   Personal bests in localStorage (pure mergeRun + shell)
     storyProgress.ts  Story map progress in localStorage: furthest stage,
                       best per stage, best run (pure mergeLevel + shell)
+    shipUnlocks.ts    Which ships the story progress unlocks (pure, derived:
+                      isUnlocked, newShips(before, after), storyComplete,
+                      unlockHint)
     leaderboard.ts    Supabase global high scores, one board per `level`
                       (Endless, each stage, story runs): startMatch(board) +
                       match-gated submitScore, plus getTop/getRank reads
@@ -145,6 +184,7 @@ src/
                       InputPanel, PauseOverlay, GameOverScreen, Ducker
                       (fades HUD under aliens); positions in layout.ts
     DrawPad.ts        The drawing pad: pointer capture, glowing ink, "?" flash
+    pencilButton.ts   A pencil-box button for the paper screens (map, themes)
     keyboard.ts       `onKeyDown`: each key press delivered once (Phaser bug)
     battleViews.ts    `BattleView` seam for the battle UI (M8): views of the
                       other players get `match.tiles()` + match events each
@@ -197,14 +237,17 @@ src/
     abilities.ts      Monster abilities (Blinker, Shielded, Splitter): pure
                       state with update/steer/onHit/onKilled hooks + `AbilityHost`.
     traits.ts, bosses.ts  Story registries: creature traits, boss mechanics.
+    mole.ts, owlBoss.ts, caveTroll.ts, …  One file per boss mechanic.
     pondCreatures.ts  Level 2's rules: Hop, Dart, Dive traits + the BigFrog.
     Bullet.ts         Pure bullet state {x, y, active}.
   renderDoodle/        The default view: DoodleWorld (FieldView), recipes.ts
                       (one short stroke recipe per ship/monster/boss),
                       pencil.ts (Rough.js + pre-drawn boil frames), paper.ts,
                       pages.ts (story pages: tinted paper + faint props that
-                      scroll), shipIcons.ts, storyMap.ts (map islands +
-                      trail), font.ts
+                      scroll and loop), drifts.ts (things floating across a
+                      page), shipIcons.ts, storyMap.ts (map islands +
+                      trail), ending.ts (the ending's desk, hands, crayons),
+                      font.ts
   render3d/
     World3D.ts        Three.js view: camera, lights, starfield, ship/alien/bullet
                       meshes, voxel-debris explosions, shake. Page-wide singleton.
@@ -266,8 +309,8 @@ docs/SOLO_MODES_DESIGN.md   Story mode plan: 10 scrolling levels + bosses, Endle
     before deploying a build with the story map (it reads `scores.level`),
     then `endless-details.sql` before a build that shows Endless details.
 - **Endless details** (`supabase/endless-details.sql`, owner's design): each
-  Endless score carries the ship, the power, the world (theme: "notebook"
-  or a stage's page id) and the survival time (game clock, pauses
+  Endless score carries the ship, the power, the world (its Endless theme
+  id: "plain" or a story world's page id) and the survival time (game clock, pauses
   excluded), in a one-to-one detail table `endless_runs(score_id → scores.id,
   ship, power, theme, survival_ms)`; `scores` stays the one ranking table.
   `submit_run` gained `p_ship, p_power, p_theme, p_survival_ms` (default
@@ -297,14 +340,15 @@ docs/SOLO_MODES_DESIGN.md   Story mode plan: 10 scrolling levels + bosses, Endle
   board, both `LeaderboardScene` browse with BACK → map; PLAY / Enter →
   `GameScene` with `{ story: { level: 0, lives, score, levelScores: [] } }`);
   ENDLESS (and
-  Enter) → `GameScene`; BATTLE → `GameScene` with `{ battle: true }` (no leaderboard); HOW TO PLAY → `HowToPlayScene`; SCORES → `LeaderboardScene` in
+  Enter) → `ThemePickerScene` (pick a theme; PLAY / Enter → `GameScene`, BACK /
+  Esc → menu); BATTLE → `GameScene` with `{ battle: true }` (no leaderboard); HOW TO PLAY → `HowToPlayScene`; SCORES → `LeaderboardScene` in
   **browse** mode (fetches `getTop()` itself, BACK → menu).
 - Game-over flow (when enabled): GAME OVER overlay → `NameEntryScene` (3–6 char
   length selector + initials) → `submitScore` (via the match gate) →
   `LeaderboardScene` (post-run mode, shows world rank) → `MenuScene`. All restart
   triggers route through one idempotent `GameScene.leaveGameOver()`; when the
   leaderboard is disabled it goes straight to `MenuScene`. A story run ends
-  (game over, or the last built level cleared) the same way, but names are
+  (game over, or the last level cleared, which shows `EndingScene` first) the same way, but names are
   entered once and submitted to several boards (the run's total, shown
   after, then each stage played, ranks in one line), and it goes back to
   the story map.
@@ -414,9 +458,9 @@ Green=multiplication, Yellow=division.
     score). It runs on its own spawn clock (first after 15 s, then every
     18–28 s, one at a time) and does **not** count toward any spawn cap. Stray
     bullets fly through it (it must be solved, not hit by accident).
-- **Drifter energy:** a solved drifter charges its `ENERGY_BURST` on top of the
-  normal kill energy (one `addEnergy()` call, capped by the meter) and pops
-  "+N ENERGY" where it died.
+- **Drifter energy:** a solved drifter charges its `ENERGY_BURST` (16) on top
+  of the normal kill energy (one `charge()` call, capped by the meter) and
+  pops "+N ENERGY" where it died.
 - **Scoring** rewards skill (`SCORE` in constants):
   `BASE × ballCountBonus × speedBonus × difficultyMult × comboMult`, where speed
   bonus decays from solving fast→slow, difficulty = `1 + d`, and the combo
@@ -518,24 +562,29 @@ Green=multiplication, Yellow=division.
   same colors; they burst gold when it's solved and scatter red when it was
   wrong. Every kill (and a shield break) pops the solved sum, e.g.
   `7 + 5 = 12`, above the alien. Pause hides all of it.
-- **Energy** (`ENERGY`, `src/sim/energy.ts`): each kill charges a 0–100 meter by
+- **Energy** (`ENERGY`, `src/sim/energy.ts`): each kill has a value
   `BASE × ballBonus × digitBonus × speedBonus × comboBonus` (more balls, bigger
   average digit, faster solve, longer streak = more; ~8 for an easy early kill,
-  30+ for a fast 3-ball streak kill). Overflow is lost. The meter only charges
-  and spends; each use is a separate spender (one per power). Per-run
-  earned/spent totals show on game over. In a battle SEND spends a separate
-  **attack gauge** (below), never this meter.
+  ~20 for a strong player's kill on a streak). The 0–100 power meter gets
+  **`POWER_RATE` (0.4) of it**: ~3 for an easy kill, ~8 on a streak, so
+  ~12 strong kills fill the bar (scarce, worth saving). Overflow is lost. The
+  meter only charges and spends; each use is a separate spender (one per
+  power). Per-run earned/spent totals show on game over. In a battle the
+  kill's full value goes to cancelling and the separate **attack gauge**
+  (below), which SEND spends, never this meter. **Story: energy carries
+  over** from level to level like lives and score (`StoryRun.energy`, saved
+  with the run); an armed shield goes back into the bar as its cost.
 - **Powers** (`POWERS`, `Power` in `src/sim/energy.ts`): the ship is only a
   look; the player picks ONE power on the menu (`STORAGE.POWER`), fixed for
   the run. One POWER input (`{ type: "power" }`) uses it. The set is data: each
   entry has an `EFFECT` (`time` / `blast` / `shield`) plus its numbers, and
   bots play any power by its effect.
-  - **FREEZE** (time): field stopped, drains 25/s. The panic button.
+  - **FREEZE** (time): field stopped, drains 15/s. The panic button.
   - **SLOW** (time): field at 45%, drains 6/s, so a bar lasts ~17 s. About
-    twice the alien movement saved per energy, but aliens still creep.
-  - **BLAST**: 60 energy, destroys every alien on the field. No score, no
+    1.4× FREEZE's alien movement saved per energy, but aliens still creep.
+  - **BLAST**: 40 energy, destroys every alien on the field. No score, no
     energy, streak untouched, splitters don't split.
-  - **SHIELD**: 50 energy to arm (one at a time); the next alien that reaches
+  - **SHIELD**: 33 energy to arm (one at a time); the next alien that reaches
     the ship is destroyed instead of costing a life (no hit freeze, streak kept).
     A gold bubble shows around the ship while armed.
   Time powers are toggles needing 10 energy to start; they turn off when empty
@@ -545,10 +594,29 @@ Green=multiplication, Yellow=division.
   charge no energy (they still score and extend the streak) and, in a
   battle, cancel no incoming attacks; aliens destroyed by BLAST or SHIELD
   charge nothing.
+  **Balance target:** ace bots (≈ the owner) survive within ~±10% with any
+  power in Endless (12 seeds: FREEZE 185, SLOW 190, BLAST 197, SHIELD 171 s;
+  no power 120 s), and win about a fair share in an ace mirror battle
+  (`npm run match -- --powers freeze,slow,blast,shield --seats ace,ace,ace,ace,ace,ace,ace,ace`).
 - **Energy HUD**: the POWER button (named after the picked power) sits in
   both gutters beside the keypad, one per thumb (in a battle the left one is
   SEND); it lights while running/armed and dims when unaffordable.
-  The meter is a bar under the keypad with a mark at the power's cost.
+  The meter is a **small vertical bar in the top-right corner** (`METER` in
+  `ui/hud/layout.ts`, 14 × 60 px), under the lives and the progress bar: it
+  fills from the bottom, a gold mark shows the power's cost, and the value
+  sits over the power's name to its left. Like the rest of the top HUD it
+  ducks under aliens; a kill's "+N" pops under the bar. Under the keypad it
+  went unseen; as a long horizontal bar it read like a second progress bar.
+  **Ready cues** (`POWER_CUE`, `ui/hud/powerCue.ts`, looks only): when
+  energy crosses the power's cost, the bar flashes in gold, a READY tag
+  pops in under the name, both POWER buttons flash gold, and a two-note
+  chime plays (not when a time power is switched off with energy left).
+  While ready, the bar's gold glow and the buttons' gold fill breathe; at
+  100 the tag says FULL and a light band runs up the bar (new energy is
+  wasted). Ready with a lethal, unanswered alien within 200 px of the ship
+  = a faster, stronger pulse (the nudge). EnergyHud works all of this out
+  from the field each frame (last frame's cue vs this one); Field has no
+  event for it, so bots, replays and the golden master don't change.
 - HUD (score, lives, difficulty bar, typed display) draws above gameplay
   (`depth 5`), so entering aliens never obscure it. **The numbers win over
   the HUD:** every top-HUD piece, ability banner and score/equation/energy
@@ -685,19 +753,39 @@ Green=multiplication, Yellow=division.
   The boss (`Boss` ability) takes `HP` answers: each but the last rolls a
   new sum and burrows to the other side and up (numbers hidden while it
   digs), then holds still to be read; reaching the ship costs a life and
-  sends it back up; BLAST doesn't touch it. The last answer clears the
-  level (`levelCleared`, a card, then the next level with the same lives
-  and score). Game over = back to the story map (every run starts at
+  sends it back up; BLAST doesn't touch it. **Every boss has one signature
+  trick** on top (owner: that's what makes a boss memorable; table in
+  docs/SOLO_MODES_DESIGN.md §4): it changes how the fight feels, never its
+  HP, with numbers readable when they count and a telegraph before danger.
+  The first time a boss (or a boss part: halves, raindrops, the monster
+  out from under the bed) comes in, one line under its banner names the
+  trick and what to do (`BossDef.INTRO`, e.g. "WHO? · answer the missing
+  number"); banners stack by their real heights.
+  The last answer clears the
+  level (`levelCleared`, the clear sequence below, then the next level
+  with the same lives, score and energy). Game over = back to the story map (every run starts at
   level 1). The top bar shows the path's progress; the page scrolls
   (`DOODLE.PAGE_*`).
   **Story map** (`StoryMapScene`, `STORY_MAP`, owner's design): 10 islands
   (`STORY.STAGES`) up a notebook page joined by a pencil trail. A stage is
   reached once the previous boss is beaten (`services/storyProgress.ts`,
-  `STORAGE.STORY`): reached islands are shaded with a sketch of their world
-  and the best score under them (a flag = boss beaten, the ship sits on the
-  furthest one); the rest are a dashed "?". Built levels come from LEVELS; a
+  `STORAGE.STORY`). The ship sits on the island of the run in progress
+  (`runStage`: the saved run's level, island 1 when there is none, so after
+  a game over); islands this run has reached are shaded in color with a
+  sketch of their world, islands reached only in an earlier run are the same
+  sketch in gray pencil until this run gets there again (`islandView`), and
+  the rest are a dashed "?". Every reached island shows its best score (a
+  flag = its boss ever beaten); the trail is solid up to the run's island and
+  is rubbed out around every label, so it never crosses a name or a score
+  (`STORY_MAP.LABEL_CLEAR_PX`). Built levels come from LEVELS; a
   reached stage that isn't built yet says "coming soon". Islands are not
   entry points: PLAY always starts at island 1 (no practice mode).
+  **Ship unlocks on the map:** a clear that unlocks a ship hands its model
+  to the map (`{ travelTo, newShips }`, from `newShips(before, after)` in
+  `GameScene.clearLevel`); a NEW SHIP card (FLY IT picks it, LATER) comes
+  before the ship flies on. Once the story is finished a gold crown sits
+  over island 10 and beside the title. Every start of the map passes data
+  (`{}` at least), so Phaser can't hand it a stale flight or card.
   **Creatures** (`LevelDef.SPECIES`): a level turns monster kinds into its
   own creatures with a ball layout (`BALL_LAYOUTS`: eyes, chain, wings; it
   sets the readability box), a trait (`objects/traits.ts`), an optional
@@ -706,32 +794,78 @@ Green=multiplication, Yellow=division.
   (rules) + `renderDoodle/levels/<page>.ts` (looks), each listed in its
   folder's index (docs/SOLO_MODES_DESIGN.md "Adding a level").
   **Flow:** STORY opens the map (CONTINUE a saved run, or a new run from
-  island 1). After a clear the game returns to the map, the ship flies to
-  the next island, and a tap starts it. The run is saved when each level
-  starts (`STORAGE.STORY_SAVE`: level, lives, score), so it can be left
+  island 1). **After a boss** (`GameScene.clearLevel`, timings in
+  `LEVEL_CLEAR`, owner's order): the minions left pop one by one, the ship
+  squashes, then blasts off the top on a flame and pencil speed lines
+  ("zoom!", `scenes/shipLaunch.ts`) while the boss track fades and the
+  victory jingle plays; once it is gone the results card
+  (`ui/hud/LevelClearCard`) counts the level score up (the total with it)
+  and shows lives, kills, best combo, the level's time and a NEW BEST
+  stamp (beat an earlier best on that stage); a tap mid-count skips to the
+  end, the next tap returns to the map, the ship flies to the next island,
+  and a tap starts it. The run is saved when each level
+  starts (`STORAGE.STORY_SAVE`: level, lives, score, energy, and `playedMs`,
+  the game-clock time of the levels finished), so it can be left
   (pause → SAVE & QUIT TO MAP) and continued from that level's start; a
-  game over deletes it. **Music** (docs/MUSIC_PROMPTS.md): one shared
+  game over deletes it. **The ending** (`EndingScene`, owner's pick of
+  three looks): beating level 10 shows, after the clear card, a top-down
+  desk where a kid's hands color the game's bosses (their real doodle
+  recipes, in crayon: `Pencil` look `"crayon"`) and the player's ship on a
+  small sheet; the last ones start as gray sketches and get colored in. THANK
+  YOU FOR PLAYING is on the sheet, the score on a sticky note. Then **the
+  credits** (owner's ask: "the game made by me, thanking the player a
+  lot"): a fresh notebook page slides over the desk and lines are written
+  on its rules one by one (`scenes/endingCredits.ts`): THE END, "a game by
+  J²" (`ENDING.CREDIT_NAME`), a thank-you, the run told back (time played,
+  worlds, score), "You unlocked …" when `EndingData.unlocked` names a
+  reward (filled by `storyReward()` in GameScene), and a signed heart.
+  **Taps never skip the thank-you:** taps count after 2 s; on the drawing
+  a tap turns the page, while writing it shows every line, and only once
+  all lines have been up `READ_MIN_MS` (4 s, "tap to continue" shows) does
+  a tap fade the picture out to the `next` scene GameScene handed
+  it (name entry, else the map). Its song is `ending.mp3` on the shared
+  player below, once. Dev: `?ending=1` (with a made-up unlock line).
+  **Music** (docs/MUSIC_PROMPTS.md): one shared
   player for the page (`scenes/music.ts`, `music.play(scene, file)`) plays
   one song at a time, crossfades from the one before, keeps a song that is
   asked for again (the menu's through HOW TO PLAY / SCORES), and loads
   each file the first time it's asked for (browsers hold audio until the
   first tap or key). Menu `menu.mp3`, story map `map.mp3`, Endless
-  `endless.mp3` (`MUSIC.ENDLESS_FILE`, via `ENDLESS_TRACKS`), battles none
+  the picked theme's song (`endless.mp3` on the plain page), battles none
   yet. Each level plays its path track and crossfades to its boss track
   when the boss comes in (`LevelMusic`, `public/assets/music/levelNN-{path,
-  boss}.mp3`); beating the last boss plays `ending.mp3` once, on through
-  name entry and the map. Files: MP3, mono, 96 kbps (24 tracks, 16 MB).
+  boss}.mp3`); the ending (`EndingScene`) plays `ending.mp3` once, on
+  through name entry and the map. Files: MP3, mono, 96 kbps (24 tracks, 16 MB).
+  After each boss a victory jingle plays (`scenes/extraMusic.ts`:
+  `level-clear.mp3` when it exists, else a rising blip fanfare).
+  **Endless themes** (`config/themes.ts`, `ThemePickerScene`, like Tetris
+  99's): the ENDLESS button opens a picker of the plain page plus one theme
+  per story world; a world opens once its boss is beaten
+  (`StoryProgress.furthest`), locked ones show a dashed "?" island and
+  "beat its boss in STORY". A theme is only a look and a song: its page
+  (paper + props, scrolling with the game clock and repeating its props
+  every `DOODLE.THEME_LOOP_PX`) and its path song (looped, no boss track).
+  Never its creatures, traits, ball layouts or waves: Endless keeps
+  EndlessDirector, its curve and its one board. GameScene reads the pick
+  (`STORAGE.THEME`; a locked pick falls back to the plain page) and gives
+  it only to the snapshot's `page` and to `LevelMusic`; the Field never
+  sees it. The plain page plays `endless.mp3` (docs/MUSIC_PROMPTS.md); a
+  missing file just plays nothing. The 3D view (`?art=3d`) draws no pages,
+  so there a theme is only its song.
   Built: level 1, THE BACKYARD (now 100 s, d 0.1 → 0.35; beetles whose eyes are
   the numbers and sometimes march in pairs, worms made of numbers, a
-  butterfly that folds its wings over its numbers; boss GIANT MOLE, 5
-  answers of 3 balls). Bots: rookie clears 16/20, pilot and ace 20/20.
+  butterfly that folds its wings over its numbers; boss GIANT MOLE, 4
+  answers of 3 balls (5 before its trick), whack-a-mole: it peeks out of one of three molehills,
+  ducks and digs to another, which shakes first; `objects/mole.ts`). Bots: rookie clears 16/20, pilot and ace 20/20.
   Level 2, THE POND (3:20, d 0.1 → 0.28, sums of 2–4 balls via
   `LevelDef.MAX_BALLS`): goldfish whose numbers are bubbles, swimming in
   schools of 3; dragonflies whose eyes are the numbers, darting down in
   zips with hovers (trait `dart`); frogs with 3–4 spots (`cluster` layout)
   that sit longer the more spots they carry (trait `hop`); a duck that dives
-  and pops up further along (trait `dive`); boss BIG FROG (6 answers of 4
-  balls, `leap`: sits, croaks, leaps from pad to pad). Rules for the pond's
+  and pops up further along (trait `dive`); boss BIG FROG (6 answers of 3–4
+  balls, `leap`: sits, croaks, leaps from pad to pad; hungry: while it
+  croaks its tongue aims at the nearest creature, then eats it and its sum
+  grows a number, via `AbilityHost.preyNear` / `swallow` / `addBall`). Rules for the pond's
   traits/boss in `objects/pondCreatures.ts`; they move themselves through
   `Ability.steer(alien, fieldDelta)` (field time). Bots: rookie 11/20,
   pilot and ace 20/20.
@@ -740,8 +874,10 @@ Green=multiplication, Yellow=division.
   acorns (numbers) in their paws; owls whose eyes are the numbers turn
   their heads away while perched, never while they swoop; birds in flocks
   of up to three, a number on each wing (0.6× speed); a hummingbird bonus
-  that darts and hovers; boss GREAT OWL (6 answers, eyes = numbers, blinks
-  faster after each answer, flies to another branch). Traits that move
+  that darts and hovers; boss GREAT OWL (6 riddles, `riddle`: its eyes
+  show "3" and "?", its belly "= 8", and the answer is the missing number,
+  so its `result` is not its sum: `AbilityHost.rerollMissing`,
+  `Ability.ballText`; flies to another branch after each). Traits that move
   their creature use `Ability.steer` (field time, glideTo/hold only).
   Bots: rookie clears 10/20, pilot 19/20, ace 20/20.
   Level 4, THE MUD SWAMP (200 s, d 0.3 → 0.55; slime blobs that pop in
@@ -813,7 +949,7 @@ Green=multiplication, Yellow=division.
   cap and threat budget and not holding back the field's own spawns, but
   obeying the on-screen cap and readability (no room → it waits).
   **Two gauges (owner's pick, 2026-09-30):** a kill charges the power meter
-  in full, and its value (without the drifter burst) **pays off incoming
+  (`POWER_RATE` of its value), and its full value (without the drifter burst) **pays off incoming
   first** (soonest first; each alien's share of the weight); only the rest
   fills the **attack gauge** (`field.attack`, max `SEND.GAUGE_MAX` 100,
   overflow lost), and SEND spends only the gauge. So attacking never costs
@@ -822,7 +958,7 @@ Green=multiplication, Yellow=division.
   gauge: it fills from the bottom in orange (marks at each tier) while
   incoming attacks hang from its top as pink blocks (blinking in their last
   second); tap = strongest affordable tier, hold steps down, slide off
-  cancels; Space = send. Under the energy meter sits the battle dock (see
+  cancels; Space = send. Under the keypad sits the battle dock (see
   the phone battle HUD), and game over shows the placement.
 - **Targeting, KO credit, badges** (M7, `MATCH`): the `target` input aims a
   player's attacks by a strategy (`TARGET_STRATEGIES`: random, kos = whoever
@@ -847,7 +983,7 @@ Green=multiplication, Yellow=division.
   GameScene calls each view once per frame with the tiles and new match
   events; a view acts only via `aimAt(seat)` / `aimBy(strategy)`.
 - **Phone battle HUD** (M8, `PhoneBattleDock`, `BATTLE_HUD`): a **dock under
-  the energy meter** (the only portrait strip never over the field, so it
+  the keypad** (the only portrait strip never over the field, so it
   never ducks or hides a sum; the solo key hint sits there otherwise).
   Left: the **aim chip** (strategy or PICK, `→P3` target, `⚠n` = n aim at
   you; tap = next strategy). Middle: **one tile per opponent** in seat order,
@@ -1045,6 +1181,21 @@ Newest first. Format: `YYYY-MM-DD — decision — rationale`.
   mode's facts in one wide table) and a JSON column (no type or id checks).
   `scores` stays the one ranking table. A count of runs played was left
   out: initials aren't an identity. Not applied to the live project yet.
+- **2026-10-21 — Sound plays on iPhones with the silent switch on.** A
+  tester's iPhone was silent: iOS's ring/silent switch mutes Web Audio
+  (not media playback). `services/audioSession.ts` sets
+  `navigator.audioSession.type = "playback"` (iOS 17+), or on older iOS
+  loops a silent <audio> from the first tap; it also resumes audio on any
+  tap after a call or an app switch. The menu tells iPhone/iPad players
+  "no sound? turn off silent mode" in case an older iOS still mutes it.
+
+- **2026-10-21 — Playtest round 2 merged into master: one music player.**
+  Round 2 (energy rework, boss tricks, level-clear sequence, ending,
+  credits, ship unlocks) had its own song helpers; master's shared player
+  (`scenes/music.ts`) now plays every song, the ending's included (once,
+  on through name entry and the map). Kept from round 2: the level-clear
+  jingle (`scenes/extraMusic.ts`) and its waves module (`tuning/waves.ts`),
+  now holding master's escalating waves.
 
 - **2026-10-20 — New soundtrack in; one shared music player for every
   screen.** The owner's 24 tracks (44-bar wave-timed path songs, bosses,
@@ -1069,6 +1220,18 @@ Newest first. Format: `YYYY-MM-DD — decision — rationale`.
   Paid themes skipped (accounts, payments). Menu, map, ending and Endless
   songs share one main theme (docs/MUSIC_PROMPTS.md); not wired yet.
 
+- **2026-10-20 — Endless themes live outside the sim.** A beaten world can
+  dress Endless in its page and path song. The pick is read by GameScene
+  and handed only to the view (snapshot `page`) and the music, not put on
+  `Field` like the story level (the owner's first guess): a level is rules
+  (species, waves, seed), a theme is not, and keeping it out means replays,
+  bots and the future server never carry it and no rule can start reading
+  it. Picker = its own paper screen after ENDLESS (11 cards, island
+  sketches reused from the map). An Endless page has no end, so its props
+  repeat every 3 screens. Also fixed an import cycle (tuning/story ↔
+  levels) that had left GitHub Pages blank since the escalating-waves
+  merge: LEVELS is now exported by the constants barrel.
+
 - **2026-10-20 — Level songs follow the level's waves (docs/MUSIC_PROMPTS.md).**
   Owner's ask: the first soundtrack looped a short phrase; songs should
   rise and fall with the difficulty. Each path song is 44 bars, one per
@@ -1092,6 +1255,164 @@ Newest first. Format: `YYYY-MM-DD — decision — rationale`.
   (`npm run bots:story` now shows both when and where hitters came in).
   Two level tests assumed a calm field (a row's step held by the
   readability guard, a snowball lifted by pushback) and were loosened.
+- **2026-10-20 — Life icons show the picked ship.** They always drew the
+  old FALCON sprite. GameScene picks the picture (the ship's doodle, one
+  boil frame, or the sprite in 3D art) and hands TopHud a texture key,
+  which TopHud fits into a 22 px slot (owner's pick over TopHud reading
+  the art mode itself, or the FieldView supplying it).
+
+- **2026-10-20 — The power shows when it's ready (owner's Playtest 3
+  note: "the energy bar is very small").** Replayed: in dangerous moments
+  the power was ready but off 12–74% of the time per level, the owner took
+  a median 8–32 s to press it after it became ready, and the bar sat full
+  27–66% of levels 1–8. Owner picked all four cues: a ready moment (flash,
+  READY, buttons, chime), breathing while ready, FULL + shimmer, and a
+  nudge when an alien is near, plus a 14 × 60 bar (was 10 × 44). Motion
+  over size, so the bar still ducks and the numbers win. The cue is worked
+  out in the view (EnergyHud compares last frame's state), not a Field
+  event (owner's first pick): it is two numbers the HUD already reads, and
+  in Field every bot, replay and the future server would compute it for
+  nothing. Not yet playtested by the owner.
+
+- **2026-10-20 — The ending gets credits, the run's time and music
+  (owner's Playtest 3 ask).** Owner's picks: credited as **J²**; the
+  credits go on a new notebook page after the drawing (over a note on the
+  desk or text under the drawing: more room, readable on a phone); the
+  run's time is the sum of each level's game-clock time, saved in the run
+  (`playedMs`, 0 for old saves), over a wall-clock start time, which would
+  count pauses, breaks and days between quit and continue. A quit level's
+  attempt isn't counted (the level restarts). The reward line is data
+  (`EndingData.unlocked`), so the unlockable-ships work fills it without
+  touching the scene. Fallback music = the level-10 track slowed (Claude's
+  pick, over a blip melody: a real track for ~40 s), so the ending is never
+  silent.
+
+- **2026-10-20 — Story unlocks ships; finishers get the kid's crayon ship
+  and a crown (owner's picks).** Three themed ships after the Great Owl,
+  the Dragon and the Moon (over five or ten: fewer doodles, each one an
+  event), and all three finisher rewards (crayon ship, crown on the map,
+  STORY COMPLETE on the menu). Unlocks are derived from `furthest` instead
+  of a saved list (the owner first picked the list, then switched): it is
+  the same fact twice otherwise, and players who beat a boss before this
+  change get their ship with no migration. Ships stay looks only (rule of
+  2026-09-29); no 3D models for them.
+
+- **2026-10-20 — Every boss says its trick in one line (owner's picks).**
+  The owl's riddle changes what you type and only a "who?" bubble said so.
+  Owner picked the creature-intro shape "TRICK · rule" (over a worked
+  example like "3 + ? = 8 → type 5", and over a tip with no trick name),
+  and a line for second forms too (halves, raindrops, the monster out from
+  under the bed), shown once per run with no big banner. `INTRO` is
+  required on `BossDef`, so a new boss can't forget it. Found while
+  checking: banners stacked by count × the new one's size, so a 26 px BOSS
+  banner and a 15 px line overlapped when other banners were up; they now
+  stack by measured height.
+
+- **2026-10-20 — The energy meter is a small vertical bar, top right
+  (owner's phone playtest).** The long horizontal meter under the progress
+  bar was easy to confuse with it. Owner's pick of three: a 10 × 44 px
+  bar under the lives (over the POWER buttons filling up like SEND, or
+  both), so it stays where the eyes are and looks nothing like the path.
+
+- **2026-10-20 — Level clear sequence: pop, launch, jingle, results, map
+  (owner's ask).** Owner's picks: one beat after another (minions pop →
+  squash → blast off → results count up → map), and the card shows kills,
+  best combo, the level's time and a NEW BEST stamp. The launch is a look,
+  so it lives in the snapshot (`shipLaunch`) timed on the scene clock, not
+  in `Field` (owner's first pick: the rules have ended by then, and bots,
+  replays and the server would carry an animation nobody sees). `ShipLaunch`
+  is its own component so the story ending can fly the ship off too. Music
+  files made one at a time are optional: `menu.mp3` and `level-clear.mp3`
+  play when present, else silence / a blip fanfare.
+
+- **2026-10-20 — The story's ending: a kid coloring the game's monsters
+  (owner's idea and pick).** Three looks were sketched (kid at a desk seen
+  from the side, top-down hands on the sheet, kid on the floor with the
+  bosses on the wall); the owner picked top-down hands: the monsters stay
+  big enough to read on a phone. The sheet reuses every level's boss
+  recipe (and the picked ship) drawn with a new crayon look of the same
+  `Pencil`, so new bosses appear there for free. GameScene decides where
+  the run goes after the ending and hands it over as data (`next`), so
+  EndingScene doesn't need to know about the leaderboard. Music is
+  optional: loaded at the ending, played only if it reached the cache.
+
+- **2026-10-20 — Every boss gets a signature trick; the three plain ones
+  got theirs (owner's picks).** Audit: 7 bosses already had one (split,
+  lamp, breath, rain, stomp-and-throw, moon phases, under-the-bed); the
+  mole, frog and owl were "answer, move away" (the owl's blink repeated the
+  butterfly's). Owner picked from two each: **mole = whack-a-mole** (three
+  molehills, the next one shakes; over "it hears wrong answers"), **frog =
+  hungry** (tongue aims while it croaks, eats a creature, its sum grows a
+  number; over a belly-flop that shoves creatures back), **owl = "WHO?"
+  riddles** (3 + ? = 8, answer the missing number; over a hoot that
+  freezes the page). Rule: a trick changes the feel, not the HP. The
+  hiding made mole fights ~5 s longer, so it takes 4 answers (was 5); the
+  frog starts at 3 numbers (was 4); the owl stopped blinking (riddle + blink
+  was harder, not different) and moves at 0.35 (was 0.4). New hooks, all
+  no-ops elsewhere (levels 4–10 bots identical): `Boss.newSum`,
+  `Ability.ballText`, `BossLook.over`, optional `AbilityHost.preyNear` /
+  `swallow` / `rerollMissing`; bots answer `alien.result` (the owl's answer
+  isn't its sum). Bots (24 seeds, rookie/pilot/ace clears, SLOW then
+  FREEZE): mole 6/24/24 → 6/24/24 and 11/24/24 → 15/24/24, fight 38 → 37 s
+  (rookie); frog 4/22/24 → 8/21/24 and 9/23/24 → 13/24/24; owl 17/24/24 →
+  17/24/24 and 19/24/24 → 18/24/24. Not yet playtested by the owner.
+
+- **2026-10-19 — Powers rebalanced after the energy cut: the weak three
+  got cheaper (owner picked C).** With scarce energy SLOW's cheap drain made
+  it the best pick (ace Endless FREEZE 160 / SLOW 190 / BLAST 144 / SHIELD
+  150 s; ace mirror battle wins per seat 7 / 28 / 4 / 12%, fair 12.5).
+  Tested three sets with bots: A = SLOW 9/s only (all ~150 s, BLAST still
+  4% in battle), B = SLOW 7/s, FREEZE 18/s, BLAST 44, SHIELD 36 (most even in
+  Endless, ±3%), C = FREEZE 25 → 15/s, BLAST 60 → 40, SHIELD 50 → 33, SLOW
+  unchanged. C: Endless 185 / 190 / 197 / 171 s (±7%), mirror battle 9 / 14
+  / 15 / 12% (most even), pilots story L4 clears 1/7/5/8 → 6/7/8/11 of 12;
+  the bar still sits full only 16–21% of the time, so energy stays scarce.
+  Flawless BLAST's ceiling rose 180 → 230 s (was 457 before the cut).
+  Aces clear story 1/4/8 with any power, so Endless and battles set the
+  numbers. Rookie SLOW stays weakest (113 s vs 93 with no power): rookie
+  power use is guessed. Tables: docs/learning/2026-10-19-power-balance.md.
+
+- **2026-10-19 — Energy is scarce, carries over between story levels, and
+  its bar is at the top (owner's playtest notes 2+3).** Replayed playtest: a
+  kill charged 16–22, the bar was full 10–17 s into every level, full 47–93%
+  of the time, 75–97% of energy lost to overflow, and 2 of 3 hits came with
+  the power affordable and unused (the bar under the keypad went unseen).
+  Owner's picks: cut every kill evenly (over dropping the combo bonus or
+  charging only hard sums) at rate 0.4 (over 0.5 / 0.3), and carry energy
+  over like lives and score. The power meter gets `ENERGY.POWER_RATE` of a
+  kill's value; the battle attack gauge keeps the full value, so SEND's
+  balance holds. The drifter burst was cut with it (40 → 16): at 40 it
+  became a quarter of early income. Results: owner's runs replayed, first
+  full bar 10–17 s → 18–31 s; ace bots 14–22 s → 25–46 s, still clear every
+  level (an ace's bar still sits full in easy levels: it doesn't need the
+  power there, and with carry-over that saved bar now pays at the next
+  level). Cost, as warned: pilots lean on the power (story L8 SLOW 7/12 →
+  3/12, SHIELD 12/12 → 6/12; whole runs with SHIELD reach stage 8 → 4);
+  Endless ace survival FREEZE 215 → 160 s, BLAST 257 → 144 s, SLOW 211 →
+  190 s (SLOW is now the strongest: power costs may need a retune);
+  battles ace win 95 → 85%, matches 83 → 77 s. The meter moved to the top
+  HUD under the progress bar and ducks like the rest of it; the battle dock
+  grew into the freed strip under the keypad. Golden master updated (rule
+  change). `npm run bots -- --story 1,7` measures energy per level.
+
+- **2026-10-19 — Story map shows this run, not the furthest ever (owner's
+  playtest).** "Reached in this run" comes from the saved run alone (its
+  level; none = island 1), chosen over a new `runFurthest` field in the
+  progress (owner's pick): two stored copies of one fact can disagree.
+  Islands reached only before are gray pencil (owner's pick over faded or
+  dashed), keeping their score, flag and board. Labels stay readable by
+  erasing the trail around them (chosen over a paper backing, which hides the
+  ruled lines).
+
+- **2026-10-19 — Animated story pages: looping props + drifts (owner's
+  playtest note 1).** Owner picked both kinds of motion, backyard first.
+  Props loop the 6 frames every doodle already has (a prop's recipe draws
+  frame `t`), so moving props cost nothing extra; drifts are a fixed set
+  per page that re-enter where they came from (no creating/destroying).
+  Chosen over redrawing Rough.js shapes per frame (ms each, too slow on
+  phones) and over a full-screen animated layer (fill-rate). Drifts live in
+  screen space and ignore FREEZE and the sky's wind (the view gets neither);
+  they are faint and small so the numbers stay the most readable thing.
 
 - **2026-10-19 — Story levels come in waves and last ~2 minutes (owner's
   playtest notes 4 + 7).** The felt load was flat (the unsolved cap sat at

@@ -1,12 +1,13 @@
 import type Phaser from "phaser";
 import { DOODLE, STORY_MAP } from "../config/constants";
-import type { IslandState } from "../services/storyProgress";
+import type { IslandView } from "../services/storyProgress";
 import { drawFrames, type DoodleRecipe, type Pencil, type Point } from "./pencil";
 
 /**
  * The story map's doodles (scenes/StoryMapScene.ts): one small island per
  * stage, with a sketch of its world on top (a flower for the backyard, a
- * lily pad for the pond…). Islands not reached yet are a faint dashed
+ * lily pad for the pond…). Islands reached only in an earlier run are the
+ * same doodle in gray pencil. Islands not reached yet are a faint dashed
  * outline with nothing on them: the scene writes a "?" over them.
  */
 
@@ -169,6 +170,42 @@ const WORLDS: ((p: Pencil) => void)[] = [
   },
 ];
 
+/** The finisher's gold crown (story complete): over the last island and
+ * beside the map's title, and on the menu. */
+export const CROWN: DoodleRecipe = {
+  w: 40,
+  h: 30,
+  draw(p) {
+    const points: Point[] = [
+      [-16, -9],
+      [0, -12],
+      [16, -9],
+    ];
+    p.shape(
+      [
+        [-14, 9],
+        [-16, -9],
+        [-7, 0],
+        [0, -12],
+        [7, 0],
+        [16, -9],
+        [14, 9],
+      ],
+      DOODLE.INK.gold,
+      { hachureGap: 2 },
+    );
+    p.line(-14, 4, 14, 4, { strokeWidth: 1 }); // the band
+    for (const [x, y] of points) p.dot(x, y, 1.8, DOODLE.TARGET);
+  },
+};
+
+/** The crown as a Phaser texture (one frame: it stays still), drawn once. */
+export function crownTexture(textures: Phaser.Textures.TextureManager, pxPerUnit: number): string {
+  const key = `storyMap:crown:${pxPerUnit}`;
+  if (!textures.exists(key)) textures.addCanvas(key, drawFrames(CROWN, pxPerUnit, 1, 9)[0]);
+  return key;
+}
+
 /** A small flag on a cleared island (its boss is beaten). */
 function flag(p: Pencil): void {
   p.line(26, 2, 26, -18);
@@ -182,7 +219,7 @@ function flag(p: Pencil): void {
   );
 }
 
-export function islandRecipe(stage: number, state: IslandState): DoodleRecipe {
+export function islandRecipe(stage: number, view: IslandView): DoodleRecipe {
   const w = STORY_MAP.ISLAND_W;
   const h = STORY_MAP.ISLAND_H;
   const ink = STORY_MAP.INK[stage % STORY_MAP.INK.length];
@@ -192,7 +229,7 @@ export function islandRecipe(stage: number, state: IslandState): DoodleRecipe {
     draw(p) {
       const ground = coast(stage, w - 12, h * 0.55);
       const lift = (pts: Point[], dy: number): Point[] => pts.map(([x, y]) => [x, y + dy]);
-      if (state === "unreached") {
+      if (view.look === "unreached") {
         p.shape(lift(ground, 12), undefined, { stroke: LIGHT, strokeLineDash: [5, 5] });
         return;
       }
@@ -200,9 +237,26 @@ export function islandRecipe(stage: number, state: IslandState): DoodleRecipe {
       for (const dx of [-30, 18]) p.curve([[dx, h / 2 - 6], [dx + 6, h / 2 - 8], [dx + 12, h / 2 - 6]], { stroke: WATER });
       p.shape(lift(ground, 12), ink, { hachureGap: 2.6 });
       WORLDS[stage]?.(p);
-      if (state === "cleared") flag(p);
+      if (view.flag) flag(p);
     },
   };
+}
+
+/**
+ * Redraw a finished doodle in gray pencil: every pixel keeps its shape and
+ * darkness but loses its color, then gets a little lighter. Done on the
+ * pixels, so the island recipes need no gray version of each color.
+ */
+export function grayPencil(canvas: HTMLCanvasElement, lighten: number): void {
+  const ctx = canvas.getContext("2d")!;
+  const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const px = image.data;
+  for (let i = 0; i < px.length; i += 4) {
+    const gray = 0.3 * px[i] + 0.59 * px[i + 1] + 0.11 * px[i + 2];
+    const light = gray + (255 - gray) * lighten;
+    px[i] = px[i + 1] = px[i + 2] = light;
+  }
+  ctx.putImageData(image, 0, 0);
 }
 
 /**
@@ -212,22 +266,40 @@ export function islandRecipe(stage: number, state: IslandState): DoodleRecipe {
 export function islandFrames(
   textures: Phaser.Textures.TextureManager,
   stage: number,
-  state: IslandState,
+  view: IslandView,
   pxPerUnit: number,
 ): string[] {
-  const keys = Array.from({ length: DOODLE.BOIL_FRAMES }, (_, i) => `island:${stage}:${state}:${i}`);
+  const keys = Array.from({ length: DOODLE.BOIL_FRAMES }, (_, i) => `island:${stage}:${view.look}:${view.flag}:${i}`);
   if (textures.exists(keys[0])) return keys;
-  const frames = drawFrames(islandRecipe(stage, state), pxPerUnit, DOODLE.BOIL_FRAMES, 40 + stage);
+  const frames = drawFrames(islandRecipe(stage, view), pxPerUnit, DOODLE.BOIL_FRAMES, 40 + stage);
+  if (view.look === "before") frames.forEach((canvas) => grayPencil(canvas, STORY_MAP.BEFORE_LIGHTEN));
   frames.forEach((canvas, i) => textures.addCanvas(keys[i], canvas));
   return keys;
 }
 
+/** A box on the page (logical px), e.g. around an island's label. */
+export interface Box {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
 /**
  * The trail between the islands: pencil dots from stage to stage, solid up
- * to the furthest island reached and faint after it. Returns a canvas the
- * size of the page (GAME px × `scale`).
+ * to the island the run is on (`reached`) and faint after it. The trail is
+ * rubbed out inside each box in `clear` (the islands' names and scores), so
+ * it never runs through a label. Returns a canvas the size of the page
+ * (GAME px × `scale`).
  */
-export function drawTrail(width: number, height: number, scale: number, spots: readonly (readonly [number, number])[], reached: number): HTMLCanvasElement {
+export function drawTrail(
+  width: number,
+  height: number,
+  scale: number,
+  spots: readonly (readonly [number, number])[],
+  reached: number,
+  clear: readonly Box[] = [],
+): HTMLCanvasElement {
   const canvas = document.createElement("canvas");
   canvas.width = Math.round(width * scale);
   canvas.height = Math.round(height * scale);
@@ -249,5 +321,9 @@ export function drawTrail(width: number, height: number, scale: number, spots: r
     ctx.quadraticCurveTo(mx, my, x2, y2);
     ctx.stroke();
   }
+  // "destination-out" erases what is already drawn where the boxes are.
+  ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = "destination-out";
+  for (const box of clear) ctx.fillRect(box.x, box.y, box.w, box.h);
   return canvas;
 }

@@ -4,11 +4,15 @@ import { artMode } from "../config/artMode";
 import { selectPower, selectedPower } from "../config/powers";
 import { selectShip, selectedShip } from "../config/ships";
 import { storedHighScore } from "../services/masteryStats";
+import { isUnlocked, storyComplete, unlockHint } from "../services/shipUnlocks";
+import { loadStoryProgress, type StoryProgress } from "../services/storyProgress";
 import { onKeyDown } from "../ui/keyboard";
 import { PALETTE, css } from "../config/palette";
 import { textStyle } from "../ui/theme";
-import { shipIconFrames } from "../renderDoodle/shipIcons";
+import { lockedIconFrames, shipIconFrames } from "../renderDoodle/shipIcons";
+import { crownTexture } from "../renderDoodle/storyMap";
 import { music } from "./music";
+import { isIPhoneOrIPad } from "../services/audioSession";
 
 /**
  * Title / main menu. The first scene the player sees: a ship picker (a look
@@ -16,7 +20,8 @@ import { music } from "./music";
  * map), ENDLESS or
  * BATTLE (you + 7 bots), HOW TO PLAY and SCORES. Buttons are large pointer
  * targets (mobile-friendly); ←/→ change ship, ↑/↓ change power and Enter
- * plays ENDLESS.
+ * opens ENDLESS (its theme picker). Some ships are unlocked by the story
+ * (services/shipUnlocks), and finishing it puts a crown over the title.
  */
 export default class MenuScene extends Phaser.Scene {
   constructor() {
@@ -44,6 +49,12 @@ export default class MenuScene extends Phaser.Scene {
       .text(cx, 188, "math invaders", textStyle(18, PALETTE.ACCENT))
       .setOrigin(0.5);
 
+    const progress = loadStoryProgress();
+    if (storyComplete(progress)) {
+      this.add.image(cx, 54, crownTexture(this.textures, 2)).setScale(0.75);
+      this.add.text(cx, 80, "STORY COMPLETE", textStyle(13, PALETTE.GOLD)).setOrigin(0.5);
+    }
+
     const best = storedHighScore();
     if (best > 0) {
       this.add
@@ -51,13 +62,14 @@ export default class MenuScene extends Phaser.Scene {
         .setOrigin(0.5);
     }
 
-    this.makeShipPicker(cx, 296);
+    this.makeShipPicker(cx, 296, progress);
     this.makePowerPicker(cx, 432);
 
     // Story: 10 levels with bosses, lives carried over (docs/SOLO_MODES_DESIGN.md);
     // the map shows how far you got and starts a run.
-    this.makeButton(cx - 154, 522, "STORY", () => this.scene.start("StoryMapScene"), 144);
-    // Endless: play until your lives run out (the world leaderboard).
+    this.makeButton(cx - 154, 522, "STORY", () => this.scene.start("StoryMapScene", {}), 144);
+    // Endless: play until your lives run out (the world leaderboard), after
+    // picking a theme (a world beaten in story: its page and song only).
     this.makeButton(cx, 522, "ENDLESS", () => this.startEndless(), 144);
     // Battle royale vs bots (docs/MULTIPLAYER_DESIGN.md): you + 7 bots, one life.
     this.makeButton(cx + 154, 522, "BATTLE", () => this.scene.start("GameScene", { battle: true }), 144);
@@ -69,56 +81,73 @@ export default class MenuScene extends Phaser.Scene {
     this.add
       .text(cx, GAME.HEIGHT - 26, "runs are saved anonymously (no names) to tune the game", textStyle(12, PALETTE.TEXT_MUTED))
       .setOrigin(0.5);
+    // The silent switch can still mute the game on older iPhones (services/audioSession.ts).
+    if (isIPhoneOrIPad()) {
+      this.add
+        .text(cx, GAME.HEIGHT - 10, "the game has music! no sound? turn off silent mode", textStyle(12, PALETTE.TEXT_MUTED))
+        .setOrigin(0.5);
+    }
 
     onKeyDown(this, (e) => {
       if (e.key === "Enter") this.startEndless();
     });
   }
 
-  /** Endless: the GameScene with no story and no battle. The empty data is
-   * needed: Phaser's start() without data hands the scene its last data,
-   * so ENDLESS after a battle or a story level replayed that instead. */
+  /** Endless: its theme picker first (scenes/ThemePickerScene.ts), which
+   * then starts the run. */
   private startEndless(): void {
-    this.scene.start("GameScene", {});
+    this.scene.start("ThemePickerScene");
   }
 
-  /** ◀ ship ▶ carousel; the pick is saved and used by the next run. */
-  private makeShipPicker(x: number, y: number): void {
+  /** ◀ ship ▶ carousel; the pick is saved and used by the next run. A ship
+   * the story hasn't unlocked yet shows as a dashed "?" with its name and
+   * how to get it, and isn't picked. */
+  private makeShipPicker(x: number, y: number, progress: StoryProgress): void {
     const ships = RENDER3D.SHIPS;
+    // Progress can only grow, so this happens only if storage was cleared.
+    if (!isUnlocked(selectedShip(), progress)) selectShip(ships[0]);
     let index = ships.indexOf(selectedShip());
-    const icon = this.add.image(x, y, `icon:${ships[index].model}`);
-    const name = this.add
-      .text(x, y + 58, ships[index].name, textStyle(18, PALETTE.GOLD))
-      .setOrigin(0.5);
+    const icon = this.add.image(x, y, "star");
+    const unknown = this.add.text(x, y, "?", textStyle(40, PALETTE.TEXT_MUTED)).setOrigin(0.5);
+    const name = this.add.text(x, y + 58, "", textStyle(18, PALETTE.GOLD)).setOrigin(0.5);
+    const hint = this.add.text(x, y + 79, "", textStyle(13, PALETTE.TEXT_MUTED)).setOrigin(0.5);
 
     // Doodle art: the ship's own doodle, drawn at 2× for a sharp picture and
-    // flipping through its boil frames like in play. 3D art: the model's icon.
+    // flipping through its boil frames like in play. 3D art: the model's icon
+    // (ships without a 3D model show their doodle there too).
     const doodle = artMode() === "doodle";
     let frame = 0;
     const show = () => {
-      const model = ships[index].model;
-      if (!doodle) return icon.setTexture(`icon:${model}`).setDisplaySize(96, 96);
-      const keys = shipIconFrames(this.textures, model, 192);
+      const ship = ships[index];
+      const locked = !isUnlocked(ship, progress);
+      unknown.setVisible(locked);
+      name.setText(ship.name).setColor(css(locked ? PALETTE.TEXT_MUTED : PALETTE.GOLD));
+      hint.setText(locked ? unlockHint(ship) : "");
+      if (!locked && !doodle && this.textures.exists(`icon:${ship.model}`)) {
+        icon.setTexture(`icon:${ship.model}`).setDisplaySize(96, 96);
+        return;
+      }
+      const keys = locked
+        ? lockedIconFrames(this.textures, 192, css(PALETTE.TEXT_MUTED))
+        : shipIconFrames(this.textures, ship.model, 192);
       icon.setTexture(keys[frame % keys.length]).setScale(0.5);
     };
     show();
-    if (doodle) {
-      this.time.addEvent({
-        delay: 1000 / DOODLE.BOIL_FPS,
-        loop: true,
-        callback: () => {
-          frame++;
-          show();
-        },
-      });
-    }
+    this.time.addEvent({
+      delay: 1000 / DOODLE.BOIL_FPS,
+      loop: true,
+      callback: () => {
+        frame++;
+        show();
+      },
+    });
 
     const step = (dir: number) => {
       index = (index + dir + ships.length) % ships.length;
-      selectShip(ships[index]);
+      const locked = !isUnlocked(ships[index], progress);
+      if (!locked) selectShip(ships[index]);
       show();
-      name.setText(ships[index].name);
-      this.sound.play("blip", { volume: 0.4 });
+      this.sound.play("blip", { volume: 0.4, rate: locked ? 0.7 : 1 });
     };
     for (const dir of [-1, 1]) {
       const arrow = this.add

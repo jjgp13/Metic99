@@ -15,6 +15,7 @@ export const STORAGE = {
   HW_LAB: "metic-hw-lab", // handwriting lab samples in progress (?lab=draw)
   STORY: "metic-story", // story map: furthest stage reached, best scores (JSON)
   STORY_SAVE: "metic-story-save", // the story run in progress: level, lives, score (JSON)
+  THEME: "metic-theme", // Endless theme picked (config/themes.ts): a look and a song only
 } as const;
 
 /** Arcade global leaderboard (Supabase-backed). */

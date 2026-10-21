@@ -337,3 +337,17 @@ song.
 > 4. Bars 57–64, **Climax:** double-time drums, the main theme in octaves,
 >    the loudest part, leading straight back into bar 1.
 >    F – G – Am – Am | F – G – E7 – E7.
+
+### Level clear (a jingle, not a loop)
+
+**File:** `level-clear.mp3` (optional, not made yet; `scenes/extraMusic.ts`
+plays it after each boss, and a rising blip fanfare stands in until it
+exists).
+
+> A short victory fanfare, about 6–8 seconds, then silence (no loop, a
+> clean final note). 140 BPM, C major: a quick rising square-wave run,
+> three bright triumphant chords, a little trill on top and a final held
+> chord with a noise-channel cymbal hit. It plays while the ship
+> accelerates off the top of the screen and the level's score counts
+> up: joyful, proud, a bit cheeky, like "did it!". Use the main theme's
+> first four notes (do – mi – sol – la) for the rising run.

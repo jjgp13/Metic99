@@ -1,6 +1,7 @@
 // Story mode (docs/SOLO_MODES_DESIGN.md): levels, bosses, the arcade run.
 // Re-exported by config/constants.ts; see docs/ENGINEERING.md §3.
 import type { AlienKind, BallLayout } from "./monsters";
+import type { WavesDef } from "./waves";
 
 /** Monster kinds a level's 2-ball spawns pick from (see ENEMY.TWO_BALL_KINDS). */
 type TwoBallWeights = Readonly<Record<"darter" | "strafer" | "swooper", number>>;
@@ -14,6 +15,10 @@ type LevelAbility = "shielded" | "blinker" | "splitter";
  */
 export interface BossDef {
   NAME: string;
+  /** Its trick in one line ("WHO? · answer the missing number"), shown under
+   * the BOSS banner the first time it appears in a run (a part's: when it
+   * first comes in). */
+  INTRO: string;
   /** Its doodle (the level's page draws it by this name). */
   MODEL: string;
   /** How it fights (objects/bosses.ts); "burrow" = the mole's dig. */
@@ -70,34 +75,6 @@ export interface SpeciesDef {
   INTRO: string;
 }
 
-/**
- * One stretch of a level's wave (owner's playtests: "small spikes and then
- * rest, then increase gradually, then a burst and then rest again", and
- * each peak bigger than the one before, back to the same base between):
- * - rest: back to the base (WavesDef.BASE sums at once, slow spawns);
- * - spike: a push held at its HEIGHT;
- * - ramp: climbs from the base to its HEIGHT across the stretch;
- * - burst: the level's top (WavesDef.PEAK sums at once, fast spawns).
- * HEIGHT is how hard a push is, from 0 (the base) to 1 (a burst).
- */
-export type WaveKind = "rest" | "spike" | "ramp" | "burst";
-
-/** Its share of the path (any unit: the shares are scaled to PATH_MS). */
-export type WaveSegment =
-  | { KIND: "rest" | "burst"; SHARE: number }
-  | { KIND: "spike" | "ramp"; SHARE: number; HEIGHT: number };
-
-/** How a level's pressure comes and goes along its path. The profile is the
- * shape (shared by every level); BASE and PEAK are the level's scale. */
-export interface WavesDef {
-  /** The stretches in order, from the start of the path to the boss. */
-  PROFILE: readonly WaveSegment[];
-  /** Unsolved sums at once while resting. */
-  BASE: number;
-  /** Unsolved sums at once in a burst (a push of HEIGHT h: in between). */
-  PEAK: number;
-}
-
 export interface LevelDef {
   /** Shown in the level banner and on the level-complete card. */
   NAME: string;
@@ -124,35 +101,6 @@ export interface LevelDef {
   BOSS: BossDef;
 }
 
-/**
- * The waves' numbers (WaveKind). A stretch pushes with an intensity from 0
- * (rest) to 1 (burst), and the intensity sets the two knobs the owner
- * picked: how many unsolved sums may be up at once (BASE → PEAK), and how
- * fast they come. Speed and sum size keep following the level's D underneath.
- */
-export const WAVES = {
-  /** × the spawn interval at rest and at a full burst. */
-  INTERVAL_X: { REST: 1.5, BURST: 0.55 },
-} as const;
-
-/**
- * The owner's wave: three pushes, each bigger than the one before, with a
- * rest back to the base after each, then a breath before the boss. Shares
- * are bars of level 1's song (120 BPM: a bar = 2 s, an 88 s path), in
- * 4-bar phrases so each stretch is one chord progression or two
- * (`npm run waves` prints every level's timeline in seconds).
- */
-export const OWNER_WAVE: readonly WaveSegment[] = [
-  { KIND: "rest", SHARE: 4 }, // warm-up under the level banner
-  { KIND: "spike", SHARE: 4, HEIGHT: 0.35 }, // wave 1: a taste
-  { KIND: "rest", SHARE: 4 },
-  { KIND: "spike", SHARE: 8, HEIGHT: 0.7 }, // wave 2: bigger, longer
-  { KIND: "rest", SHARE: 4 },
-  { KIND: "ramp", SHARE: 8, HEIGHT: 1 }, // wave 3: climb to the top…
-  { KIND: "burst", SHARE: 8 }, // …and hold it
-  { KIND: "rest", SHARE: 4 }, // a breath before the boss
-];
-
 /** Music (scenes/music.ts): a path and a boss track per story level
  * (scenes/levelMusic.ts), plus the songs outside the levels, which share
  * one main theme (files in public/assets/music/). */
@@ -163,6 +111,44 @@ export const MUSIC = {
   MAP_FILE: "map.mp3", // the story map
   ENDING_FILE: "ending.mp3", // plays once when the last boss is beaten
   ENDLESS_FILE: "endless.mp3", // Endless mode
+  /** The victory jingle after a boss (not a loop). */
+  LEVEL_CLEAR_FILE: "level-clear.mp3",
+  JINGLE_VOLUME: 0.5,
+  /** No jingle file yet: a fanfare made of the blip sound at these pitches
+   * (playback rates: C E G C, a rising major arpeggio), one every STEP_MS. */
+  FALLBACK_FANFARE: [1, 1.26, 1.5, 2],
+  FALLBACK_STEP_MS: 110,
+} as const;
+
+/**
+ * Story: the moment after a level's boss is beaten (GameScene.clearLevel),
+ * in order: the minions left pop, the ship squashes and blasts off the top
+ * (scenes/shipLaunch.ts), then the results card counts the score up.
+ */
+export const LEVEL_CLEAR = {
+  /** The first leftover minion pops this long after the boss; then one per STAGGER. */
+  POP_START_MS: 150,
+  POP_STAGGER_MS: 90,
+  /** The ship's launch starts this long after the boss. */
+  LAUNCH_AT_MS: 500,
+  /** Anticipation: the ship squashes down and shivers, gathering power. */
+  SQUASH_MS: 300,
+  SQUASH: 0.3, // height lost at the deepest squash (it gets wider by 2/3 of it)
+  SQUASH_DIP_PX: 6, // pressed down this far
+  SHIVER_PX: 1.5,
+  /** Then it accelerates off the top: gone after FLY_MS. */
+  FLY_MS: 800,
+  /** How the climb speeds up: height ∝ time^EASE (higher = slower start). */
+  FLY_EASE: 2.4,
+  STRETCH: 0.35, // taller while it flies (and a little thinner)
+  EXIT_MARGIN_PX: 40, // gone = this far above the top edge
+  /** The speed lines under the flying ship, at full length. */
+  TRAIL_PX: 140,
+  /** The results card comes in this long after the ship is gone. */
+  CARD_DELAY_MS: 400,
+  /** The level score counts up in this long; a tap skips to the end. */
+  COUNT_MS: 1300,
+  COUNT_TICK_MS: 70, // a blip at most this often while it counts
 } as const;
 
 export const STORY = {
@@ -182,6 +168,51 @@ export const STORY = {
   PATH_MIN_PACE: 0.8,
   /** Stages planned (docs/SOLO_MODES_DESIGN.md §3); LEVELS holds the built ones. */
   STAGES: 10,
+} as const;
+
+/**
+ * The ending (scenes/EndingScene.ts), after the last level's boss: seen from
+ * above, a kid's hands color the game's bosses on a small sheet of paper.
+ */
+export const ENDING = {
+  /** The sheet on the desk: center, size, a slight tilt (radians). */
+  SHEET: { X: 240, Y: 318, W: 404, H: 488, TILT: -0.03 },
+  /** The doodles on the sheet: rows of cells (sheet px from its center). */
+  CELL_W: 126,
+  CELL_H: 96,
+  ROWS_Y: [-118, -22, 74, 170],
+  /** How many doodles at the end are still gray pencil, colored in one by
+   * one while the scene plays. */
+  STILL_GRAY: 2,
+  /** A gray doodle is this much lighter than graphite. */
+  GRAY_LIGHTEN: 0.45,
+  /** Before the first stroke, per doodle, and moving between doodles. */
+  START_MS: 1400,
+  COLOR_MS: 3200,
+  MOVE_MS: 800,
+  /** The crayon's scribble up and down while coloring. */
+  SCRIBBLE_HZ: 4,
+  /** Taps count only after this long (the first may still be the clear
+   * card's tap). A tap on the drawing turns to the credits; it never leaves. */
+  TAP_AFTER_MS: 2000,
+  FADE_IN_MS: 900,
+  /** The drawing stays this long once the last doodle is colored in. */
+  DRAWING_HOLD_MS: 2500,
+  /** Crayons the hand picks up, one per doodle colored in. */
+  CRAYONS: ["#f08a2c", "#8e4fd8", "#e0679f", "#1f9e8f"],
+  /** How the owner is credited ("a game by …"). */
+  CREDIT_NAME: "J²",
+  /** The credits page: it slides in over the desk, then each line is
+   * written left to right at WRITE_MS_PER_CHAR, LINE_GAP_MS apart. */
+  PAGE_FLIP_MS: 800,
+  WRITE_MS_PER_CHAR: 38,
+  LINE_GAP_MS: 280,
+  /** Once every line is written, a tap leaves only after this long, so the
+   * thank-you is never skipped by accident. */
+  READ_MIN_MS: 4000,
+  /** Leaving: the picture fades out (the ending's song, MUSIC.ENDING_FILE,
+   * plays on to its end). */
+  FADE_OUT_MS: 1000,
 } as const;
 
 /**
@@ -208,6 +239,12 @@ export const STORY_MAP = {
   /** Where the ship hovers next to its island. */
   SHIP_DX: 52,
   SHIP_DY: -24,
+  /** An island reached only in an earlier run is redrawn in gray pencil:
+   * its colors turn gray, this much lighter (0 = as dark, 1 = white). */
+  BEFORE_LIGHTEN: 0.35,
+  /** The trail stops this far (px) around each island's name and score, so
+   * it never runs through them. */
+  LABEL_CLEAR_PX: 5,
   /** An island's doodle box (logical px), drawn at 2× for a sharp picture. */
   ISLAND_W: 112,
   ISLAND_H: 66,

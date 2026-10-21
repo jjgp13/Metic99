@@ -1,12 +1,15 @@
 import { DOODLE, GAME } from "../config/constants";
 import type Alien from "../objects/Alien";
+import type { DriftDef } from "./drifts";
 import type { DoodleRecipe } from "./pencil";
 
 /**
  * Story pages (docs/SOLO_MODES_DESIGN.md §2): each level is drawn on its
  * own notebook page that scrolls down as the level's path goes by, with
- * faint props (pebbles, grass…) doodled on it. The numbers must still win,
- * so props are light pencil drawn at PAGE_PROP_ALPHA.
+ * faint props (pebbles, grass…) doodled on it. Some props move in place
+ * (grass sways, ants march: their pre-drawn frames turn at `fps`) and little
+ * things drift across it (`drifts`: seeds, snow). The numbers must still
+ * win, so all of it is light pencil, slow, and under every alien.
  *
  * Each level's page lives in its own file under renderDoodle/levels/ (with
  * its creatures and its boss) and is listed in renderDoodle/levels/index.ts.
@@ -16,10 +19,13 @@ export interface PageDef {
   paper: string;
   rule: string;
   margin: string;
-  /** Props scattered along the path, picked by weight. */
-  props: { recipe: DoodleRecipe; weight: number }[];
+  /** Props scattered along the path, picked by weight. A prop with `fps`
+   * moves in place: its recipe draws frame `t` of a loop (0..1). */
+  props: { recipe: DoodleRecipe; weight: number; fps?: number }[];
   /** Average px of path between two props. */
   propGap: number;
+  /** Little things drifting across the page (renderDoodle/drifts.ts). */
+  drifts?: DriftDef[];
   /** How the level's creatures look, by species name (SpeciesDef.NAME). */
   creatures: Record<string, CreatureLook>;
   /** How the level's boss looks, by its model (BossDef.MODEL). */
@@ -52,6 +58,9 @@ export interface BossLook {
   /** Drawn on the page under every alien while the boss is up (a lamp's
    * beam, a shadow); `ctx` is in logical px. */
   under?(ctx: CanvasRenderingContext2D, boss: Alien, alpha: number): void;
+  /** Drawn over everything, with the number balls (a sum's total written on
+   * the boss); `ctx` is in logical px. */
+  over?(ctx: CanvasRenderingContext2D, boss: Alien, alpha: number): void;
 }
 
 /** A prop placed on the page: `pathY` px along the path from the start. */
@@ -61,6 +70,9 @@ export interface PlacedProp {
   x: number;
   pathY: number;
   angle: number;
+  /** Frames per second of its loop (0 = still), and where in it it starts. */
+  fps: number;
+  phase: number;
 }
 
 export { PAGES } from "./levels";
@@ -101,13 +113,17 @@ export function drawPageTile(page: PageDef, scale: number): HTMLCanvasElement {
 
 /**
  * Scatter the page's props along `lengthPx` of path (plus a screen's worth
- * already in view at the start). Visual only, so Math.random is fine; it is
- * done once per level and kept, so the props don't jump.
+ * already in view at the start). A page that `loops` (Endless) gets props
+ * only within one loop, [0, lengthPx), since it repeats them every
+ * `lengthPx`. Visual only, so Math.random is fine; it is done once per run
+ * and kept, so the props don't jump.
  */
-export function layOutProps(pageId: string, page: PageDef, lengthPx: number): PlacedProp[] {
+export function layOutProps(pageId: string, page: PageDef, lengthPx: number, loops = false): PlacedProp[] {
   const total = page.props.reduce((t, p) => t + p.weight, 0);
   const out: PlacedProp[] = [];
-  for (let y = -GAME.HEIGHT; y < lengthPx + GAME.HEIGHT; y += page.propGap * (0.5 + Math.random())) {
+  const from = loops ? 0 : -GAME.HEIGHT;
+  const to = loops ? lengthPx : lengthPx + GAME.HEIGHT;
+  for (let y = from; y < to; y += page.propGap * (0.5 + Math.random())) {
     let r = Math.random() * total;
     const i = Math.max(
       0,
@@ -119,7 +135,20 @@ export function layOutProps(pageId: string, page: PageDef, lengthPx: number): Pl
       x: 12 + Math.random() * (GAME.WIDTH - 24),
       pathY: y,
       angle: (Math.random() - 0.5) * 0.8,
+      fps: page.props[i].fps ?? 0,
+      phase: Math.random(),
     });
   }
   return out;
+}
+
+/**
+ * Where a prop is drawn on screen (logical y) when the page has scrolled
+ * `scrolledPx`. A looping page repeats every `loopPx`, so a prop is seen at
+ * every y one loop apart; this returns the copy at or just below the top,
+ * and the caller also draws the one a loop higher (`y - loopPx`).
+ */
+export function propScreenY(prop: PlacedProp, scrolledPx: number, loopPx: number | null): number {
+  const y = scrolledPx - prop.pathY;
+  return loopPx === null ? y : ((y % loopPx) + loopPx) % loopPx;
 }
