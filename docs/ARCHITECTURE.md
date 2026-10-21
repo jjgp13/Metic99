@@ -271,6 +271,23 @@ fits here, and **what we didn't do**.
   two versions that both accept the old arguments make the RPC call
   ambiguous.
 
+### 2.17 Detail table (one-to-one extension)
+
+- **What:** a second table whose primary key is also a link to one row of
+  the main table. It holds facts that only some rows have.
+- **Where:** `supabase/endless-details.sql`: `endless_runs.score_id` →
+  `scores.id` holds an Endless score's ship, power, world and survival time.
+  `scores` stays the one table every board ranks from. `getTop` reads both
+  in one request (`endless_runs(...)` embedded in the select).
+- **Why:** each mode records different context (Endless: ship, power,
+  time; a battle later: placement). Each gets its own table with strict
+  types and checks, while ranking stays in one place.
+- **Instead of:** nullable columns on `scores` (one read, no join, but
+  every mode's facts end up in one wide table, empty for most rows), or a
+  JSON column (flexible, but the database can't check the ids).
+- **Caution:** the two rows must be written together. `submit_run` writes
+  both in one transaction, so a bad detail undoes the score too.
+
 ---
 
 ## 3. Where to start when you want to…
