@@ -253,8 +253,9 @@ game has a musical identity and the ending can bring it back as a memory
 four notes stepping up (do – mi – sol – la), then three notes falling
 back home (sol – mi – re – do), like a pencil drawing a loop.
 
-**Files** (not played by the game yet): `menu.mp3`, `map.mp3`,
-`ending.mp3`, `endless.mp3` in `public/assets/music/`.
+**Files** (in `public/assets/music/`, played by `scenes/music.ts`):
+`menu.mp3` (menu, HOW TO PLAY, SCORES), `map.mp3` (story map),
+`ending.mp3` (once, from the last boss's fall), `endless.mp3` (Endless).
 
 **Endless and world themes** (owner's pick, 2026-10-20): Endless keeps
 one set of rules (all monsters, the score-led curve, one leaderboard);
