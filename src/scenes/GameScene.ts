@@ -21,7 +21,7 @@ import { EnergyHud } from "../ui/hud/EnergyHud";
 import { GameOverScreen } from "../ui/hud/GameOverScreen";
 import { InputPanel, type PadKey } from "../ui/hud/InputPanel";
 import { LevelClearCard } from "../ui/hud/LevelClearCard";
-import { LevelMusic } from "./levelMusic";
+import { LevelMusic, levelTracks } from "./levelMusic";
 import { PauseOverlay } from "../ui/hud/PauseOverlay";
 import { Popups } from "../ui/hud/Popups";
 import { Reticle } from "../ui/hud/Reticle";
@@ -129,7 +129,7 @@ export default class GameScene extends Phaser.Scene {
       void startMatch();
     }
     initPlaytestLog();
-    this.music = this.story ? new LevelMusic(this, this.story.level) : null;
+    this.music = this.story ? new LevelMusic(this, levelTracks(this.story.level)) : null;
     // Story: a run left in the middle continues from the start of this level.
     if (this.story) saveStoryRun(this.story);
     if (this.story) {
