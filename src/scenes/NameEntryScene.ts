@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { GAME, LEADERBOARD, STORAGE } from "../config/constants";
+import type { EndlessDetails } from "../services/endlessDetails";
 import { type Board, submitScore } from "../services/leaderboard";
 import { onKeyDown } from "../ui/keyboard";
 import { PALETTE } from "../config/palette";
@@ -11,6 +12,8 @@ export interface BoardScore {
   score: number;
   /** How the rank on this board is named after submitting ("stage 1"). */
   label: string;
+  /** Endless: what the run was played with, submitted with the score. */
+  details?: EndlessDetails;
 }
 
 interface NameEntryData {
@@ -304,10 +307,10 @@ export default class NameEntryScene extends Phaser.Scene {
   /** Submit the main board, then the others one by one; their ranks become
    * one line ("stage 1 #4 · stage 2 #9"). */
   private async submitAll(name: string, main: BoardScore, others: BoardScore[]) {
-    const result = await submitScore(name, main.score, main.board);
+    const result = await submitScore(name, main.score, main.board, main.details);
     const ranks: string[] = [];
     for (const other of others) {
-      const r = await submitScore(name, other.score, other.board);
+      const r = await submitScore(name, other.score, other.board, other.details);
       if (r.ok && r.rank > 0) ranks.push(`${other.label} #${r.rank}`);
     }
     return { result, note: ranks.join(" · ") };

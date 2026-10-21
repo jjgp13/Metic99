@@ -1,5 +1,8 @@
 import Phaser from "phaser";
-import { GAME, LEADERBOARD } from "../config/constants";
+import { artMode } from "../config/artMode";
+import { GAME, LEADERBOARD, POWERS, type PowerKind } from "../config/constants";
+import { shipIconFrames } from "../renderDoodle/shipIcons";
+import { type EndlessDetails, formatSurvival } from "../services/endlessDetails";
 import { type Board, ScoreRow, getTop, isLeaderboardEnabled } from "../services/leaderboard";
 import { PALETTE } from "../config/palette";
 import { textStyle } from "../ui/theme";
@@ -25,6 +28,11 @@ interface LeaderboardData {
   rowId?: number;
 }
 
+/** The Endless board's columns (x in the 480-wide layout): rank + name,
+ * ship icon (center), power, world, then time and score (right edges). */
+const COLS = { NAME: 20, SHIP: 140, POWER: 160, WORLD: 226, TIME: 380, SCORE: 460 } as const;
+const SHIP_ICON_PX = 20;
+
 /**
  * Global high-score board, for one board (Endless, a story stage or a whole
  * story run). Two modes:
@@ -48,7 +56,7 @@ export default class LeaderboardScene extends Phaser.Scene {
     ok: boolean;
     rowId?: number;
   };
-  private rowObjects: Phaser.GameObjects.Text[] = [];
+  private rowObjects: Phaser.GameObjects.GameObject[] = [];
 
   constructor() {
     super("LeaderboardScene");
@@ -153,6 +161,10 @@ export default class LeaderboardScene extends Phaser.Scene {
       return;
     }
 
+    // Endless rows also show what the run was played with (EndlessDetails).
+    const endless = this.result.board === LEADERBOARD.ENDLESS_BOARD;
+    if (endless) this.addHeader(top - 18);
+
     // Highlight the player's freshly-submitted run (post-run mode only): by
     // unique row id when we have it, else the first name+score match.
     let highlighted = false;
@@ -171,15 +183,51 @@ export default class LeaderboardScene extends Phaser.Scene {
       const color = isPlayer ? PALETTE.GOLD : PALETTE.TEXT;
       const rankStr = `${i + 1}`.padStart(2, " ");
 
-      this.rowObjects.push(
-        this.add.text(leftX, y, `${rankStr}. ${row.name}`, textStyle(16, color)),
-      );
+      if (endless) {
+        this.rowObjects.push(this.add.text(COLS.NAME, y, `${rankStr}. ${row.name}`, textStyle(16, color)));
+        if (row.details) this.addDetails(row.details, y, color);
+      } else {
+        this.rowObjects.push(this.add.text(leftX, y, `${rankStr}. ${row.name}`, textStyle(16, color)));
+      }
       this.rowObjects.push(
         this.add
-          .text(rightX, y, `${row.score}`, textStyle(16, color))
+          .text(endless ? COLS.SCORE : rightX, y, `${row.score}`, textStyle(16, color))
           .setOrigin(1, 0),
       );
     });
+  }
+
+  /** Endless: the column names over the rows. */
+  private addHeader(y: number): void {
+    const style = textStyle(12, PALETTE.TEXT_MUTED);
+    const add = (x: number, label: string, originX = 0) =>
+      this.rowObjects.push(this.add.text(x, y, label, style).setOrigin(originX, 0));
+    add(COLS.SHIP, "SHIP", 0.5);
+    add(COLS.POWER, "POWER");
+    add(COLS.WORLD, "WORLD");
+    add(COLS.TIME, "TIME", 1);
+    add(COLS.SCORE, "SCORE", 1);
+  }
+
+  /** Endless: one row's ship, power, world and survival time. */
+  private addDetails(d: EndlessDetails, y: number, color: number): void {
+    const icon = this.add.image(COLS.SHIP, y + 10, this.shipIcon(d.ship));
+    if (artMode() === "doodle") icon.setScale(0.5);
+    else icon.setDisplaySize(SHIP_ICON_PX, SHIP_ICON_PX);
+    const power = POWERS[d.power as PowerKind]?.NAME ?? d.power.toUpperCase();
+    this.rowObjects.push(
+      icon,
+      this.add.text(COLS.POWER, y + 2, power, textStyle(13, color)),
+      this.add.text(COLS.WORLD, y + 2, d.theme.toUpperCase(), textStyle(13, PALETTE.TEXT_MUTED)),
+      this.add.text(COLS.TIME, y + 1, formatSurvival(d.survivalMs), textStyle(14, color)).setOrigin(1, 0),
+    );
+  }
+
+  /** A ship's small picture: its doodle (drawn at 2× for sharpness), or the
+   * 3D model's icon in the 3D art. */
+  private shipIcon(model: string): string {
+    if (artMode() !== "doodle") return `icon:${model}`;
+    return shipIconFrames(this.textures, model, SHIP_ICON_PX * 2)[0];
   }
 
   private toMenu(): void {

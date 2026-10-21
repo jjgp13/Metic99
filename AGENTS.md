@@ -123,6 +123,8 @@ src/
     leaderboard.ts    Supabase global high scores, one board per `level`
                       (Endless, each stage, story runs): startMatch(board) +
                       match-gated submitScore, plus getTop/getRank reads
+    endlessDetails.ts What an Endless score was played with (ship, power,
+                      world, survival): RPC args, embed parsing, m:ss (pure)
     playtestLog.ts    Playtest logger: in the claude.ai playtest Artifact,
                       saves each finished run (seed + input log + extras)
                       to the Artifact's `db`; a no-op anywhere else
@@ -261,7 +263,25 @@ docs/SOLO_MODES_DESIGN.md   Story mode plan: 10 scrolling levels + bosses, Endle
     legit match is never burned. `p_level` defaults to 0 (Endless), so the
     old call shapes still work.
   - **Migration order:** run `story-boards.sql` (after `match-gate.sql`)
-    before deploying a build with the story map (it reads `scores.level`).
+    before deploying a build with the story map (it reads `scores.level`),
+    then `endless-details.sql` before a build that shows Endless details.
+- **Endless details** (`supabase/endless-details.sql`, owner's design): each
+  Endless score carries the ship, the power, the world (theme: "notebook"
+  or a stage's page id) and the survival time (game clock, pauses
+  excluded), in a one-to-one detail table `endless_runs(score_id → scores.id,
+  ship, power, theme, survival_ms)`; `scores` stays the one ranking table.
+  `submit_run` gained `p_ship, p_power, p_theme, p_survival_ms` (default
+  null: the old call shape still works, no detail row). Details come all or
+  none, Endless only; ids are table CHECKs (**adding a ship, power or world
+  = update its check there**); survival must fit the ticket's age (+5 s) and
+  the score must fit the survival time (same 3000/s cap); all in the same
+  transaction. Public read, no API writes (RLS). `getTop` embeds the details
+  for Endless (falls back to the plain board on an older database);
+  `submitScore` retries without details if the database doesn't know them
+  (PGRST202: the call never ran, the ticket is unused). The Endless board
+  shows a ship icon, power, world and time per row; older scores show only
+  name and score. GameScene builds them (`endlessDetails()`) and passes them
+  through NameEntry (`BoardScore.details`).
   - `matches` has RLS on with NO policies (only the definer functions touch it).
   - **Honest limit:** this blocks devtools/REST forgery and bots that skip the
     flow, but — like any client-scored game — can't stop a scripted
@@ -1015,6 +1035,16 @@ dMatch)`; it is 0 in solo play.
 ## Decision Log
 
 Newest first. Format: `YYYY-MM-DD — decision — rationale`.
+
+- **2026-10-21 — Endless scores carry their context in a detail table
+  (owner's pick).** Ship, power ("the ability" = the power), world and
+  survival time ("how long they stayed" = survival, not a run count) go in
+  `endless_runs`, one row per Endless score keyed by its id, written by
+  `submit_run` in the same transaction. Owner picked B (a table per mode's
+  context) over new nullable columns on `scores` (simpler reads, but every
+  mode's facts in one wide table) and a JSON column (no type or id checks).
+  `scores` stays the one ranking table. A count of runs played was left
+  out: initials aren't an identity. Not applied to the live project yet.
 
 - **2026-10-20 — New soundtrack in; one shared music player for every
   screen.** The owner's 24 tracks (44-bar wave-timed path songs, bosses,

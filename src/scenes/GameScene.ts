@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { DOODLE, LEADERBOARD, LEVELS, MATCH, MUSIC, RECOVERY, STORY, TARGET_STRATEGIES, type TargetStrategy } from "../config/constants";
 import { inputMode } from "../config/inputMode";
+import { selectedShip } from "../config/ships";
 import type { InkEvent } from "../handwriting/inkReader";
 import type Alien from "../objects/Alien";
 import { ABILITY_KINDS, Boss, type AbilityKind } from "../objects/abilities";
@@ -30,6 +31,7 @@ import { SendButton } from "../ui/hud/SendButton";
 import { TopHud } from "../ui/hud/TopHud";
 import { onKeyDown } from "../ui/keyboard";
 import { createFieldView, type FieldView } from "./fieldView";
+import type { EndlessDetails } from "../services/endlessDetails";
 import type { BoardScore } from "./NameEntryScene";
 import { setUpRun, type StoryRun } from "./runSetup";
 
@@ -611,10 +613,24 @@ export default class GameScene extends Phaser.Scene {
         this.scene.start("StoryMapScene");
       }
     } else if (isLeaderboardEnabled() && !this.match) {
-      this.scene.start("NameEntryScene", { score: this.field.score, personalBest: this.newHighScore });
+      const f = this.field;
+      const boards: BoardScore[] = [{ board: LEADERBOARD.ENDLESS_BOARD, score: f.score, label: "", details: this.endlessDetails() }];
+      this.scene.start("NameEntryScene", { score: f.score, personalBest: this.newHighScore, boards });
     } else {
       this.scene.start("MenuScene");
     }
+  }
+
+  /** Endless: what this run was played with, shared on the board. */
+  private endlessDetails(): EndlessDetails {
+    return {
+      ship: selectedShip().model,
+      power: this.field.power.kind,
+      // Until the world picker lands (config/worlds.ts: selectedWorldId()),
+      // every Endless run is played on the plain notebook page.
+      theme: "notebook",
+      survivalMs: this.field.elapsedMs,
+    };
   }
 }
 

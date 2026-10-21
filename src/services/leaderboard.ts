@@ -1,5 +1,6 @@
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { LEADERBOARD } from "../config/constants";
+import { type EndlessDetails, detailArgs, parseDetails } from "./endlessDetails";
 
 /** Which board a score goes on: 0 = Endless, 1–10 = a story stage, 99 = a story run. */
 export type Board = number;
@@ -26,6 +27,10 @@ export const stageBoard = (stage: number): Board => stage + 1;
  * Endless (board 0) calls the functions without a level, so a game already
  * deployed keeps working once the database has the column (reading the top
  * scores per board needs the column: migrate first, then deploy).
+ *
+ * An Endless score also carries what it was played with (`EndlessDetails`:
+ * ship, power, world, survival time), stored in its own `endless_runs` row
+ * (supabase/endless-details.sql) and read back with the board.
  */
 
 const URL = import.meta.env.VITE_SUPABASE_URL;
@@ -55,6 +60,8 @@ export interface ScoreRow {
   id?: number;
   name: string;
   score: number;
+  /** Endless only: what the run was played with (null for older scores). */
+  details?: EndlessDetails | null;
 }
 
 export interface SubmitResult {
@@ -96,26 +103,42 @@ function withTimeout<T>(p: Promise<T>, ms: number, fallback: T): Promise<T> {
   ]);
 }
 
-/** Top `limit` scores on `board`, highest first. */
+/** Top `limit` scores on `board`, highest first; Endless rows come with
+ * their details. */
 export async function getTop(board: Board = LEADERBOARD.ENDLESS_BOARD, limit: number = LEADERBOARD.TOP_N): Promise<ScoreRow[]> {
   const c = getClient();
   if (!c) return [];
-  const query = (byLevel: boolean) => {
-    const rows = c.from("scores").select("id,name,score");
+  const endless = board === LEADERBOARD.ENDLESS_BOARD;
+  const query = (columns: string, byLevel: boolean) => {
+    const rows = c.from("scores").select(columns);
     return (byLevel ? rows.eq("level", board) : rows)
       .order("score", { ascending: false })
       .order("created_at", { ascending: true })
       .limit(limit);
   };
-  let { data, error } = await query(true);
-  // A database not yet migrated (supabase/story-boards.sql) has no `level`
-  // column: every row there is an Endless score, so read them unfiltered.
-  if (error && board === LEADERBOARD.ENDLESS_BOARD) ({ data, error } = await query(false));
-  if (error) {
-    console.error("[leaderboard] getTop failed:", error.message);
+  // Endless tries the richest read first and falls back for a database not
+  // yet migrated: without `endless_runs` (supabase/endless-details.sql), the
+  // plain board; without the `level` column (story-boards.sql), every row
+  // there is an Endless score, so read them unfiltered.
+  const attempts: [string, boolean][] = endless
+    ? [["id,name,score,endless_runs(ship,power,theme,survival_ms)", true], ["id,name,score", true], ["id,name,score", false]]
+    : [["id,name,score", true]];
+  let result = await query(...attempts[0]);
+  for (const attempt of attempts.slice(1)) {
+    if (!result.error) break;
+    result = await query(...attempt);
+  }
+  if (result.error) {
+    console.error("[leaderboard] getTop failed:", result.error.message);
     return [];
   }
-  return (data ?? []) as ScoreRow[];
+  const rows = (result.data ?? []) as unknown as Record<string, unknown>[];
+  return rows.map((r) => ({
+    id: r.id as number,
+    name: r.name as string,
+    score: r.score as number,
+    details: parseDetails(r.endless_runs),
+  }));
 }
 
 /** Exact 1-based rank for a score on `board` (count of strictly-higher scores + 1). */
@@ -158,9 +181,15 @@ export async function startMatch(board: Board = LEADERBOARD.ENDLESS_BOARD): Prom
  * separately for display. Network/validation failures degrade gracefully: `ok`
  * is false and rank/top are best-effort. A timeout guards against a hung network
  * leaving the player stuck on "submitting". The match id is single-use and is
- * cleared whether or not the submit succeeds.
+ * cleared whether or not the submit succeeds. `details` (Endless only) go
+ * with the score; a database that doesn't know them yet gets the score alone.
  */
-export async function submitScore(name: string, score: number, board: Board = LEADERBOARD.ENDLESS_BOARD): Promise<SubmitResult> {
+export async function submitScore(
+  name: string,
+  score: number,
+  board: Board = LEADERBOARD.ENDLESS_BOARD,
+  details?: EndlessDetails,
+): Promise<SubmitResult> {
   const c = getClient();
   const matchId = openMatches.get(board) ?? null;
   openMatches.delete(board);
@@ -169,13 +198,20 @@ export async function submitScore(name: string, score: number, board: Board = LE
   const clean = name.toUpperCase().slice(0, LEADERBOARD.NAME_LEN_MAX);
   const clamped = Math.max(0, Math.min(LEADERBOARD.MAX_SCORE, Math.round(score)));
 
-  const run = async (): Promise<SubmitResult> => {
-    const { data, error } = await c.rpc("submit_run", {
+  const call = (withDetails: boolean) =>
+    c.rpc("submit_run", {
       p_match: matchId,
       p_name: clean,
       p_score: clamped,
       ...levelArg(board),
+      ...(withDetails ? detailArgs(details) : {}),
     });
+
+  const run = async (): Promise<SubmitResult> => {
+    let { data, error } = await call(true);
+    // PGRST202 = no submit_run with these parameters: the database predates
+    // endless-details.sql. The call never ran, so the ticket is still unused.
+    if (error?.code === "PGRST202" && details) ({ data, error } = await call(false));
     if (error) {
       console.error("[leaderboard] submit failed:", error.message);
       const top = await getTop(board);
