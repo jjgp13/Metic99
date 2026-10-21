@@ -219,6 +219,3 @@ export const STORY_MAP = {
     "#c07a9e", // bedroom
   ] as const,
 } as const;
-
-/** The story, in order: one file per level in config/levels/. */
-export { LEVELS } from "../levels";
