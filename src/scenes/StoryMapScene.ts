@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { DOODLE, GAME, LEADERBOARD, LEVELS, STORY, STORY_MAP } from "../config/constants";
+import { DOODLE, GAME, LEADERBOARD, LEVELS, MUSIC, STORY, STORY_MAP } from "../config/constants";
 import { selectedShip } from "../config/ships";
 import { drawPaper } from "../renderDoodle/paper";
 import { drawFrames, type DoodleRecipe } from "../renderDoodle/pencil";
@@ -16,6 +16,7 @@ import {
 } from "../services/storyProgress";
 import { onKeyDown } from "../ui/keyboard";
 import { textStyle } from "../ui/theme";
+import { music } from "./music";
 
 /** Doodles are drawn at 2× and shown at half size, for a sharp picture. */
 const SHARP = 2;
@@ -54,6 +55,8 @@ export default class StoryMapScene extends Phaser.Scene {
     this.boiling = [];
     this.frame = 0;
     this.travelling = false;
+    // After the last boss the ending plays once, to its end, map or not.
+    if (music.playing !== MUSIC.ENDING_FILE) music.play(this, MUSIC.MAP_FILE);
     const progress = loadStoryProgress();
     this.saved = loadSavedRun();
 

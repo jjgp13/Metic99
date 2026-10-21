@@ -153,10 +153,16 @@ export const OWNER_WAVE: readonly WaveSegment[] = [
   { KIND: "rest", SHARE: 4 }, // a breath before the boss
 ];
 
-/** Story music (scenes/levelMusic.ts): a path and a boss track per level. */
+/** Music (scenes/music.ts): a path and a boss track per story level
+ * (scenes/levelMusic.ts), plus the songs outside the levels, which share
+ * one main theme (files in public/assets/music/). */
 export const MUSIC = {
   VOLUME: 0.35, // under the sound effects
-  FADE_MS: 700, // crossfade to the boss track; fade out at the end
+  FADE_MS: 700, // crossfade between songs; fade out at the end
+  MENU_FILE: "menu.mp3", // main menu, HOW TO PLAY and SCORES
+  MAP_FILE: "map.mp3", // the story map
+  ENDING_FILE: "ending.mp3", // plays once when the last boss is beaten
+  ENDLESS_FILE: "endless.mp3", // Endless mode
 } as const;
 
 export const STORY = {

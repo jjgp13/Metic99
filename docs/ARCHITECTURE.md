@@ -210,11 +210,13 @@ fits here, and **what we didn't do**.
 ### 2.12 Single shared instance (page-wide singleton)
 
 - **What:** one `World3D` for the whole page, made on first use by
-  `getWorld3D()`.
+  `getWorld3D()`; one music player, `music` in `scenes/music.ts`.
 - **Why:** phones allow only a few WebGL contexts; making one per run would
-  leak them.
-- **Caution:** singletons hide dependencies, so it is used only here, and
-  the scene still receives it once in `create()` and passes it on.
+  leak them. A song outlives the scene that started it (the menu's song
+  plays on through SCORES), so the player can't belong to a scene.
+- **Caution:** singletons hide dependencies, so they are used only here.
+  The scene still receives World3D once in `create()` and passes it on;
+  scenes ask `music` for a song by name and never reach into its sounds.
 
 ### 2.13 Write-on-change caching (DOM)
 

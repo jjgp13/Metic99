@@ -103,6 +103,9 @@ src/
     StoryMapScene.ts  The STORY button: one island per stage, best scores,
                       "?" for stages not reached; PLAY = a run from island 1
     HowToPlayScene.ts Static rules screen reached from the menu
+    music.ts          The page's one music player (one song at a time,
+                      crossfades, loads on demand); levelMusic.ts = a
+                      run's path → boss tracks on top of it
     GameScene.ts      Composition root: builds the run and the HUD parts,
                       maps keypad/keyboard/pad to Field inputs, steps the
                       Field (or the battle Match) at a fixed 60 Hz (SimClock),
@@ -687,9 +690,17 @@ Green=multiplication, Yellow=division.
   the next island, and a tap starts it. The run is saved when each level
   starts (`STORAGE.STORY_SAVE`: level, lives, score), so it can be left
   (pause → SAVE & QUIT TO MAP) and continued from that level's start; a
-  game over deletes it. **Music:** each level loads its own path + boss
-  track (`public/assets/music/levelNN-{path,boss}.mp3`, `scenes/levelMusic.ts`)
-  and crossfades to the boss track when the boss comes in.
+  game over deletes it. **Music** (docs/MUSIC_PROMPTS.md): one shared
+  player for the page (`scenes/music.ts`, `music.play(scene, file)`) plays
+  one song at a time, crossfades from the one before, keeps a song that is
+  asked for again (the menu's through HOW TO PLAY / SCORES), and loads
+  each file the first time it's asked for (browsers hold audio until the
+  first tap or key). Menu `menu.mp3`, story map `map.mp3`, Endless
+  `endless.mp3` (`MUSIC.ENDLESS_FILE`, via `ENDLESS_TRACKS`), battles none
+  yet. Each level plays its path track and crossfades to its boss track
+  when the boss comes in (`LevelMusic`, `public/assets/music/levelNN-{path,
+  boss}.mp3`); beating the last boss plays `ending.mp3` once, on through
+  name entry and the map. Files: MP3, mono, 96 kbps (24 tracks, 16 MB).
   Built: level 1, THE BACKYARD (now 100 s, d 0.1 → 0.35; beetles whose eyes are
   the numbers and sometimes march in pairs, worms made of numbers, a
   butterfly that folds its wings over its numbers; boss GIANT MOLE, 5
@@ -1004,6 +1015,20 @@ dMatch)`; it is 0 in solo play.
 ## Decision Log
 
 Newest first. Format: `YYYY-MM-DD — decision — rationale`.
+
+- **2026-10-20 — New soundtrack in; one shared music player for every
+  screen.** The owner's 24 tracks (44-bar wave-timed path songs, bosses,
+  menu, map, ending, Endless), re-encoded from the WAV masters to MP3 mono
+  96 kbps: plays on every browser (iPhone too), 16 MB for all, ~1.3 MB per
+  level; the masters are mono already. Chosen over OGG/Opus (smaller,
+  but older iPhones can't play it) and 128 kbps (no audible gain on these
+  square waves for +33%). Player: one page-wide instance (like World3D),
+  because a song must outlive its scene (menu → SCORES, ending → name
+  entry); LevelMusic now runs on it (owner said "just do it"; chosen over
+  a player per scene, which restarts songs, and handing it through
+  scene data). Battles stay silent for now (open for the owner). Found: ENDLESS
+  after a battle/story level replayed it (Phaser reuses a scene's last
+  data); fixed.
 
 - **2026-10-20 — Endless = one set of rules; story worlds are cosmetic
   themes (owner's pick).** Endless keeps every monster, the score-led curve
