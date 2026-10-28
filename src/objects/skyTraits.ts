@@ -1,4 +1,5 @@
 import { GAME } from "../config/constants";
+import { sin } from "../math/detmath";
 import { BALLOON, KITE, LOOP, SKY_WIND, SWOOP } from "../config/levels/sky";
 import { Ability } from "./abilities";
 import type Alien from "./Alien";
@@ -98,7 +99,7 @@ export class Kite extends Windy {
     // Incremental swing, so a sideways step refused by the readability rule
     // never makes it jump later (like the cave's bats).
     const g = this.swing + (TAU * delta) / KITE.SWING_MS;
-    let x = alien.x + KITE.SWING_PX * (Math.sin(g) - Math.sin(this.swing));
+    let x = alien.x + KITE.SWING_PX * (sin(g) - sin(this.swing));
     if (this.wind.phase === "gust") x += (this.wind.dir * KITE.DRIFT_PX_S * delta) / 1000;
     alien.x = inField(alien, x);
     this.swing = g % TAU;

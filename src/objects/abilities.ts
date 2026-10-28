@@ -1,4 +1,5 @@
 import { ABILITY, BLINKER, GAME, SHIELD, SPLITTER, type AlienKind, type BossDef } from "../config/constants";
+import { sin } from "../math/detmath";
 import type Alien from "./Alien";
 
 /**
@@ -156,7 +157,7 @@ export function blinkCover(time: number, B: BlinkTiming): number {
   t %= B.OPEN_MS + B.WARN_MS + B.LID_MS * 2 + B.CLOSED_MS;
   if (t < B.OPEN_MS) return 0;
   if ((t -= B.OPEN_MS) < B.WARN_MS) {
-    return B.WARN_COVER * Math.abs(Math.sin((Math.PI * B.WARN_FLUTTERS * t) / B.WARN_MS));
+    return B.WARN_COVER * Math.abs(sin((Math.PI * B.WARN_FLUTTERS * t) / B.WARN_MS));
   }
   if ((t -= B.WARN_MS) < B.LID_MS) return t / B.LID_MS;
   if ((t -= B.LID_MS) < B.CLOSED_MS) return 1;

@@ -92,7 +92,7 @@ solo play they unlock as difficulty rises. The others reuse the same hooks.
 | --- | --- | --- |
 | 0 | Offline match vs bots in the browser | Tests the fun cheaply; no infrastructure to maintain while the rules change |
 | 1 | Node + plain WebSocket (`ws`/uWebSockets.js) match server, one room | Plain sockets expose the protocol, rooms and state ownership that a framework like Colyseus would hide; one process keeps it debuggable |
-| 1 | Each client runs its own field; the server owns shared state (targets, attacks, incoming queues, KOs, badges, placement) | Fields need instant input response, so they stay on the client; anything two players must agree on lives on the server |
+| 1 | Each client runs its own field; the server owns shared state (targets, attacks, incoming queues, KOs, badges, placement) | Fields need instant input response, so they stay on the client; anything two players must agree on lives on the server. **Built 2026-10-18** (docs/NETCODE.md): the server also re-runs every field from its inputs (option A), so phase 2's checks are already in |
 | 2 | Shared TypeScript sim + seeded spawns | The server can replay a field and check claimed kills (anti-cheat); everyone gets the same base aliens, so only attacks differ |
 | 3 | Matchmaking, many match servers, Redis queue | Teaches horizontal scaling and server allocation once one room works |
 | 4 | Headless bot load tests, metrics, reconnects | Proves the servers hold up; bots double as lobby fillers |
@@ -265,8 +265,13 @@ the agreed shape.
   WebSocket messages (the server owns the match, clients own their field).
   All fields in a match share one seed (same base aliens).
 - **Float caveat:** `Math.sin`/`Math.exp` may differ in the last bit between
-  Safari and Node, so a cross-engine replay can drift. Keep them out of
-  decisions or let the server check with a tolerance.
+  Safari and Node, so a cross-engine replay can drift. A tolerance doesn't
+  work with inputs-only replication (a last-bit difference eventually flips
+  a comparison), so copies must be bit-identical (netcode S0,
+  `docs/NETCODE.md`). Drift is detected by a whole-state fingerprint
+  (`src/sim/fingerprint.ts`) compared every 60 steps. Measured 2026-10-14:
+  even Node 24 and Chromium 152 (both V8) differ in the last bit of `sin`
+  (3%) and `exp` (10%), so the shared sim can't use them as they are.
 
 ## 9. Contracts vs content
 

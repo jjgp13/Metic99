@@ -48,8 +48,9 @@ These are what a reviewer checks first.
 ## 2. Layers and dependencies
 
 ```
-config/      numbers, types, the player's saved picks (imports only config/)
-sim/ objects/ handwriting/   the rules, pure TS  (imports config only)
+math/        deterministic math for the rules (imports nothing)
+config/      numbers, types, the player's saved picks (imports only config/, math/)
+sim/ objects/ handwriting/   the rules, pure TS  (imports config, math)
 render3d/ ui/ services/      views and the outside world
 scenes/      Phaser scenes: wire the above together
 ```
@@ -60,6 +61,12 @@ scenes/      Phaser scenes: wire the above together
 - **Game rules never use `Math.random()` or the wall clock.** Draw from the
   run's seeded `Rng` and read the game clock (`elapsedMs`). Visual-only
   randomness (stars, debris) may use `Math.random()`.
+- **Game rules never call `Math.sin`, `Math.cos`, `Math.exp`, `Math.pow`
+  or `**`.** Engines compute them differently in the last bit (measured in
+  netcode S0), so the rules use `sin`/`cos`/`exp` from `math/detmath.ts`.
+  `+ - * /`, `%`, `Math.sqrt`, `floor`, `abs`, `min`, `max` are exact and fine.
+  Bots are the exception: they run only on the server and act through
+  logged inputs.
 - **Views read state; they change it only through inputs.** A view calls
   `field.apply(input)` or a `BattleActions` callback, never sets a field
   property.

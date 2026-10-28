@@ -101,6 +101,14 @@ loop. See the Decision Log.
   plays whole bot-only battle matches (`scripts/match-report.ts`; `--
   --matches 40 --players 16 --seats ace,pilot,...`): win rate and placement
   per level, match length, KO times, what knocks players out.
+  **Online:** `npm run server` (game server, dev; with `npm run dev`, Vite
+  proxies `/ws`), `npm run build && npm run build:server && npm start`
+  (production: one Node process serves the game + WebSocket on :8787),
+  `npm run net:bots -- --clients 7 [--go] [--lag 120 --jitter 80]`
+  (headless bot clients over real sockets). `Dockerfile` builds both.
+  `npm run determinism:record` re-records the determinism lab's runs
+  (`src/lab/determinism-recording.json`; needed after any rule change,
+  `determinism.test.ts` says so).
 
 ## Project layout
 
@@ -109,6 +117,9 @@ public/assets/        Game art/audio/fonts (reused verbatim from the Unity repo)
   sprites/  sounds/  fonts/
 src/
   main.ts             Phaser.Game config + scene registration
+  math/
+    detmath.ts        Deterministic sin/cos/exp (fdlibm ports, exact ops
+                      only): same bits on every engine (netcode S0)
   config/
     constants.ts      Re-exports every tuning file (import constants from here)
     tuning/           Tuning numbers, one file per domain: game, monsters,
@@ -151,6 +162,8 @@ src/
                       credits on a new page (`?ending=1`)
     endingCredits.ts  The credits' lines (pure): author, thank-you, the run
                       told back (time, worlds, score), an unlock line
+    LobbyScene.ts     Online lobby: name, who waits, countdown, START NOW;
+                      builds a NetBattle on the server's `start`
     HandwritingLabScene.ts `?lab=draw`: records real handwriting, exports JSON
   services/
     masteryStats.ts   Personal bests in localStorage (pure mergeRun + shell)
@@ -167,6 +180,15 @@ src/
     playtestLog.ts    Playtest logger: in the claude.ai playtest Artifact,
                       saves each finished run (seed + input log + extras)
                       to the Artifact's `db`; a no-op anywhere else
+  net/                Online play, client side (docs/NETCODE.md)
+    protocol.ts       Every message both ways (JSON) + parseClient: the
+                      server's validation of anything a client sends
+    NetClient.ts      The WebSocket: hello (protocol + build), lobby, ping
+    NetBattle.ts      An online match on this device: plays your field at
+                      once, sends inputs@step, applies server messages and
+                      reports seq@step, fingerprints; tiles/events in
+    session.ts        The browser's one connection + the online name
+    Lag.ts            Fake delay/jitter, order kept (break-it experiments)
   handwriting/        Phaser-free digit recognition (unit-tested)
     recognizer.ts     $P point-cloud recognizer + scratch-out detector
     digitTemplates.ts 0–9 templates (~31 variants): line/arc/curve recipes plus
@@ -221,7 +243,17 @@ src/
     Bot.ts            Bot player: reads only what's on screen, acts only via
                       `field.apply()`; skill levels in `BOT` (rookie/pilot/ace).
     SimClock.ts       Fixed timestep: real time → whole rule steps + alpha.
+    BattleSource.ts   What the game screen needs from a battle; LocalBattle
+                      (offline Match) and net/NetBattle (online) implement it
     stats.ts          Solve-time summaries.
+    hash.ts           FNV-1a 32-bit hash helpers (hashByte/String/Number).
+    determinism.ts    The S0 experiment: replay a recorded run and compare
+                      fingerprints/outcome with Node's (`checkRun`), re-ask
+                      Math.sin/exp (`checkMath`), `withBrokenSin` (break it).
+    fingerprint.ts    State fingerprint: walks every value reachable from a
+                      Field (`walkState`), hashes it; `stateDump` lists
+                      "path = value"; `fingerprintReplay` = a checkpoint
+                      every `NET.FINGERPRINT_EVERY` steps (netcode S0).
     golden.test.ts    Golden master: fixed-seed bot runs + a match vs a
                       saved snapshot (refactors must keep it green).
     pace.ts           Answer times by ball count (replayed from an input
@@ -240,6 +272,10 @@ src/
     mole.ts, owlBoss.ts, caveTroll.ts, …  One file per boss mechanic.
     pondCreatures.ts  Level 2's rules: Hop, Dart, Dive traits + the BigFrog.
     Bullet.ts         Pure bullet state {x, y, active}.
+  lab/
+    determinismLab.ts `?lab=determinism`: plain DOM page (no Phaser) that
+                      replays Node's recording on this engine; report box
+    determinism-recording.json  Written by `npm run determinism:record`
   renderDoodle/        The default view: DoodleWorld (FieldView), recipes.ts
                       (one short stroke recipe per ship/monster/boss),
                       pencil.ts (Rough.js + pre-drawn boil frames), paper.ts,
@@ -263,6 +299,18 @@ art/                  3D art source (docs/ART_SPEC.md)
   previews/           Rendered top-down + 3/4 previews per model
 public/assets/models/ Built .glb models loaded by World3D
 public/assets/icons/  Transparent top-down model renders for 2D menus (build output)
+server/               The game server (Node + plain ws; docs/NETCODE.md)
+  main.ts             HTTP (serves dist/, /health) + WebSocket upgrade on
+                      /ws, hello check, heartbeat; one Room
+  Rooms.ts            Where a newcomer goes (lobby → new room → queue →
+                      busy), MAX_ROOMS cap, a crashing room closes alone
+  Room.ts             Lobby → Match → results → lobby; 60 Hz tick from real
+                      time; tiles 10 Hz; takeover by a bot
+  RateLimit.ts        Token bucket per socket
+  RemoteSeat.ts       The server's copy of one person's field, fed only by
+                      their inputs; refuses impossible reports
+  Player.ts, TickStats.ts  A connection; tick time p50/p99
+Dockerfile            Game + server in one container (any container host)
 docs/ENGINEERING.md   How code is written, verified and explained (read first)
 docs/ARCHITECTURE.md  Guided tour of the design patterns used, and why
 docs/learning/        The owner's learning: HOW_WE_LEARN.md (the science),
@@ -273,6 +321,7 @@ docs/learning/        The owner's learning: HOW_WE_LEARN.md (the science),
 .claude/skills/explain-change/  How Claude explains every change
 docs/ART_SPEC.md      3D art style, budgets, axes, pipeline
 docs/MULTIPLAYER_DESIGN.md  Battle-royale design: energy, attacks, backend plan
+docs/NETCODE.md       Phase 1 (online server) plan S0–S6 + learning journal
 docs/SOLO_MODES_DESIGN.md   Story mode plan: 10 scrolling levels + bosses, Endless
   env.d.ts            Types for Vite `import.meta.env` (Supabase env vars)
 ```
@@ -337,11 +386,12 @@ docs/SOLO_MODES_DESIGN.md   Story mode plan: 10 scrolling levels + bosses, Endle
   when both are present, so the game **builds and runs locally without them** —
   game over just returns to the menu instead of routing to name entry.
 - **Navigation:** `BootScene` → `MenuScene` (ship picker ◀ ▶ / ←→, then STORY /
-  ENDLESS / BATTLE (beta) / HOW TO PLAY / SCORES). STORY → `StoryMapScene`
+  ENDLESS / BATTLE (beta) / ONLINE / HOW TO PLAY / SCORES). STORY → `StoryMapScene`
   (islands; tap a reached island = that stage's board, RUN SCORES = the run
   board, both `LeaderboardScene` browse with BACK → map; PLAY / Enter →
   `GameScene` with `{ story: { level: 0, lives, score, levelScores: [] } }`);
-  ENDLESS (and
+  ONLINE → `LobbyScene` → `GameScene` with `{ online: NetBattle }` → results →
+  `LobbyScene`; ENDLESS (and
   Enter) → `ThemePickerScene` (pick a theme; PLAY / Enter → `GameScene`, BACK /
   Esc → menu); BATTLE → `GameScene` with `{ battle: true }` (no leaderboard); HOW TO PLAY → `HowToPlayScene`; SCORES → `LeaderboardScene` in
   **browse** mode (fetches `getTop()` itself, BACK → menu).
@@ -1023,6 +1073,14 @@ Green=multiplication, Yellow=division.
   YOU (attack orange, not red: red is for subtraction balls). Click a tile
   = `aimAt(seat)`. It is a DOM overlay placed from the canvas rect every
   frame and hidden when a side gets too narrow, so it never covers the field.
+- **Online battle** (docs/NETCODE.md; `NET` tunables): up to 8 people on
+  the game server, empty seats are server bots; the match starts 30 s after
+  the first player joins or on START NOW. Your field runs on your device at
+  once; the server re-runs a copy from your inputs (step-tagged) and decides
+  KOs, attacks and places. Attacks/standing reach you as numbered messages
+  you apply at your next step and report back. Fingerprints every 60 steps
+  catch desyncs. No pause online; 5 s of silence (closed tab), a speed hack
+  or a delayed attack hands your seat to a bot. Not yet: reconnect.
 - **Lives** are a playtest constant, `PLAYER.LIVES` (3 by default; 1 = the
   battle-royale knockout rule). With 1 life the hit recovery below never runs:
   the only hit ends the game, so the power is the sole safety tool.
@@ -1118,7 +1176,8 @@ dMatch)`; it is 0 in solo play.
        `docs/MULTIPLAYER_DESIGN.md`. Single player first: [x] energy bar +
        one picked power (FREEZE / SLOW / BLAST / SHIELD), [x] alien
        movement patterns, [x] monster abilities; then offline bots (and energy
-       "send"), then the WebSocket match server (8 players to start).
+       "send"), then the WebSocket match server (8 players to start;
+       plan S0–S6 in `docs/NETCODE.md`, one chat per milestone).
        **Phase 0 (offline vs bots)** milestones M0–M9 are in
        `docs/MULTIPLAYER_DESIGN.md` §10: [x] M0 battle rules/bots/contracts
        written down, [x] M1 seeded random numbers + game clock, [x] M2a
@@ -1132,6 +1191,13 @@ dMatch)`; it is 0 in solo play.
        badges, `tiles()`, [x] sending pays: separate attack gauge,
        [ ] M8 battle UI: [x] desktop opponent board, [x] phone feedback
        (dock + edge glow + haptics), [ ] results + fast-forward.
+       **Phase 1 (online, docs/NETCODE.md):** [x] S0 determinism,
+       [x] S1 protocol, [x] S2 server, [x] S3 server runs the match,
+       [x] S4 client network mode, [x] S5 lag + bot-client load test,
+       [ ] S6 deploy (Dockerfile + render.yaml ready), [x] launch
+       hardening (rooms + caps, rate limit, origin, compression,
+       slow-motion guard), [ ] fast-solve flag, [ ] name filter + privacy
+       note, [ ] reconnect (only if needed).
 
 14. [ ] **Solo modes: STORY + ENDLESS** — 10 notebook-page levels, each
        with a new monster and a boss; today's game becomes ENDLESS. Plan
@@ -1156,6 +1222,12 @@ dMatch)`; it is 0 in solo play.
   **Never mix a refactor and a behavior change in one commit**: a refactor
   keeps the golden master (`src/sim/golden.test.ts`) green; an intended rule
   change updates it (`npx vitest run -u`) and says why.
+- **Game rule state lives inside the `Field`** (no counters or caches at the
+  top of a file): the fingerprint (`sim/fingerprint.ts`) only sees what is
+  reachable from the field, so state outside it could drift unnoticed.
+- **Game rules use `sin`/`cos`/`exp` from `src/math/detmath.ts`, never
+  `Math.sin`/`cos`/`exp`/`pow` or `**`:** engines round those differently
+  (netcode S0), which would make the server's copy of a field drift.
 - **Game rules never use `Math.random()` or the wall clock** (`this.time.now`):
   draw from the run's seeded streams and read the game clock. Visual-only
   randomness (stars, debris) may use `Math.random()`. New monsters and
@@ -1173,6 +1245,16 @@ dMatch)`; it is 0 in solo play.
 ## Decision Log
 
 Newest first. Format: `YYYY-MM-DD — decision — rationale`.
+
+- **2026-10-27 — Online play (netcode S0–S6) merged into master.** The
+  branch was cut before levels 7–10, the pushback and the boss tricks; their
+  rule code used the engine's sin/cos/hypot and `**`, which the
+  determinism guard refuses (two engines can differ in the last bit), so
+  they now use `math/detmath` like the rest of the rules. The determinism
+  recording was re-recorded (the rules changed since it was made). Golden
+  master unchanged. Not deployed yet: no Render service and no
+  `VITE_NET_URL`, so ONLINE on GitHub Pages says "can't reach the server"
+  until the server is up (docs/NETCODE.md).
 
 - **2026-10-21 — Endless scores carry their context in a detail table
   (owner's pick).** Ship, power ("the ability" = the power), world and
@@ -1581,6 +1663,55 @@ Newest first. Format: `YYYY-MM-DD — decision — rationale`.
   Prototype A stays on its local branch, unmerged.
   Same day: the three ships got their own doodles (all three drew FALCON),
   and the ship got hit / dazed / destroyed animations (owner's ask).
+- **2026-10-18 — Launch hardening, free tiers only (owner: an experiment,
+  cap instead of scaling).** Hello compares a rules-file hash
+  (`__RULES_ID__`), so Pages and Render builds match; up to MAX_ROOMS (3)
+  rooms then "busy"; per-IP/total socket caps, token-bucket rate limit,
+  Origin check, hello timeout, crash isolation; permessage-deflate; a
+  field > 3 s behind real time (slow-motion cheat) goes to a bot, honest
+  clients catch up. Note: docs/learning/2026-10-18-launch-hardening.md.
+
+- **2026-10-18 — Online battles: phase 1 S1–S5 (owner: "continue until a
+  playable demo").** One Node process (plain `ws`) serves the game and the
+  socket. Clients send only step-tagged inputs; the server's copy of each
+  field (`RemoteSeat`) replays them and decides KOs/attacks/places; server
+  messages are applied by the device at a step it picks and reported back
+  (seq@step), so prediction never rolls back. The server refuses steps
+  backwards, ahead of real time, late message reports; silent/misbehaving
+  players become bots. Measured: 0 desyncs (after skipping the `outgoing`
+  outbox in fingerprints), step p99 <= 2 ms, fine at 300+ ms RTT.
+
+- **2026-10-15 — Netcode S0 done: rules use our own sin/cos/exp
+  (`src/math/detmath.ts`, owner picked A over removing them or rounding).**
+  fdlibm ports with exact ops only: same bits on every engine and equal to
+  Node 24's results on all recorded inputs. A guard test bans engine
+  sin/cos/exp/pow/`**` in rule files (it caught `** 3` in the glide).
+
+- **2026-10-14 — Netcode S0: two V8 versions already disagree on
+  `Math.sin`/`Math.exp`.** Node 24 vs Chromium 152: last-bit differences on
+  3% / 10% of the inputs the rules use; fingerprints drift in every
+  recorded run, outcomes still match after 2–2.5 min. A recording (not a
+  live bot) is replayed by the `?lab=determinism` page so only the engine
+  varies. Phones next; step 4 decides the fix. Details: `docs/NETCODE.md`.
+
+- **2026-10-08 — Owner practice is intent-level (owner's pick).** "Your
+  turn" tasks are now test cases in plain English, finding smells or
+  planted bugs, designing break-it experiments and reading files by their
+  intent comment; Claude writes the low-level code. Writing code is cheap
+  now; specifying, judging and debugging it is the skill to build.
+
+- **2026-10-08 — Netcode S0: field copies must be bit-identical; checked
+  with a whole-state fingerprint.** Inputs-only replication can't use a
+  tolerance (a last-bit difference eventually changes an event). The
+  fingerprint walks every value reachable from the `Field` (no hand-picked
+  list to forget), hashes it with FNV-1a, every 60 steps
+  (`NET.FINGERPRINT_EVERY`). Details: `docs/NETCODE.md` journal.
+
+- **2026-10-08 — Phase 1 (online match server) is planned as S0–S6 in
+  `docs/NETCODE.md`, one chat per milestone.** Server re-runs every field
+  from inputs (option A), Node + plain `ws` sharing `src/sim`. Each
+  milestone is small learning-loop steps where the owner designs first;
+  NETCODE.md is the plan and the journal (decisions, measurements, glossary).
 
 - **2026-10-08 — Reviews move to a dedicated quiz chat (owner's design).**
   One chat per feature teaches; one long-lived chat quizzes (`/quiz`, and a

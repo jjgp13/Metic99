@@ -50,7 +50,8 @@ export class Moon extends Boss {
     if (b <= a) return 0;
     // The shadow's edges at the balls' row: the terminator is a half
     // ellipse, so it is narrower there than at the face's middle.
-    const reach = P.FACE_R * Math.sqrt(1 - (this.def.BOX.BALLS_Y / P.FACE_R) ** 2);
+    const row = this.def.BOX.BALLS_Y / P.FACE_R;
+    const reach = P.FACE_R * Math.sqrt(1 - row * row);
     const from = (2 * a - 1) * reach;
     const to = (2 * b - 1) * reach;
     const r = ENEMY.BALL_RADIUS;

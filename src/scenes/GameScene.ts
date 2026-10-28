@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { DOODLE, LEADERBOARD, LEVEL_CLEAR, LEVELS, MATCH, MUSIC, POWER_CUE, RECOVERY, STORY, TARGET_STRATEGIES, type TargetStrategy } from "../config/constants";
+import { DOODLE, LEADERBOARD, LEVEL_CLEAR, LEVELS, MATCH, MUSIC, NET, POWER_CUE, RECOVERY, STORY, TARGET_STRATEGIES, type TargetStrategy } from "../config/constants";
 import { artMode } from "../config/artMode";
 import { inputMode } from "../config/inputMode";
 import { PLAIN_THEME, levelTracks, selectedTheme, type Theme } from "../config/themes";
@@ -15,7 +15,8 @@ import { selectedShip, type ShipChoice } from "../config/ships";
 import { shipIconFrames } from "../renderDoodle/shipIcons";
 import type { Bot } from "../sim/Bot";
 import { ANSWER_MAX_DIGITS, type Field, type FieldEvent, type FieldInput } from "../sim/Field";
-import type { Match, MatchEvent } from "../sim/Match";
+import type { BattleSource } from "../sim/BattleSource";
+import type { MatchEvent } from "../sim/Match";
 import type { PageView } from "../render3d/World3D";
 import { SimClock } from "../sim/SimClock";
 import type { PowerUse } from "../sim/energy";
@@ -42,10 +43,14 @@ import type { EndingData, EndingNext } from "./EndingScene";
 import type { BoardScore } from "./NameEntryScene";
 import { setUpRun, type StoryRun } from "./runSetup";
 import { ShipLaunch } from "./shipLaunch";
+import { NetBattle } from "../net/NetBattle";
+
+/** Online: longest wait for the server's placement after your KO (ms). */
+const RESULTS_WAIT_MS = 3_000;
 
 /**
  * The game screen. It is the *composition root* (docs/ARCHITECTURE.md §2.9):
- * it builds the run (a Field, or a battle Match) and the screen's parts,
+ * it builds the run (a Field, or a battle) and the screen's parts,
  * connects them, and runs the frame loop. It holds no rules and draws
  * nothing itself:
  *
@@ -61,8 +66,8 @@ import { ShipLaunch } from "./shipLaunch";
 export default class GameScene extends Phaser.Scene {
   // --- The run (rebuilt in create(): Phaser reuses the scene object) ---
   private field!: Field;
-  /** Battle mode: the match; the player plays `match.fields[0]`. */
-  private match: Match | null = null;
+  /** Battle mode: the battle (offline match or online); you play `battle.field`. */
+  private battle: BattleSource | null = null;
   /** Dev (`?bot=ace`): a bot plays this field through the same inputs. */
   private autopilot: Bot | null = null;
   /** Story mode: the run so far (this scene plays its current level). */
@@ -78,6 +83,9 @@ export default class GameScene extends Phaser.Scene {
   private gameOver = false;
   /** Guards the single way out of the game-over screen. */
   private leaving = false;
+  /** Online: knocked out, waiting (briefly) for the server's placement before
+   * showing the results; the time we started waiting. */
+  private resultsPendingSince: number | null = null;
   /** Scene time before which a tap can't leave (the level-clear card). */
   private leaveAllowedAt = 0;
   /** Whether this run set a new personal best (name entry says so). */
@@ -108,19 +116,20 @@ export default class GameScene extends Phaser.Scene {
     super("GameScene");
   }
 
-  create(data?: { battle?: boolean; story?: StoryRun }): void {
+  create(data?: { battle?: boolean; story?: StoryRun; online?: BattleSource }): void {
     this.story = data?.story ?? null;
-    const run = setUpRun({ battle: data?.battle ?? false, story: this.story });
+    const run = setUpRun({ battle: data?.battle ?? false, story: this.story }, data?.online);
     // Read here, not in setUpRun: the theme is for the view and the music only.
-    const endless = !this.story && !run.match;
+    const endless = !this.story && !run.battle;
     this.theme = endless ? selectedTheme(loadStoryProgress().furthest) : null;
     this.field = run.field;
-    this.match = run.match;
+    this.battle = run.battle;
     this.autopilot = run.autopilot;
     this.clock = new SimClock();
     this.paused = false;
     this.gameOver = false;
     this.leaving = false;
+    this.resultsPendingSince = null;
     this.leaveAllowedAt = 0;
     this.newHighScore = false;
     this.unlockedShips = [];
@@ -130,8 +139,8 @@ export default class GameScene extends Phaser.Scene {
     this.runExtras = {
       lives: this.field.lives,
       forcedAbilities: run.forcedAbilities,
-      battle: this.match
-        ? { players: MATCH.OPPONENTS.length + 1, opponents: [...MATCH.OPPONENTS], placement: null }
+      battle: this.battle
+        ? { players: this.battle.seatCount, opponents: [...MATCH.OPPONENTS], placement: null }
         : null,
       story: this.story
         ? { level: this.story.level, startScore: this.story.score, startEnergy: this.story.energy ?? 0 }
@@ -153,7 +162,7 @@ export default class GameScene extends Phaser.Scene {
     if (this.story) {
       if (this.story.level === 0) void startMatch(LEADERBOARD.STORY_RUN_BOARD);
       void startMatch(stageBoard(this.story.level));
-    } else if (!this.match) {
+    } else if (!this.battle) {
       void startMatch();
     }
     initPlaytestLog();
@@ -188,9 +197,9 @@ export default class GameScene extends Phaser.Scene {
       onKey: (key, source) => this.onAnswerKey(key, source),
       onInk: (e) => this.onInk(e),
     });
-    this.sendButton = this.match ? new SendButton(this, this.field, (cost) => this.sendAttack(cost)) : null;
+    this.sendButton = this.battle ? new SendButton(this, this.field, (cost) => this.sendAttack(cost)) : null;
     this.energyHud = new EnergyHud(this, this.ducker, this.field, {
-      battle: this.match !== null,
+      battle: this.battle !== null,
       onPower: () => this.usePower(),
       onReady: () => this.powerReadyChime(),
     });
@@ -202,8 +211,8 @@ export default class GameScene extends Phaser.Scene {
     );
 
     this.unseenMatchEvents = [];
-    this.battleViews = this.match
-      ? createBattleViews(this, this.match, { aimAt: (seat) => this.aimAt(seat), aimBy: (s) => this.aimBy(s) })
+    this.battleViews = this.battle
+      ? createBattleViews(this, this.battle.seatCount, { aimAt: (seat) => this.aimAt(seat), aimBy: (s) => this.aimBy(s) })
       : [];
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
@@ -217,23 +226,40 @@ export default class GameScene extends Phaser.Scene {
     // (stars drift, the last explosion finishes, pause hides the aliens).
     if (!this.paused && !this.gameOver) {
       this.clock.advance(delta, () => this.step());
+      this.catchUp();
       this.updateHud(delta);
       this.inputPanel.update(delta);
     }
+    this.battle?.poll();
+    if (this.battle?.kicked && !this.gameOver) this.endGame();
+    this.showResultsWhenPlaced(time);
     this.updateBattleViews(delta);
     this.renderWorld(time, delta);
+  }
+
+  /**
+   * Online: after a stall (a slow frame, a hidden tab), run the steps real
+   * time owes, a batch per frame, instead of dropping them like offline play:
+   * the server refuses a field that lags far behind (a slow-motion cheat).
+   */
+  private catchUp(): void {
+    if (!(this.battle instanceof NetBattle)) return;
+    const due = this.battle.stepsDue() - 1;
+    for (let i = 0; i < NET.CATCH_UP_STEPS && this.field.steps < due; i++) {
+      if (!this.step()) return;
+    }
   }
 
   /** One fixed rule step, then show what happened in it. False once the run ended. */
   private step(): boolean {
     this.autopilot?.update(this.field, this.clock.stepMs);
-    if (this.match) this.match.step(this.clock.stepMs);
+    if (this.battle) this.battle.step(this.clock.stepMs);
     else this.field.step(this.clock.stepMs);
 
     for (const e of this.field.takeEvents()) this.showFieldEvent(e);
-    for (const e of this.match?.takeEvents() ?? []) {
+    for (const e of this.battle?.takeEvents() ?? []) {
       this.unseenMatchEvents.push(e);
-      if (e.type === "over" && e.winner === 0) this.endGame();
+      if (e.type === "over" && e.winner === this.battle?.you) this.endGame();
     }
     return !this.gameOver;
   }
@@ -252,11 +278,11 @@ export default class GameScene extends Phaser.Scene {
   }
 
   private updateBattleViews(delta: number): void {
-    if (!this.match || !this.battleViews.length) return;
+    if (!this.battle || !this.battleViews.length) return;
     const frame = {
-      tiles: this.match.tiles(),
+      tiles: this.battle.tiles(),
       events: this.unseenMatchEvents,
-      you: 0,
+      you: this.battle.you,
       delta,
       paused: this.paused,
       gameOver: this.gameOver,
@@ -406,7 +432,7 @@ export default class GameScene extends Phaser.Scene {
       e.preventDefault();
       return this.usePower();
     }
-    if ((key === "t" || key === "T") && this.match) return this.cycleAim();
+    if ((key === "t" || key === "T") && this.battle) return this.cycleAim();
     if (key >= "0" && key <= "9") this.onAnswerKey(key, "keyboard");
     else if (key === "Backspace") this.onAnswerKey("<", "keyboard");
     else if (key === "Escape") this.onAnswerKey("C", "keyboard");
@@ -478,14 +504,14 @@ export default class GameScene extends Phaser.Scene {
 
   /** Battle: aim at one opponent by hand (a tile was tapped). */
   private aimAt(seat: number): void {
-    if (!this.match || this.gameOver || this.paused || seat === 0) return;
+    if (!this.battle || this.gameOver || this.paused || seat === this.battle.you) return;
     this.field.apply({ type: "target", aim: { seat } });
     this.sound.play("blip", { volume: 0.4, rate: 1.3 });
   }
 
   /** Battle: aim by a targeting strategy (the aim chip, or T). */
   private aimBy(strategy: TargetStrategy): void {
-    if (!this.match || this.gameOver || this.paused) return;
+    if (!this.battle || this.gameOver || this.paused) return;
     this.field.apply({ type: "target", aim: strategy });
     this.sound.play("blip", { volume: 0.4, rate: 1.3 });
   }
@@ -503,7 +529,8 @@ export default class GameScene extends Phaser.Scene {
 
   /** Freeze the field and hide the aliens, so sums can't be solved on a break. */
   private togglePause(): void {
-    if (this.gameOver) return;
+    // Online the others keep playing: a paused field would dodge attacks.
+    if (this.gameOver || this.battle?.online) return;
     this.paused = !this.paused;
     this.music?.pause(this.paused);
     this.reticle.setVisible(!this.paused);
@@ -525,6 +552,25 @@ export default class GameScene extends Phaser.Scene {
     this.inputPanel.setEnabled(false);
     if (import.meta.env.DEV) this.logPaceToConsole();
 
+    // Online, your KO happened here first: the server confirms it (and your
+    // place) a moment later, when its copy of your field gets there.
+    if (this.battle?.online && this.battle.placementOf(this.battle.you) === 0) {
+      this.resultsPendingSince = this.time.now;
+      return;
+    }
+    this.showResults();
+  }
+
+  /** Online: show the results once the server has placed you (or after a wait). */
+  private showResultsWhenPlaced(now: number): void {
+    const since = this.resultsPendingSince;
+    if (since === null || !this.battle) return;
+    if (this.battle.placementOf(this.battle.you) === 0 && now - since < RESULTS_WAIT_MS) return;
+    this.resultsPendingSince = null;
+    this.showResults();
+  }
+
+  private showResults(): void {
     const f = this.field;
     const { mastery, newHighScore } = recordRun(f);
     this.newHighScore = newHighScore;
@@ -533,21 +579,26 @@ export default class GameScene extends Phaser.Scene {
       recordLevel(this.story.level, f.score - f.startScore, false);
       this.newHighScore = recordStoryRun(f.score);
     }
-    const placement = this.match ? this.match.placements[0] : null;
+    const placement = this.battle ? this.battle.placementOf(this.battle.you) : null;
     if (this.runExtras.battle) this.runExtras.battle.placement = placement;
 
     const screen = new GameOverScreen(this, {
       field: f,
       mastery,
       rank: rankFor(mastery.highScore),
-      battle: this.match && placement !== null ? { placement, players: this.match.seats.length } : null,
-      continueHint: this.match
-        ? "tap / Enter for the menu"
-        : this.story && !isLeaderboardEnabled()
-          ? "tap / Enter for the map"
-          : isLeaderboardEnabled()
-          ? "tap / Enter to enter initials"
-          : "tap / Enter to play again",
+      // No place shown while it's unknown (online: replaced by a bot mid-match).
+      battle: this.battle && placement ? { placement, players: this.battle.seatCount } : null,
+      continueHint: this.battle?.kicked
+        ? `replaced by a bot (${this.battle.kicked}) · tap for the lobby`
+        : this.battle?.online
+          ? "tap / Enter for the lobby"
+          : this.battle
+            ? "tap / Enter for the menu"
+            : this.story && !isLeaderboardEnabled()
+              ? "tap / Enter for the map"
+              : isLeaderboardEnabled()
+                ? "tap / Enter to enter initials"
+                : "tap / Enter to play again",
     });
 
     this.saveRun((saved) => screen.showSaveStatus(saved));
@@ -681,10 +732,13 @@ export default class GameScene extends Phaser.Scene {
    * level, name entry (leaderboard on), the story map or the menu.
    */
   private leaveGameOver(): void {
-    if (this.leaving || this.time.now < this.leaveAllowedAt) return;
+    if (this.leaving || this.resultsPendingSince !== null || this.time.now < this.leaveAllowedAt) return;
     if (this.clearCard?.finishCount()) return; // the first tap shows the whole score
     this.leaving = true;
-    if (this.story) {
+    if (this.battle instanceof NetBattle) {
+      this.battle.dispose();
+      this.scene.start("LobbyScene");
+    } else if (this.story) {
       const f = this.field;
       const next = this.story.level + 1;
       const levelScores = [...this.story.levelScores, f.score - f.startScore];
@@ -718,7 +772,7 @@ export default class GameScene extends Phaser.Scene {
         }
         else this.scene.start(after.scene, after.data);
       }
-    } else if (isLeaderboardEnabled() && !this.match) {
+    } else if (isLeaderboardEnabled() && !this.battle) {
       const f = this.field;
       const boards: BoardScore[] = [{ board: LEADERBOARD.ENDLESS_BOARD, score: f.score, label: "", details: this.endlessDetails() }];
       this.scene.start("NameEntryScene", { score: f.score, personalBest: this.newHighScore, boards });

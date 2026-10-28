@@ -119,3 +119,31 @@ describe("Match", () => {
     expect(match.elapsedMs).toBeGreaterThan(MATCH.SUDDEN_DEATH_AT_MS);
   });
 });
+
+describe("Match with remote seats (online play)", () => {
+  const STEP = SIM.STEP_MS;
+
+  it("doesn't step a remote seat's field and sends its messages to the outbox", () => {
+    const match = new Match({ seed: 5, seats: ["remote", "ace", "ace"] });
+    const out = match.takeOutbox();
+    expect(out).toEqual([{ seat: 0, message: { type: "standing", alive: 3, total: 3 } }]);
+    // Bots got their standing message straight into their fields.
+    expect(match.fields[1].standing).toEqual({ alive: 3, total: 3 });
+    for (let i = 0; i < 120; i++) match.step(STEP);
+    expect(match.fields[0].steps).toBe(0);
+    expect(match.fields[1].steps).toBe(120);
+  });
+
+  it("a remote seat taken over by a bot is stepped from then on", () => {
+    const match = new Match({ seed: 5, seats: ["remote", "ace"] });
+    match.replaceWithBot(0, "pilot");
+    for (let i = 0; i < 60; i++) match.step(STEP);
+    expect(match.fields[0].steps).toBe(60);
+    expect(match.seats[0]).toBe("pilot");
+  });
+
+  it("puts names on the tiles", () => {
+    const match = new Match({ seed: 5, seats: ["remote", "ace"], names: ["ANA"] });
+    expect(match.tiles().map((t) => t.name)).toEqual(["ANA", undefined]);
+  });
+});

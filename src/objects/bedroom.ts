@@ -1,4 +1,5 @@
 import { ENEMY, GAME } from "../config/constants";
+import { cos, sin } from "../math/detmath";
 import { BOUNCE, JACK, LOOP, NAP, PEEK, TOY_THROW, WINDUP } from "../config/levels/bedroom";
 import { Ability, Boss, blinkCover, type AbilityHost } from "./abilities";
 import type Alien from "./Alien";
@@ -174,7 +175,7 @@ export class Nap extends Ability {
     this.phase = this.t >= NAP.WALK_MS - NAP.YAWN_MS ? "yawn" : "waddle";
     // Incremental, so a sway refused by the readability rule never makes it jump.
     const g = this.sway + (TAU * delta) / NAP.WADDLE_MS;
-    alien.x += NAP.WADDLE_PX * (Math.sin(g) - Math.sin(this.sway));
+    alien.x += NAP.WADDLE_PX * (sin(g) - sin(this.sway));
     this.sway = g % TAU;
     return delta;
   }
@@ -200,8 +201,8 @@ export class LoopTheLoop extends Ability {
     const g0 = this.loop;
     const g = Math.min(TAU, g0 + (TAU * delta) / LOOP.LOOP_MS);
     const R = LOOP.RADIUS_PX;
-    alien.x += alien.heading * R * (Math.sin(g) - Math.sin(g0));
-    alien.y -= R * (Math.cos(g0) - Math.cos(g)); // up first, then back down
+    alien.x += alien.heading * R * (sin(g) - sin(g0));
+    alien.y -= R * (cos(g0) - cos(g)); // up first, then back down
     this.loop = g >= TAU ? null : g;
     if (this.loop === null) this.leftMs = LOOP.EVERY_MS;
     return delta;

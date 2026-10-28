@@ -12,6 +12,7 @@ import {
   type BossDef,
 } from "../config/constants";
 import type { DifficultyParams } from "../config/difficulty";
+import { hypot } from "../math/detmath";
 import Alien from "../objects/Alien";
 import { Boss, createAbility, type AbilityHost, type AbilityKind } from "../objects/abilities";
 import { createBoss } from "../objects/bosses";
@@ -353,7 +354,7 @@ export class Swarm implements AbilityHost {
     let bestDist = reachPx;
     for (const a of this.aliens) {
       if (!a.active || !a.lethal || a === hunter || a.ability instanceof Boss) continue;
-      const dist = Math.hypot(a.x - hunter.x, a.y - hunter.y);
+      const dist = hypot(a.x - hunter.x, a.y - hunter.y);
       if (dist <= bestDist) {
         best = a;
         bestDist = dist;

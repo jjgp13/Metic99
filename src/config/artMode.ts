@@ -10,8 +10,11 @@ let mode: ArtMode | null = null;
 
 export function artMode(): ArtMode {
   if (mode === null) {
-    // No window in the headless sims and tests: they draw nothing anyway.
-    const art = typeof window === "undefined" ? null : new URLSearchParams(window.location.search).get("art");
+    // No page (location) in the headless sims, tests and the game server:
+    // they draw nothing anyway. Read through globalThis so this file also
+    // compiles for the server, which has no browser types.
+    const search = (globalThis as { location?: { search: string } }).location?.search;
+    const art = search === undefined ? null : new URLSearchParams(search).get("art");
     mode = art === "3d" ? "3d" : "doodle";
   }
   return mode;

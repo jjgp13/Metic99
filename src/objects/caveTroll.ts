@@ -1,5 +1,6 @@
 import { ENEMY, GAME } from "../config/constants";
 import { TROLL_LAMP } from "../config/levels/cave";
+import { atan, atan2, hypot } from "../math/detmath";
 import { Boss } from "./abilities";
 import type Alien from "./Alien";
 
@@ -55,10 +56,10 @@ export class CaveTroll extends Boss {
   private darkness(alien: Alien): number {
     const x = alien.x;
     const y = alien.y + alien.ballOffset(0)[1];
-    const dist = Math.hypot(x - LAMP_X, y - LAMP_Y);
-    const off = Math.abs(Math.atan2(x - LAMP_X, y - LAMP_Y) - this.beamAngle);
+    const dist = hypot(x - LAMP_X, y - LAMP_Y);
+    const off = Math.abs(atan2(x - LAMP_X, y - LAMP_Y) - this.beamAngle);
     const rowHalf = ((alien.ballCount - 1) * ENEMY.BALL_SPACING) / 2 + ENEMY.BALL_RADIUS;
-    const litUpTo = TROLL_LAMP.CONE_DEG * DEG - Math.atan(rowHalf / dist);
+    const litUpTo = TROLL_LAMP.CONE_DEG * DEG - atan(rowHalf / dist);
     return Math.min(1, Math.max(0, (off - litUpTo) / (TROLL_LAMP.EDGE_DEG * DEG)));
   }
 }
