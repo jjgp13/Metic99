@@ -1,0 +1,3 @@
+# Changes here don't require a PROJECT_STATE.md update (fnmatch patterns, * spans folders).
+# Learning records: REVIEWS.md (quiz chat), CONCEPTS.md and dated notes (learning-loop).
+docs/learning/*

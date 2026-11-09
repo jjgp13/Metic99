@@ -1242,6 +1242,43 @@ dMatch)`; it is 0 in solo play.
 
 ---
 
+## Journals
+
+The three root journals are `GAME_VISION.md`, `PROJECT_STATE.md` and `LEARNING_LOG.md`.
+Read them before feature work, together with this project's existing design documents
+and agreements. The original design documents and dated decisions remain the evidence;
+the journals are concise summaries and navigation.
+
+Before committing a feature or opening a pull request:
+
+1. Update `PROJECT_STATE.md` for changes that affect the project. Separate work integrated
+   in this branch from experiments, planned work and pending review.
+2. Record the change date, what changed, outstanding work, the next action, relevant
+   decision/document references, and actual verification evidence. Identify the
+   build/commit tested; say explicitly when a test was not run.
+3. Change `GAME_VISION.md` only for an explicitly agreed vision or major design decision.
+   Do not reinterpret implementation as a new creative goal.
+4. Append to `LEARNING_LOG.md` only for concepts actually discussed, exercises attempted,
+   learner responses and feedback. Code existence does not establish mastery.
+   The quiz chat stays the only writer of `docs/learning/REVIEWS.md` and owns review
+   dates; `CONCEPTS.md` and dated notes follow the learning-loop skill.
+   `LEARNING_LOG.md` summarizes and links to them.
+5. Include the applicable journal changes in the same feature branch and review. A
+   journal-only or automation-only maintenance change need not manufacture a gameplay
+   update, design decision or lesson. Paths listed in `tools/journals/state-exempt.txt`
+   (learning records) don't require a `PROJECT_STATE.md` update.
+6. Source links in journals name repository-relative paths and sections; a cloud reader
+   cannot resolve a local Windows path. Never put source code, credentials, raw logs or
+   machine-specific details in a journal: the files are mirrored to a private repository,
+   and the check refuses obvious secrets and local paths.
+
+After a push reaches the default branch, `.github/workflows/journal-sync.yml` validates the
+journals and (once enabled) copies only them plus a `sync-manifest.json` with the source
+revision and hashes to the private journal repository. It never commits back here and does
+not invent vision, completion, test or learning claims. Setup: `tools/journals/README.md`.
+
+---
+
 ## Decision Log
 
 Newest first. Format: `YYYY-MM-DD — decision — rationale`.
